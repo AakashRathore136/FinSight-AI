@@ -36,21 +36,95 @@ type VerifiedUser = {
   uid: string;
 };
 
-function parseGeminiJson(text: string): any {
-  const trimmed = (text || "").trim();
-  if (!trimmed) {
+class PipelineError extends Error {
+  stage: string;
+  recommendation: string;
+
+  constructor(stage: string, reason: string, recommendation: string) {
+    super(reason);
+    this.name = "PipelineError";
+    this.stage = stage;
+    this.recommendation = recommendation;
+  }
+}
+
+function safeJsonParse(text: string): any {
+  let cleaned = (text || "").trim();
+  if (!cleaned) {
     throw new Error("Empty model response");
   }
 
+  // 1. Extract JSON block if surrounded by markdown or other text
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  // 2. Try parsing directly
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    const cleaned = trimmed
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/, "")
-      .trim();
     return JSON.parse(cleaned);
+  } catch (err: any) {
+    // 3. Perform common repairs:
+    // a. Remove trailing commas before closing braces/brackets
+    let repaired = cleaned
+      .replace(/,\s*([}\]])/g, "$1") // trailing commas
+      // b. Handle unescaped newlines in JSON strings.
+      .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
+        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
+      });
+
+    try {
+      return JSON.parse(repaired);
+    } catch (err2: any) {
+      // c. Attempt to repair truncated JSON by appending missing brackets
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+      let escape = false;
+      let repairStr = repaired;
+
+      for (let i = 0; i < repairStr.length; i++) {
+        const char = repairStr[i];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (char === '\\') {
+          escape = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === '{') openBraces++;
+          else if (char === '}') openBraces--;
+          else if (char === '[') openBrackets++;
+          else if (char === ']') openBrackets--;
+        }
+      }
+
+      if (inString) {
+        repairStr += '"';
+      }
+
+      while (openBrackets > 0) {
+        repairStr += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repairStr += '}';
+        openBraces--;
+      }
+
+      try {
+        return JSON.parse(repairStr);
+      } catch (err3: any) {
+        throw new Error(`JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`);
+      }
+    }
   }
 }
 
@@ -111,10 +185,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
       const decoded = await admin.auth().verifyIdToken(idToken);
       return { uid: decoded.uid };
     } catch (error: any) {
-      if (!isDefaultCredentialsError(error)) {
-        throw error;
-      }
-      console.warn("Firebase Admin credentials unavailable; falling back to Identity Toolkit token verification.");
+      console.warn("Firebase Admin verification failed, falling back to Identity Toolkit:", error?.message || error);
     }
   }
 
@@ -233,27 +304,31 @@ async function startServer() {
       const file = req.file;
 
       if (!file) {
-        console.error('PDF_EXTRACTION_ERROR: No file uploaded');
-        return res.status(400).json({ error: "No file uploaded" });
+        throw new PipelineError(
+          "PDF_INGESTION",
+          "No file uploaded",
+          "Please select a valid PDF file to upload."
+        );
       }
 
       console.log(`PDF_FILE_RECEIVED: name=${file.originalname}, size=${file.size} bytes, mimetype=${file.mimetype}`);
 
       if (file.mimetype !== "application/pdf") {
-        console.error(`PDF_EXTRACTION_ERROR: Invalid MIME type: ${file.mimetype}`);
-        return res.status(400).json({ error: "Only PDF files are supported" });
+        throw new PipelineError(
+          "PDF_INGESTION",
+          `Invalid MIME type: ${file.mimetype}`,
+          "Only PDF files are supported. Please convert your file to PDF format."
+        );
       }
 
-      // Verify admin SDK and auth before spending time/money on parsing or AI inference.
-      if (!admin.apps.length) {
-        console.error('FIRESTORE_ERROR: Firebase admin SDK not initialized');
-        return res.status(500).json({ error: 'Server misconfiguration: Firebase Admin is not initialized' });
-      }
-
+      // Check auth before spending resources.
       const authHeader = String(req.headers.authorization || '');
       if (!authHeader.startsWith('Bearer ')) {
-        console.error('AUTH_ERROR: Missing or invalid Authorization token');
-        return res.status(401).json({ error: 'Missing or invalid Authorization token' });
+        throw new PipelineError(
+          "AUTH_VERIFICATION",
+          "Missing or invalid Authorization token",
+          "You are not authorized. Please refresh your session or sign in again."
+        );
       }
 
       const idToken = authHeader.split(' ')[1];
@@ -263,7 +338,11 @@ async function startServer() {
         ownerId = decoded.uid;
       } catch (err: any) {
         console.error('AUTH_ERROR: ID token verification failed', err?.message || err);
-        return res.status(401).json({ error: 'Invalid ID token' });
+        throw new PipelineError(
+          "AUTH_VERIFICATION",
+          `Invalid ID token: ${err.message || String(err)}`,
+          "Your session token has expired or is invalid. Please sign out and sign in again."
+        );
       }
 
       // Extract text from PDF buffer
@@ -279,7 +358,11 @@ async function startServer() {
         }
       } catch (extractError: any) {
         console.error('PDF_EXTRACTION_ERROR: Failed to parse PDF', extractError?.message || extractError);
-        return res.status(400).json({ error: `PDF extraction failed: ${extractError?.message || 'Unknown error'}` });
+        throw new PipelineError(
+          "PDF_EXTRACTION",
+          `Failed to parse PDF: ${extractError?.message || 'Unknown error'}`,
+          "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF."
+        );
       }
 
       console.log(`PDF_EXTRACTION_COMPLETE: extracted ${extractedText.length} characters`);
@@ -287,8 +370,11 @@ async function startServer() {
 
       // Validate extraction
       if (!extractedText || extractedText.length < 100) {
-        console.error(`PDF_EXTRACTION_ERROR: Extracted text too short (${extractedText.length} chars). Requires minimum 100 characters.`);
-        return res.status(400).json({ error: `PDF extraction yielded insufficient text (${extractedText.length} chars). Ensure PDF contains readable text.` });
+        throw new PipelineError(
+          "PDF_VALIDATION",
+          `PDF extraction yielded insufficient text (${extractedText.length} characters).`,
+          "Make sure the PDF contains selectable, readable text (not scanned images without OCR processing)."
+        );
       }
 
       console.log('PDF_VALIDATION_PASSED: text meets minimum requirements');
@@ -296,8 +382,11 @@ async function startServer() {
       dotenv.config({ quiet: true });
       const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
       if (!huggingFaceApiKey) {
-        console.error('AI_CONFIG_ERROR: HUGGINGFACE_API_KEY is not configured');
-        return res.status(500).json({ error: "HUGGINGFACE_API_KEY is not configured" });
+        throw new PipelineError(
+          "AI_CONFIG",
+          "HUGGINGFACE_API_KEY is not configured on the server",
+          "Set the HUGGINGFACE_API_KEY environment variable."
+        );
       }
       const hfClient = new InferenceClient(huggingFaceApiKey);
 
@@ -344,7 +433,7 @@ CRITICAL RULES:
       const maxRetries = 1;
 
       while (retries <= maxRetries && !validPayload) {
-        console.log(`AI_REQUEST_START (attempt ${retries + 1}): calling Llama-3.3-70B-Instruct via Hugging Face Inference (novita)`);
+        console.log(`AI_REQUEST_START (attempt ${retries + 1}): calling Llama-3.3-70B-Instruct via Hugging Face Inference (together)`);
         
         const messages: any[] = [
           {
@@ -365,45 +454,69 @@ CRITICAL RULES:
           });
         }
 
-        const completion = await hfClient.chatCompletion({
-          provider: "novita",
-          model: "meta-llama/Llama-3.3-70B-Instruct",
-          messages,
-          max_tokens: 5000,
-          temperature: 0.2
-        });
-        console.log('AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct');
-
-        const rawText = completion.choices?.[0]?.message?.content || "{}";
-        console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
-
-        // Parse JSON response from AI
-        console.log('AI_JSON_PARSING_START');
-        let parsedResponse;
         try {
-          parsedResponse = parseGeminiJson(rawText);
-        } catch (parseError: any) {
-          console.error('AI_JSON_PARSE_ERROR:', parseError?.message || parseError);
-          console.error('AI_RAW_RESPONSE_SAMPLE:', rawText.slice(0, 500));
-          if (retries >= maxRetries) {
-            return res.status(500).json({ error: `Hugging Face inference failed: ${parseError?.message}` });
+          const completion = await hfClient.chatCompletion({
+            provider: "together",
+            model: "meta-llama/Llama-3.3-70B-Instruct",
+            messages,
+            max_tokens: 5000,
+            temperature: 0.2
+          });
+          console.log('AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct');
+
+          const rawText = completion.choices?.[0]?.message?.content || "{}";
+          console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
+
+          // Parse JSON response from AI
+          console.log('AI_JSON_PARSING_START');
+          let parsedResponse;
+          try {
+            parsedResponse = safeJsonParse(rawText);
+          } catch (parseError: any) {
+            console.error('AI_JSON_PARSE_ERROR:', parseError?.message || parseError);
+            console.error('AI_RAW_RESPONSE_SAMPLE:', rawText.slice(0, 500));
+            if (retries >= maxRetries) {
+              throw new PipelineError(
+                "JSON_PARSING",
+                `Failed to parse JSON response from AI: ${parseError?.message}`,
+                "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output."
+              );
+            }
+            retries++;
+            continue;
           }
-          retries++;
-          continue;
-        }
-        console.log('AI_JSON_PARSE_SUCCESS');
+          console.log('AI_JSON_PARSE_SUCCESS');
 
-        // Validate against schema
-        console.log('AI_SCHEMA_VALIDATION_START');
-        try {
-          validPayload = validateAnalysisPayload(parsedResponse);
-          console.log('AI_SCHEMA_VALIDATION_SUCCESS');
-          console.log(`AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`);
-          console.log(`AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`);
-        } catch (validateError: any) {
-          console.error('AI_SCHEMA_VALIDATION_ERROR:', validateError?.message || validateError);
+          // Validate against schema
+          console.log('AI_SCHEMA_VALIDATION_START');
+          try {
+            validPayload = validateAnalysisPayload(parsedResponse);
+            console.log('AI_SCHEMA_VALIDATION_SUCCESS');
+            console.log(`AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`);
+            console.log(`AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`);
+          } catch (validateError: any) {
+            console.error('AI_SCHEMA_VALIDATION_ERROR:', validateError?.message || validateError);
+            if (retries >= maxRetries) {
+              throw new PipelineError(
+                "SCHEMA_VALIDATION",
+                `AI response failed validation: ${validateError?.message}`,
+                "The AI model failed to structure its response properly. Try submitting again to recreate."
+              );
+            }
+            retries++;
+            continue;
+          }
+        } catch (hfError: any) {
+          if (hfError instanceof PipelineError) {
+            throw hfError;
+          }
+          console.error('HUGGINGFACE_INFERENCE_ERROR:', hfError?.message || hfError);
           if (retries >= maxRetries) {
-            return res.status(500).json({ error: `Hugging Face inference failed: ${validateError?.message}` });
+            throw new PipelineError(
+              "AI_INFERENCE",
+              `Hugging Face inference failed: ${hfError?.message || String(hfError)}`,
+              "Verify the HUGGINGFACE_API_KEY environment variable. Hugging Face could be experiencing temporary downtime."
+            );
           }
           retries++;
           continue;
@@ -411,7 +524,11 @@ CRITICAL RULES:
       }
 
       if (!validPayload) {
-        return res.status(500).json({ error: 'Failed to generate valid analysis after retries' });
+        throw new PipelineError(
+          "AI_INFERENCE",
+          "Failed to generate valid analysis after retries",
+          "The AI model repeatedly failed validation rules. Try a different document or request a simpler scan."
+        );
       }
 
       console.log(`FIRESTORE_WRITE_START: ownerId=${ownerId}, database=${firestoreDatabaseId}, document=${file.originalname}`);
@@ -445,6 +562,9 @@ CRITICAL RULES:
       let documentId = '';
       let analysisId = '';
       try {
+        if (!admin.apps.length) {
+          throw new Error("Firebase Admin SDK not initialized");
+        }
         const dbAdmin = getFirestore(firestoreDatabaseId);
         const adminDocData = {
           ...docData,
@@ -471,20 +591,25 @@ CRITICAL RULES:
         });
         console.log(`FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`);
       } catch (writeError: any) {
-        if (!isDefaultCredentialsError(writeError)) {
-          throw writeError;
+        console.warn('Firebase Admin write failed/unavailable; falling back to Firestore REST writes with user token:', writeError?.message || writeError);
+        try {
+          documentId = await createFirestoreDocumentViaRest('documents', docData, idToken);
+          console.log(`FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`);
+
+          analysisId = await createFirestoreDocumentViaRest(
+            `documents/${documentId}/analyses`,
+            { ...analysisDoc, documentId },
+            idToken
+          );
+          console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
+        } catch (restError: any) {
+          console.error('FIRESTORE_REST_WRITE_FAILED:', restError?.message || restError);
+          throw new PipelineError(
+            "FIRESTORE_WRITE",
+            `Firestore database write failed: ${restError?.message || String(restError)}`,
+            "Check database security rules, database existence, and network connection."
+          );
         }
-
-        console.warn('Firebase Admin write unavailable; falling back to Firestore REST writes with user token.');
-        documentId = await createFirestoreDocumentViaRest('documents', docData, idToken);
-        console.log(`FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`);
-
-        analysisId = await createFirestoreDocumentViaRest(
-          `documents/${documentId}/analyses`,
-          { ...analysisDoc, documentId },
-          idToken
-        );
-        console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
       }
 
       console.log('=== PDF INGESTION PIPELINE COMPLETE SUCCESS ===');
@@ -494,7 +619,20 @@ CRITICAL RULES:
       console.error("=== PDF INGESTION PIPELINE FAILED ===");
       console.error("ERROR_MESSAGE:", error?.message || error);
       console.error("ERROR_STACK:", error?.stack || 'No stack trace');
-      return res.status(500).json({ error: error?.message || "Failed to analyze document" });
+      
+      const stage = error?.stage || "PIPELINE_ERROR";
+      const reason = error?.message || String(error);
+      const stack = error?.stack || "No stack trace";
+      const recommendation = error?.recommendation || "An unexpected system interrupt occurred. Please check server logs.";
+      
+      return res.status(500).json({
+        error: {
+          stage,
+          reason,
+          stack,
+          recommendation
+        }
+      });
     }
   });
 

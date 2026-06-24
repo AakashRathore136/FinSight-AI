@@ -85,6 +85,9 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         const errorBody = await analysisRes.json().catch(() => null);
         const errorText = errorBody?.error || (await analysisRes.text().catch(() => ''));
         console.error('AI endpoint returned error', analysisRes.status, errorText);
+        if (errorText && typeof errorText === 'object') {
+          throw new Error(JSON.stringify(errorText));
+        }
         throw new Error(errorText || 'AI Analysis Failed');
       }
 
@@ -106,8 +109,8 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       toast.error(msg);
 
       try {
-        const { getFirestore, collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-        const db = getFirestore();
+        const { db } = await import('@/src/lib/firebase');
+        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
         await addDoc(collection(db, 'analyses'), {
           fileName: file?.name || 'Unknown',
           fileSize: file?.size || 0,
@@ -218,12 +221,51 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         )}
 
         {status === 'error' && (
-          <div className="flex items-center gap-4 rounded-xl bg-red-500/10 p-6 text-sm text-red-500 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-            <AlertCircle size={22} className="shrink-0" />
-            <div className="flex flex-col">
-              <span className="font-bold">System Interrupt</span>
-              <span className="text-red-400/80">{errorMessage || 'Upload or analysis failed. Please retry.'}</span>
+          <div className="rounded-xl bg-red-500/10 p-6 text-sm text-red-500 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)] space-y-4">
+            <div className="flex items-center gap-4">
+              <AlertCircle size={22} className="shrink-0 animate-bounce" />
+              <div className="flex flex-col">
+                <span className="font-black uppercase tracking-widest text-[10px] text-red-400">System Interrupt</span>
+                <span className="text-lg font-bold text-white mt-1">AI Analysis Failed</span>
+              </div>
             </div>
+            {(() => {
+              try {
+                const diag = JSON.parse(errorMessage);
+                return (
+                  <div className="mt-4 pt-4 border-t border-red-500/10 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase bg-red-500/20 text-red-300 px-2.5 py-1 rounded-md border border-red-500/30">
+                        Stage: {diag.stage || 'UNKNOWN'}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 font-medium">{diag.reason}</p>
+                    {diag.recommendation && (
+                      <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800 flex items-start gap-2.5 text-xs text-slate-400">
+                        <Zap size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                        <div>
+                          <strong className="text-slate-200">Recommendation:</strong> {diag.recommendation}
+                        </div>
+                      </div>
+                    )}
+                    {diag.stack && diag.stack !== "No stack trace" && (
+                      <details className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-400 transition-colors">
+                        <summary className="font-bold uppercase tracking-wider select-none py-1">View Stack Trace</summary>
+                        <pre className="mt-2 p-3 bg-slate-950/80 rounded-lg text-slate-400 overflow-x-auto whitespace-pre font-mono leading-relaxed border border-slate-900 max-h-40">
+                          {diag.stack}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                );
+              } catch {
+                return (
+                  <p className="text-red-400/80 mt-2 font-medium">
+                    {errorMessage || 'Upload or analysis failed. Please retry.'}
+                  </p>
+                );
+              }
+            })()}
           </div>
         )}
       </CardContent>
