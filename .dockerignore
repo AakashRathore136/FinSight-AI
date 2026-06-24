@@ -13,3 +13,4 @@ coverage
 temp_*
 *.pdf
 *.png
+firebase-applet-config.json
