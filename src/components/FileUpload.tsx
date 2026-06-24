@@ -122,7 +122,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         console.error('Could not persist failed record:', firestoreErr);
       }
     }
-    }
   };
 
   return (

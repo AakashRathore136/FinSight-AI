@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Upload, FileText, ChevronRight } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { db, auth } from '@/src/lib/firebase';
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { formatRelativeTime } from '@/src/lib/utils';
 
 interface CommandPaletteProps {
   onAction: (action: string) => void;
@@ -165,7 +165,7 @@ export function CommandPalette({ onAction, onDocSelect }: CommandPaletteProps) {
                   <div className="flex-1 text-left truncate pr-4">
                     <div className="font-medium truncate text-slate-200 group-hover:text-white">{doc.fileName}</div>
                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                      {doc.createdAt ? formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true }) : 'Recently'}
+                      {formatRelativeTime(doc.createdAt)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

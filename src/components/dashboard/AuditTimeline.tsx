@@ -1,17 +1,20 @@
-import { formatDistanceToNow } from 'date-fns';
 import { History, CheckCircle, ShieldAlert, UploadCloud, UserCheck } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
+import { formatRelativeTime, toDate } from '@/src/lib/utils';
 
 export function AuditTimeline({ recentDocs = [] }: { recentDocs: any[] }) {
   // Generate realistic audit events from the document log
   const auditEvents = recentDocs.flatMap((doc) => {
     const events = [];
+    const createdAt = toDate(doc.createdAt);
+    const processedAt = toDate(doc.latestAnalysis?.processedAt);
+    const processedTimestamp = processedAt?.getTime();
 
     // Document Upload Event
-    if (doc.createdAt) {
+    if (createdAt) {
       events.push({
         id: `${doc.id}-upload`,
-        timestamp: new Date(doc.createdAt).getTime(),
+        timestamp: createdAt.getTime(),
         type: 'upload',
         title: 'Document Ingestion Started',
         description: `Source file "${doc.fileName}" was uploaded to FinSight AI secure vaults.`,
@@ -25,7 +28,7 @@ export function AuditTimeline({ recentDocs = [] }: { recentDocs: any[] }) {
     if (doc.status === 'completed') {
       events.push({
         id: `${doc.id}-analysis`,
-        timestamp: doc.latestAnalysis?.processedAt ? new Date(doc.latestAnalysis.processedAt).getTime() : Date.now() - 10000,
+        timestamp: processedTimestamp || Date.now() - 10000,
         type: 'analysis',
         title: 'NLP Extraction Pipeline Completed',
         description: `AI extraction concluded for "${doc.fileName}" with confidence ${doc.latestAnalysis?.sentiment_score ? Math.round(doc.latestAnalysis.sentiment_score * 100) : 92}%.`,
@@ -39,7 +42,7 @@ export function AuditTimeline({ recentDocs = [] }: { recentDocs: any[] }) {
     if (doc.riskLevel === 'high') {
       events.push({
         id: `${doc.id}-breach`,
-        timestamp: doc.latestAnalysis?.processedAt ? new Date(doc.latestAnalysis.processedAt).getTime() + 1000 : Date.now(),
+        timestamp: processedTimestamp ? processedTimestamp + 1000 : Date.now(),
         type: 'breach',
         title: 'Critical Policy Breach Escalate',
         description: `High risk exposure flagged inside "${doc.fileName}". Compliance alert triggered.`,
@@ -91,7 +94,7 @@ export function AuditTimeline({ recentDocs = [] }: { recentDocs: any[] }) {
                       </div>
                     </div>
                     <span className="text-[10px] text-slate-500 font-mono shrink-0 sm:text-right mt-1 sm:mt-0">
-                      {formatDistanceToNow(event.timestamp, { addSuffix: true })}
+                      {formatRelativeTime(event.timestamp)}
                     </span>
                   </div>
                 </div>

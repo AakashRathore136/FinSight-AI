@@ -3,19 +3,15 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { InferenceClient } from "@huggingface/inference";
 import multer from "multer";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
-console.log(
-  "HF_KEY_PREFIX:",
-  process.env.HUGGINGFACE_API_KEY?.slice(0, 5)
-);
 
 
 const upload = multer({
@@ -204,9 +200,6 @@ async function startServer() {
     console.warn('Firebase admin initialization failed — server-side Firestore writes will be disabled.', err?.message || err);
   }
 
-  // Hugging Face Inference Setup
-  const hfClient = new InferenceClient(process.env.HUGGINGFACE_API_KEY || "");
-
   app.use(express.json());
 
   // Simple request logger for debugging
@@ -277,8 +270,13 @@ async function startServer() {
       console.log('PDF_EXTRACTION_START: using pdf-parse');
       let extractedText = '';
       try {
-        const parsed = await pdfParse(file.buffer);
-        extractedText = (parsed?.text || "").trim();
+        const parser = new PDFParse({ data: file.buffer });
+        try {
+          const parsed = await parser.getText();
+          extractedText = (parsed?.text || "").trim();
+        } finally {
+          await parser.destroy().catch(() => undefined);
+        }
       } catch (extractError: any) {
         console.error('PDF_EXTRACTION_ERROR: Failed to parse PDF', extractError?.message || extractError);
         return res.status(400).json({ error: `PDF extraction failed: ${extractError?.message || 'Unknown error'}` });
@@ -295,10 +293,13 @@ async function startServer() {
 
       console.log('PDF_VALIDATION_PASSED: text meets minimum requirements');
 
-      if (!process.env.HUGGINGFACE_API_KEY) {
+      dotenv.config({ quiet: true });
+      const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
+      if (!huggingFaceApiKey) {
         console.error('AI_CONFIG_ERROR: HUGGINGFACE_API_KEY is not configured');
         return res.status(500).json({ error: "HUGGINGFACE_API_KEY is not configured" });
       }
+      const hfClient = new InferenceClient(huggingFaceApiKey);
 
       // Build AI request with REAL extracted PDF text
       const systemPrompt = `You are a senior financial intelligence analyst. Produce detailed financial analysis based ONLY on the provided document.

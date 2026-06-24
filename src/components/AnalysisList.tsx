@@ -34,6 +34,7 @@ import {
 } from '@/src/components/ui/dropdown-menu';
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { toast } from 'sonner';
+import { formatDateSafe } from '@/src/lib/utils';
 
 export function AnalysisList({ type, user, onSelect }: any) {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -82,7 +83,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
   };
 
   const filteredDocs = documents.filter(doc => 
-    doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
+    String(doc.fileName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -149,7 +150,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
                       <div className="min-w-0">
                         <p className="font-bold text-white tracking-tight truncate max-w-[300px]">{doc.fileName}</p>
                         <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">
-                          {(doc.fileSize / 1024 / 1024).toFixed(2)} MB • {doc.fileType.split('/')[1]?.toUpperCase() || 'DOC'}
+                          {(Number(doc.fileSize || 0) / 1024 / 1024).toFixed(2)} MB - {String(doc.fileType || '').split('/')[1]?.toUpperCase() || 'DOC'}
                         </p>
                       </div>
                     </div>
@@ -172,7 +173,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
                     <StatusBadge status={doc.status} />
                   </TableCell>
                   <TableCell className="text-sm font-semibold text-slate-500 tabular-nums">
-                    {new Date(doc.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDateSafe(doc.createdAt, { year: 'numeric', month: 'short', day: 'numeric' })}
                   </TableCell>
                   <TableCell className="px-6 text-right">
                     <DropdownMenu>

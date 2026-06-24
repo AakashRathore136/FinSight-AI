@@ -23,6 +23,7 @@ import {
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import { formatDateSafe } from '@/src/lib/utils';
 
 export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
@@ -103,7 +104,7 @@ export function AdminPanel() {
                      <TableCell className="px-8 py-5">
                         <div className="flex items-center gap-4">
                            <div className="h-10 w-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all overflow-hidden shadow-lg">
-                              {u.photoURL ? <img src={u.photoURL} alt="" className="h-full w-full object-cover" /> : u.email[0].toUpperCase()}
+                              {u.photoURL ? <img src={u.photoURL} alt="" className="h-full w-full object-cover" /> : String(u.email || '?')[0].toUpperCase()}
                            </div>
                            <div className="min-w-0">
                               <p className="text-sm font-bold text-white truncate leading-tight">{u.displayName || u.email}</p>
@@ -120,7 +121,7 @@ export function AdminPanel() {
                         </Badge>
                      </TableCell>
                      <TableCell className="text-xs font-semibold text-slate-500 tabular-nums">
-                        {new Date(u.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                         {formatDateSafe(u.createdAt, { dateStyle: 'medium' })}
                      </TableCell>
                      <TableCell className="px-8 text-right">
                         <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:text-white hover:bg-slate-800">

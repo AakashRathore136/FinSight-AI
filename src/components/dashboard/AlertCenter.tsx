@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
 import { AlertTriangle, Info, Bell, Activity, CheckCircle, ShieldAlert, MessageSquare } from "lucide-react";
 import { RiskBadge } from "./RiskMetrics";
-import { formatDistanceToNow } from "date-fns";
+import { formatRelativeTime } from "@/src/lib/utils";
 
 export function AlertCenter({ recentDocs = [], maxItems = 4 }: { recentDocs?: any[], maxItems?: number }) {
   // Use state to persist manual acknowledgements / comments in local session
@@ -33,7 +33,7 @@ export function AlertCenter({ recentDocs = [], maxItems = 4 }: { recentDocs?: an
         id: doc.id,
         type,
         title: doc.fileName,
-        time: doc.createdAt ? formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true }) : 'Just now',
+        time: formatRelativeTime(doc.createdAt, 'Just now'),
         desc,
         level: doc.riskLevel || 'Pending'
       };

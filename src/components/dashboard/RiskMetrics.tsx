@@ -70,8 +70,10 @@ export function MetricCard({
 }
 
 export function RiskBadge({ level }: { level: string }) {
-  const isHigh = level.toLowerCase() === 'high' || level.toLowerCase() === 'critical';
-  const isMedium = level.toLowerCase() === 'medium';
+  const label = String(level || 'Pending');
+  const normalized = label.toLowerCase();
+  const isHigh = normalized === 'high' || normalized === 'critical';
+  const isMedium = normalized === 'medium';
   
   return (
     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
@@ -79,7 +81,7 @@ export function RiskBadge({ level }: { level: string }) {
       isMedium ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
       'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
     }`}>
-      {level}
+      {label}
     </span>
   );
 }

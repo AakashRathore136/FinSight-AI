@@ -5,7 +5,6 @@ import { MetricCard } from "./RiskMetrics";
 import { DynamicTrendChart, RiskDistributionChart, EntityExposureHeatmap } from "./AdvancedCharts";
 import { AlertCenter } from "./AlertCenter";
 import { AuditTimeline } from "./AuditTimeline";
-import { formatDistanceToNow } from "date-fns";
 
 // Helper components passed from Dashboard
 interface SharedProps {

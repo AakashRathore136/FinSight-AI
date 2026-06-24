@@ -3,6 +3,14 @@ import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { collection, query, where, orderBy, limit, onSnapshot, getDocs } from 'firebase/firestore';
 import { SeniorPMLayout, CROLayout, JuniorAnalystLayout, ComplianceLayout } from './dashboard/RoleLayouts';
 
+type DashboardDocument = {
+  id: string;
+  status?: string;
+  riskLevel?: string;
+  createdAt?: any;
+  latestAnalysis?: any;
+};
+
 function normalizeConfidence(value: any) {
   const n = Number(value || 0);
   if (n <= 1) return Math.round(n * 100);
@@ -42,7 +50,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
     );
 
     const unsubscribe = onSnapshot(docsQuery, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DashboardDocument));
       setRecentDocs(docs);
       
       setLoading(false);
@@ -56,7 +64,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
        try {
          const allDocsQuery = query(collection(db, 'documents'), where('ownerId', '==', user.uid));
          const allDocs = await getDocs(allDocsQuery);
-         const data = allDocs.docs.map(d => ({ id: d.id, ...d.data() }));
+         const data = allDocs.docs.map(d => ({ id: d.id, ...d.data() } as DashboardDocument));
 
          const getTimestamp = (dateVal: any) => {
            if (!dateVal) return Date.now();
