@@ -7,7 +7,6 @@ import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
 dotenv.config({ quiet: true });
 
@@ -29,8 +28,11 @@ type AnalysisResponse = {
   full_report: string;
 };
 
-const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId || "(default)";
-const firestoreBaseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`;
+const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
+const firestoreDatabaseId = String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() || "(default)";
+const firestoreBaseUrl = firebaseProjectId
+  ? `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`
+  : "";
 
 type VerifiedUser = {
   uid: string;
@@ -180,28 +182,12 @@ function isDefaultCredentialsError(error: any): boolean {
 }
 
 async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
-  if (admin.apps.length) {
-    try {
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      return { uid: decoded.uid };
-    } catch (error: any) {
-      console.warn("Firebase Admin verification failed, falling back to Identity Toolkit:", error?.message || error);
-    }
+  if (!admin.apps.length) {
+    throw new Error("Firebase Admin SDK is not initialized");
   }
 
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseConfig.apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
-  });
-
-  const body: any = await response.json().catch(() => ({}));
-  if (!response.ok || !body.users?.[0]?.localId) {
-    const message = body?.error?.message || "Invalid ID token";
-    throw new Error(message);
-  }
-
-  return { uid: body.users[0].localId };
+  const decoded = await admin.auth().verifyIdToken(idToken);
+  return { uid: decoded.uid };
 }
 
 function toFirestoreValue(value: any): any {
@@ -231,6 +217,9 @@ function toFirestoreFields(data: Record<string, any>): Record<string, any> {
 }
 
 async function createFirestoreDocumentViaRest(collectionPath: string, data: Record<string, any>, idToken: string): Promise<string> {
+  if (!firestoreBaseUrl) {
+    throw new Error("FIREBASE_PROJECT_ID is not configured");
+  }
   const response = await fetch(`${firestoreBaseUrl}/${collectionPath}`, {
     method: "POST",
     headers: {
@@ -254,21 +243,29 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3001;
 
   // Initialize Firebase Admin if credentials are available
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(svc),
-        projectId: firebaseConfig.projectId,
-      });
-      console.log('Firebase admin initialized from FIREBASE_SERVICE_ACCOUNT');
-    } else {
-      // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-      admin.initializeApp({ projectId: firebaseConfig.projectId });
-      console.log('Firebase admin initialized with application default credentials');
+  if (!firebaseProjectId) {
+    console.warn('FIREBASE_PROJECT_ID is not configured — Firebase Admin initialization skipped.');
+  } else {
+    try {
+      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({
+          credential: admin.credential.cert(svc),
+          projectId: firebaseProjectId,
+        });
+        console.log('Firebase admin initialized from FIREBASE_SERVICE_ACCOUNT');
+      } else {
+        // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
+        admin.initializeApp({ projectId: firebaseProjectId });
+        console.log('Firebase admin initialized with application default credentials');
+      }
+    } catch (err: any) {
+      if (isDefaultCredentialsError(err)) {
+        console.warn('Firebase admin initialization failed — FIREBASE_SERVICE_ACCOUNT or ADC credentials are required.', err?.message || err);
+      } else {
+        console.warn('Firebase admin initialization failed — server-side Firestore writes will be disabled.', err?.message || err);
+      }
     }
-  } catch (err: any) {
-    console.warn('Firebase admin initialization failed — server-side Firestore writes will be disabled.', err?.message || err);
   }
 
   app.use(express.json());
