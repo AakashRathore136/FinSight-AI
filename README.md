@@ -66,10 +66,10 @@ Build the image:
 docker build -t finsight-ai .
 ```
 
-Run the container:
+Run the container in detached mode so it doesn't block your terminal:
 
 ```bash
-docker run --env-file .env -p 3001:3001 finsight-ai
+docker run -d --env-file .env -p 3001:3001 finsight-ai
 ```
 
 The application will be available at:
