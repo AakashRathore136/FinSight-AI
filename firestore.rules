@@ -4,7 +4,7 @@ service cloud.firestore {
     // ----------------------------------------------------
     // GLOBAL HELPERS
     // ----------------------------------------------------
-    function isSignedIn() { return request.auth != null; }
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function isOwner(ownerId) { return isSignedIn() && request.auth.uid == ownerId; }
     function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
     function isValidId(id) { return id is string && id.size() <= 128; }
