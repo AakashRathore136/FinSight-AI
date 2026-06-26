@@ -47,3 +47,25 @@ export function formatRelativeTime(value: any, fallback = "Recently") {
     return fallback;
   }
 }
+
+export function getSharedDocId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('docId') || sessionStorage.getItem('fin_shared_docId');
+}
+
+export function setSharedDocId(id: string) {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem('fin_shared_docId', id);
+  const url = new URL(window.location.href);
+  url.searchParams.set('docId', id);
+  window.history.replaceState({}, '', url.toString());
+}
+
+export function clearSharedDocId() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem('fin_shared_docId');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('docId');
+  window.history.replaceState({}, '', url.toString());
+}

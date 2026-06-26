@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
+import { getSharedDocId, setSharedDocId, clearSharedDocId } from '@/src/lib/utils';
 
 // Components
 import { Button } from '@/src/components/ui/button';
@@ -180,11 +181,11 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         // Check email verification
-        // if (!currentUser.emailVerified) {
-        //   setShowVerificationScreen(true);
-        //   setLoading(false);
-        //   return;
-        // }
+        if (!currentUser.emailVerified) {
+          setShowVerificationScreen(true);
+          setLoading(false);
+          return;
+        }
 
         // Sync user profile for verified users
         const userRef = doc(db, 'users', currentUser.uid);
@@ -279,7 +280,7 @@ export default function App() {
       });
 
       // Send verification email
-      // await sendEmailVerification(newUser);
+      await sendEmailVerification(newUser);
 
       toast.success('Account created!');
       setUsername('');
@@ -399,85 +400,85 @@ export default function App() {
     );
   }
 
-  // Verification screen - COMMENTED OUT FOR DEVELOPMENT
-  // if (user && showVerificationScreen && !user.emailVerified) {
-  //   return (
-  //     <div className="flex min-h-screen flex-col items-center justify-center bg-[#020617] px-4 overflow-hidden relative">
-  //       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-  //         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-600/10 rounded-full blur-[120px]" />
-  //         <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
-  //       </div>
+  // Verification screen
+  if (user && showVerificationScreen && !user.emailVerified) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#020617] px-4 overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-600/10 rounded-full blur-[120px]" />
+          <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
+        </div>
 
-  //       <motion.div 
-  //         initial={false}
-  //         animate={{ opacity: 1, y: 0 }}
-  //         transition={{ duration: 0.8 }}
-  //         className="w-full max-w-md space-y-8 text-center relative z-10"
-  //       >
-  //         <div className="space-y-4">
-  //           <motion.div 
-  //             initial={false}
-  //             animate={{ scale: 1, opacity: 1 }}
-  //             transition={{ delay: 0.2 }}
-  //             className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-amber-600 shadow-2xl shadow-amber-600/40 border border-white/5"
-  //           >
-  //             <AlertTriangle className="h-12 w-12 text-white" />
-  //           </motion.div>
-  //           <div className="space-y-1">
-  //             <h1 className="text-4xl font-black tracking-tighter text-white">Verify Your Email</h1>
-  //             <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-4">Almost there!</p>
-  //           </div>
-  //         </div>
-  //         
-  //         <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-3xl overflow-hidden shadow-black/80">
-  //           <CardHeader className="p-10 pb-6">
-  //             <CardTitle className="text-xl font-bold text-white tracking-tight">Email Verification Required</CardTitle>
-  //             <CardDescription className="text-slate-500 mt-3 text-sm">
-  //               We've sent a verification email to <strong className="text-slate-300">{user.email}</strong>. Click the link in the email to verify your account.
-  //             </CardDescription>
-  //           </CardHeader>
-  //           <CardContent className="p-10 pt-0 space-y-6">
-  //             <Button 
-  //               onClick={handleCheckVerification}
-  //               disabled={verificationLoading}
-  //               className="w-full bg-indigo-600 h-14 text-white hover:bg-indigo-700 font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-900/40 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-  //             >
-  //               {verificationLoading ? 'Checking...' : '✓ I\'ve Verified My Email'}
-  //             </Button>
+        <motion.div 
+          initial={false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="w-full max-w-md space-y-8 text-center relative z-10"
+        >
+          <div className="space-y-4">
+            <motion.div 
+              initial={false}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-amber-600 shadow-2xl shadow-amber-600/40 border border-white/5"
+            >
+              <AlertTriangle className="h-12 w-12 text-white" />
+            </motion.div>
+            <div className="space-y-1">
+              <h1 className="text-4xl font-black tracking-tighter text-white">Verify Your Email</h1>
+              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-4">Almost there!</p>
+            </div>
+          </div>
+          
+          <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-3xl overflow-hidden shadow-black/80">
+            <CardHeader className="p-10 pb-6">
+              <CardTitle className="text-xl font-bold text-white tracking-tight">Email Verification Required</CardTitle>
+              <CardDescription className="text-slate-500 mt-3 text-sm">
+                We've sent a verification email to <strong className="text-slate-300">{user.email}</strong>. Click the link in the email to verify your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-10 pt-0 space-y-6">
+              <Button 
+                onClick={handleCheckVerification}
+                disabled={verificationLoading}
+                className="w-full bg-indigo-600 h-14 text-white hover:bg-indigo-700 font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-900/40 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                {verificationLoading ? 'Checking...' : '✓ I\'ve Verified My Email'}
+              </Button>
 
-  //             <Button 
-  //               onClick={handleResendVerification}
-  //               disabled={verificationLoading}
-  //               variant="outline"
-  //               className="w-full h-12 text-slate-300 border-slate-700 hover:bg-slate-800 font-bold text-sm uppercase tracking-widest rounded-2xl disabled:opacity-50"
-  //             >
-  //               {verificationLoading ? 'Sending...' : 'Resend Verification Email'}
-  //             </Button>
+              <Button 
+                onClick={handleResendVerification}
+                disabled={verificationLoading}
+                variant="outline"
+                className="w-full h-12 text-slate-300 border-slate-700 hover:bg-slate-800 font-bold text-sm uppercase tracking-widest rounded-2xl disabled:opacity-50"
+              >
+                {verificationLoading ? 'Sending...' : 'Resend Verification Email'}
+              </Button>
 
-  //             <Button 
-  //               onClick={() => {
-  //                 signOut(auth);
-  //                 setShowVerificationScreen(false);
-  //                 setUsername('');
-  //                 setEmail('');
-  //                 setPassword('');
-  //               }}
-  //               variant="ghost"
-  //               className="w-full h-12 text-slate-500 hover:text-slate-300 font-semibold text-sm uppercase rounded-2xl"
-  //             >
-  //               Use Different Email
-  //             </Button>
+              <Button 
+                onClick={() => {
+                  signOut(auth);
+                  setShowVerificationScreen(false);
+                  setUsername('');
+                  setEmail('');
+                  setPassword('');
+                }}
+                variant="ghost"
+                className="w-full h-12 text-slate-500 hover:text-slate-300 font-semibold text-sm uppercase rounded-2xl"
+              >
+                Use Different Email
+              </Button>
 
-  //             <p className="text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto uppercase font-bold tracking-wider">
-  //               Didn't receive the email? Check your spam folder or request a new verification link.
-  //             </p>
-  //           </CardContent>
-  //         </Card>
-  //       </motion.div>
-  //       <Toaster position="bottom-right" richColors theme="dark" />
-  //     </div>
-  //   );
-  // } END VERIFICATION SCREEN COMMENTED OUT
+              <p className="text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto uppercase font-bold tracking-wider">
+                Didn't receive the email? Check your spam folder or request a new verification link.
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+        <Toaster position="bottom-right" richColors theme="dark" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -812,23 +813,4 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
-function getSharedDocId() {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get('docId');
-}
 
-function setSharedDocId(docId: string) {
-  if (typeof window === 'undefined') return;
-
-  const url = new URL(window.location.href);
-  url.searchParams.set('docId', docId);
-  window.history.replaceState(null, '', url.toString());
-}
-
-function clearSharedDocId() {
-  if (typeof window === 'undefined') return;
-
-  const url = new URL(window.location.href);
-  url.searchParams.delete('docId');
-  window.history.replaceState(null, '', url.toString());
-}
