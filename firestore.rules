@@ -50,7 +50,7 @@ service cloud.firestore {
 
     match /documents/{docId} {
       allow read: if isOwner(existing().ownerId) || isAdmin();
-      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if request.auth != null && (request.query.ownerId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isValidDocument(incoming());
       allow update: if (isOwner(existing().ownerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'riskLevel'])) || isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
