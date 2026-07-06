@@ -3,7 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { InferenceClient } from "@huggingface/inference";
 import multer from "multer";
-import { PDFParse } from "pdf-parse";
+import pdf from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -346,13 +346,8 @@ async function startServer() {
       console.log('PDF_EXTRACTION_START: using pdf-parse');
       let extractedText = '';
       try {
-        const parser = new PDFParse({ data: file.buffer });
-        try {
-          const parsed = await parser.getText();
-          extractedText = (parsed?.text || "").trim();
-        } finally {
-          await parser.destroy().catch(() => undefined);
-        }
+        const parsed = await pdf(file.buffer);
+        extractedText = (parsed?.text || "").trim();
       } catch (extractError: any) {
         console.error('PDF_EXTRACTION_ERROR: Failed to parse PDF', extractError?.message || extractError);
         throw new PipelineError(
