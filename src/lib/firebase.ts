@@ -1,8 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseError } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
+
 const firebaseConfig = {
   apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY || ''),
   authDomain: String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || ''),
@@ -12,6 +13,7 @@ const firebaseConfig = {
   appId: String(import.meta.env.VITE_FIREBASE_APP_ID || ''),
   measurementId: String(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || ''),
 };
+
 const firestoreDatabaseId = String(import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || '(default)');
 
 const app = initializeApp(firebaseConfig);
@@ -31,6 +33,7 @@ export enum OperationType {
 
 interface FirestoreErrorInfo {
   error: string;
+  code?: string;
   operationType: OperationType;
   path: string | null;
   authInfo: {
@@ -46,9 +49,16 @@ interface FirestoreErrorInfo {
   }
 }
 
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const firebaseError = error instanceof FirebaseError ? error : null;
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: firebaseError
+      ? firebaseError.message
+      : error instanceof Error
+        ? error.message
+        : String(error),
+    code: firebaseError?.code,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
