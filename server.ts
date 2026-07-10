@@ -7,6 +7,7 @@ import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import cors from "cors";
 
 dotenv.config({ quiet: true });
 
@@ -43,6 +44,17 @@ const firestoreDatabaseId = String(process.env.FIREBASE_FIRESTORE_DATABASE_ID ||
 const firestoreBaseUrl = firebaseProjectId
   ? `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`
   : "";
+
+// Explicit CORS allowlist. In production, only APP_URL (the deployed
+// frontend origin) may call this API with credentials. Local Vite dev
+// ports are allowed so `npm run dev` keeps working out of the box.
+const allowedOrigins = new Set(
+  [
+    process.env.APP_URL,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ].filter((origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL")
+);
 
 type VerifiedUser = {
   uid: string;
@@ -312,6 +324,24 @@ async function startServer() {
       }
     }
   }
+
+  // Explicit CORS policy — only the deployed frontend origin (and local
+  // dev ports) may call this API, instead of the implicit wildcard that
+  // cors() with no options would produce.
+  app.use(
+    cors({
+      origin(origin, callback) {
+        // Allow same-origin/non-browser requests (no Origin header).
+        if (!origin || allowedOrigins.has(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Origin ${origin} is not allowed by CORS policy`));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Authorization", "Content-Type"],
+    })
+  );
 
   app.use(express.json());
 
