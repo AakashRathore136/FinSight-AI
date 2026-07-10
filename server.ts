@@ -200,6 +200,41 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
   return { uid: decoded.uid };
 }
 
+/**
+ * Verifies the Firebase ID token on every /api/* request (except /api/health)
+ * before any route handler runs, so a new route can never be added without
+ * authentication by accident. Attaches the verified uid to req.ownerId.
+ */
+async function requireFirebaseAuth(req: any, res: any, next: any) {
+  const authHeader = String(req.headers.authorization || '');
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: {
+        stage: "AUTH_VERIFICATION",
+        reason: "Missing or invalid Authorization token",
+        recommendation: "You are not authorized. Please refresh your session or sign in again.",
+      },
+    });
+  }
+
+  const idToken = authHeader.split(' ')[1];
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    req.ownerId = decoded.uid;
+    req.idToken = idToken;
+    next();
+  } catch (err: any) {
+    console.error('AUTH_ERROR: ID token verification failed', err?.message || err);
+    return res.status(401).json({
+      error: {
+        stage: "AUTH_VERIFICATION",
+        reason: `Invalid ID token: ${err?.message || String(err)}`,
+        recommendation: "Your session token has expired or is invalid. Please sign out and sign in again.",
+      },
+    });
+  }
+}
+
 function toFirestoreValue(value: any): any {
   if (value === null || value === undefined) return { nullValue: null };
   if (value instanceof Date) return { timestampValue: value.toISOString() };
@@ -304,8 +339,12 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Require a valid Firebase ID token on every other /api/* route so a
+  // route added in the future can't accidentally ship without auth.
+  app.use("/api", requireFirebaseAuth);
+
   // AI Analysis Endpoint
-  app.post("/api/analyze", upload.single("file"), async (req, res) => {
+  app.post("/api/analyze", upload.single("file"), async (req: any, res) => {
     try {
       console.log('=== PDF INGESTION START ===');
       const file = req.file;
@@ -328,29 +367,10 @@ async function startServer() {
         );
       }
 
-      // Check auth before spending resources.
-      const authHeader = String(req.headers.authorization || '');
-      if (!authHeader.startsWith('Bearer ')) {
-        throw new PipelineError(
-          "AUTH_VERIFICATION",
-          "Missing or invalid Authorization token",
-          "You are not authorized. Please refresh your session or sign in again."
-        );
-      }
-
-      const idToken = authHeader.split(' ')[1];
-      let ownerId = 'unknown';
-      try {
-        const decoded = await verifyFirebaseIdToken(idToken);
-        ownerId = decoded.uid;
-      } catch (err: any) {
-        console.error('AUTH_ERROR: ID token verification failed', err?.message || err);
-        throw new PipelineError(
-          "AUTH_VERIFICATION",
-          `Invalid ID token: ${err.message || String(err)}`,
-          "Your session token has expired or is invalid. Please sign out and sign in again."
-        );
-      }
+      // requireFirebaseAuth middleware has already verified the token
+      // and attached the uid/token before this handler runs.
+      const ownerId = req.ownerId as string;
+      const idToken = req.idToken as string;
 
       // Extract text from PDF buffer
       console.log('PDF_EXTRACTION_START: using pdf-parse');
