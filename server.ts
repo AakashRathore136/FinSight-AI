@@ -13,9 +13,19 @@ dotenv.config({ quiet: true });
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
 
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  // Reject non-PDF uploads before multer buffers the file into memory,
+  // instead of buffering it fully and only checking mimetype afterwards.
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      return cb(new Error("Only PDF files are accepted"));
+    }
+    cb(null, true);
+  },
 });
 
 type AnalysisResponse = {
@@ -631,6 +641,35 @@ CRITICAL RULES:
         }
       });
     }
+  });
+
+  // Catches errors from the upload.single("file") middleware above —
+  // oversized files (LIMIT_FILE_SIZE) and non-PDF rejections from
+  // fileFilter — and returns clean JSON instead of falling through to
+  // Express's default HTML error page.
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err instanceof multer.MulterError) {
+      const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      return res.status(status).json({
+        error: {
+          stage: "PDF_INGESTION",
+          reason: err.message,
+          recommendation: err.code === "LIMIT_FILE_SIZE"
+            ? `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB upload limit.`
+            : "Please check the uploaded file and try again.",
+        },
+      });
+    }
+    if (err && err.message === "Only PDF files are accepted") {
+      return res.status(400).json({
+        error: {
+          stage: "PDF_INGESTION",
+          reason: err.message,
+          recommendation: "Only PDF files are supported. Please convert your file to PDF format.",
+        },
+      });
+    }
+    next(err);
   });
 
   // Vite middleware for development
