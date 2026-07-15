@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import cors from "cors";
+import DOMPurify from "isomorphic-dompurify";
 
 dotenv.config({ quiet: true });
 
@@ -179,14 +180,26 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   }
 
   return {
-    summary: String(payload.summary || ""),
+    summary: sanitizeString(String(payload.summary || "")),
     key_metrics: typeof payload.key_metrics === "object" && payload.key_metrics ? payload.key_metrics : {},
-    risk_assessment: Array.isArray(payload.risk_assessment) ? payload.risk_assessment : [],
-    action_items: Array.isArray(payload.action_items) ? payload.action_items.map((v: unknown) => String(v)) : [],
+    risk_assessment: Array.isArray(payload.risk_assessment) ? payload.risk_assessment.map((item: any) => {
+      if (typeof item === "object" && item) {
+        return {
+          level: sanitizeString(String(item.level || "")),
+          description: sanitizeString(String(item.description || "")),
+        };
+      }
+      return sanitizeString(String(item || ""));
+    }) : [],
+    action_items: Array.isArray(payload.action_items) ? payload.action_items.map((v: unknown) => sanitizeString(String(v))) : [],
     sentiment_score: Number(payload.sentiment_score || 0),
-    entities: Array.isArray(payload.entities) ? payload.entities.map((v: unknown) => String(v)) : [],
-    full_report: fullReport,
+    entities: Array.isArray(payload.entities) ? payload.entities.map((v: unknown) => sanitizeString(String(v))) : [],
+    full_report: sanitizeString(fullReport),
   };
+}
+
+function sanitizeString(text: string): string {
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
