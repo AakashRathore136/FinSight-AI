@@ -9,6 +9,7 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import DOMPurify from "isomorphic-dompurify";
 
 dotenv.config({ quiet: true });
 
@@ -180,14 +181,26 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   }
 
   return {
-    summary: String(payload.summary || ""),
+    summary: sanitizeString(String(payload.summary || "")),
     key_metrics: typeof payload.key_metrics === "object" && payload.key_metrics ? payload.key_metrics : {},
-    risk_assessment: Array.isArray(payload.risk_assessment) ? payload.risk_assessment : [],
-    action_items: Array.isArray(payload.action_items) ? payload.action_items.map((v: unknown) => String(v)) : [],
+    risk_assessment: Array.isArray(payload.risk_assessment) ? payload.risk_assessment.map((item: any) => {
+      if (typeof item === "object" && item) {
+        return {
+          level: sanitizeString(String(item.level || "")),
+          description: sanitizeString(String(item.description || "")),
+        };
+      }
+      return sanitizeString(String(item || ""));
+    }) : [],
+    action_items: Array.isArray(payload.action_items) ? payload.action_items.map((v: unknown) => sanitizeString(String(v))) : [],
     sentiment_score: Number(payload.sentiment_score || 0),
-    entities: Array.isArray(payload.entities) ? payload.entities.map((v: unknown) => String(v)) : [],
-    full_report: fullReport,
+    entities: Array.isArray(payload.entities) ? payload.entities.map((v: unknown) => sanitizeString(String(v))) : [],
+    full_report: sanitizeString(fullReport),
   };
+}
+
+function sanitizeString(text: string): string {
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
@@ -369,6 +382,27 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Security headers middleware to prevent clickjacking and MIME-sniffing attacks
+  app.use((req, res, next) => {
+    // X-Frame-Options: Prevent the application from being embedded in iframes
+    res.setHeader('X-Frame-Options', 'DENY');
+    // X-Content-Type-Options: Prevent browser MIME-type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Strict-Transport-Security: Force HTTPS (if in production)
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    // Content-Security-Policy: Restrict resource loading to prevent XSS
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
+    // X-XSS-Protection: Enable browser XSS protection (defense-in-depth)
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Referrer-Policy: Control how much referrer information is shared
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Permissions-Policy: Disable potentially dangerous browser features
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    next();
+  });
+
   // Simple request logger for debugging
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -489,6 +523,10 @@ async function startServer() {
       let extractedText = '';
       {
         const parser = new PDFParse({ data: file.buffer });
+        const parserDestroyTimeout = setTimeout(() => {
+          console.warn('PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing');
+        }, 5000);
+
         try {
           const parsed = await parser.getText();
           extractedText = (parsed?.text || "").trim();
@@ -500,7 +538,15 @@ async function startServer() {
             "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF."
           );
         } finally {
-          await parser.destroy();
+          clearTimeout(parserDestroyTimeout);
+          try {
+            await Promise.race([
+              parser.destroy(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('destroy timeout')), 5000))
+            ]);
+          } catch (destroyError: any) {
+            console.warn('PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser', destroyError?.message || destroyError);
+          }
         }
       }
 
@@ -823,5 +869,23 @@ CRITICAL RULES:
     console.log(`FinSight AI running on http://localhost:${PORT}`);
   });
 }
+
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('UNHANDLED_PROMISE_REJECTION:', {
+    reason: reason?.message || String(reason),
+    stack: reason?.stack || 'No stack trace',
+    timestamp: new Date().toISOString(),
+  });
+  console.error('Promise state:', promise);
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('UNCAUGHT_EXCEPTION:', {
+    message: error?.message || String(error),
+    stack: error?.stack || 'No stack trace',
+    timestamp: new Date().toISOString(),
+  });
+  process.exit(1);
+});
 
 startServer();
