@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 
 dotenv.config({ quiet: true });
@@ -260,6 +261,29 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
   }
 }
 
+async function enrichUserContext(req: any, res: any, next: any) {
+  try {
+    if (!req.ownerId) {
+      req.userRole = 'free';
+      return next();
+    }
+
+    if (!admin.apps.length) {
+      req.userRole = 'free';
+      return next();
+    }
+
+    const db = getFirestore();
+    const userDoc = await db.collection('users').doc(req.ownerId).get();
+    req.userRole = userDoc.data()?.role || 'free';
+    next();
+  } catch (err: any) {
+    console.warn('Failed to load user role for rate limiting:', err?.message || err);
+    req.userRole = 'free';
+    next();
+  }
+}
+
 function toFirestoreValue(value: any): any {
   if (value === null || value === undefined) return { nullValue: null };
   if (value instanceof Date) return { timestampValue: value.toISOString() };
@@ -407,8 +431,66 @@ async function startServer() {
   // route added in the future can't accidentally ship without auth.
   app.use("/api", requireFirebaseAuth);
 
+  // Enrich user context with role information for rate limiting decisions
+  app.use("/api", enrichUserContext);
+
+  // Rate limiting for /api/analyze endpoint to prevent API quota exhaustion
+  // Limits: 5 requests per user per day, 2 concurrent requests per user per hour
+  const analyzeRateLimiter = rateLimit({
+    keyGenerator: (req: any) => req.ownerId || req.ip,
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    max: 5, // 5 requests per user per day
+    message: {
+      error: {
+        stage: "RATE_LIMIT",
+        reason: "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
+        recommendation: "Please try again tomorrow or upgrade your plan.",
+      },
+    },
+    standardHeaders: false,
+    skip: (req: any) => {
+      const userRole = req.userRole || 'free';
+      return userRole === 'premium' || userRole === 'admin';
+    },
+  });
+
+  // In-flight concurrency limiter (separate from request-rate limiting)
+  const inFlightAnalyzeByUser = new Map<string, number>();
+
+  const concurrentAnalyzeLimiter = (req: any, res: any, next: any) => {
+    const userRole = req.userRole || 'free';
+    if (userRole === 'premium' || userRole === 'admin') return next();
+
+    const key = String(req.ownerId || req.ip);
+    const current = inFlightAnalyzeByUser.get(key) || 0;
+    if (current >= 2) {
+      return res.status(429).json({
+        error: {
+          stage: "CONCURRENT_LIMIT",
+          reason: "Too many concurrent analysis requests (max 2 at a time)",
+          recommendation: "Please wait for an in-progress analysis to finish before submitting another.",
+        },
+      });
+    }
+
+    inFlightAnalyzeByUser.set(key, current + 1);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      const updated = (inFlightAnalyzeByUser.get(key) || 1) - 1;
+      if (updated <= 0) inFlightAnalyzeByUser.delete(key);
+      else inFlightAnalyzeByUser.set(key, updated);
+    };
+
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+    next();
+  };
+
   // AI Analysis Endpoint
-  app.post("/api/analyze", upload.single("file"), async (req: any, res) => {
+  app.post("/api/analyze", analyzeRateLimiter, concurrentAnalyzeLimiter, upload.single("file"), async (req: any, res) => {
     try {
       console.log('=== PDF INGESTION START ===');
       const file = req.file;
