@@ -441,6 +441,10 @@ async function startServer() {
       let extractedText = '';
       {
         const parser = new PDFParse({ data: file.buffer });
+        const parserDestroyTimeout = setTimeout(() => {
+          console.warn('PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing');
+        }, 5000);
+
         try {
           const parsed = await parser.getText();
           extractedText = (parsed?.text || "").trim();
@@ -452,7 +456,15 @@ async function startServer() {
             "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF."
           );
         } finally {
-          await parser.destroy();
+          clearTimeout(parserDestroyTimeout);
+          try {
+            await Promise.race([
+              parser.destroy(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('destroy timeout')), 5000))
+            ]);
+          } catch (destroyError: any) {
+            console.warn('PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser', destroyError?.message || destroyError);
+          }
         }
       }
 
@@ -775,5 +787,23 @@ CRITICAL RULES:
     console.log(`FinSight AI running on http://localhost:${PORT}`);
   });
 }
+
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('UNHANDLED_PROMISE_REJECTION:', {
+    reason: reason?.message || String(reason),
+    stack: reason?.stack || 'No stack trace',
+    timestamp: new Date().toISOString(),
+  });
+  console.error('Promise state:', promise);
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('UNCAUGHT_EXCEPTION:', {
+    message: error?.message || String(error),
+    stack: error?.stack || 'No stack trace',
+    timestamp: new Date().toISOString(),
+  });
+  process.exit(1);
+});
 
 startServer();
