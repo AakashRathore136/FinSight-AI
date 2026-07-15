@@ -345,6 +345,27 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Security headers middleware to prevent clickjacking and MIME-sniffing attacks
+  app.use((req, res, next) => {
+    // X-Frame-Options: Prevent the application from being embedded in iframes
+    res.setHeader('X-Frame-Options', 'DENY');
+    // X-Content-Type-Options: Prevent browser MIME-type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Strict-Transport-Security: Force HTTPS (if in production)
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    // Content-Security-Policy: Restrict resource loading to prevent XSS
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
+    // X-XSS-Protection: Enable browser XSS protection (defense-in-depth)
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Referrer-Policy: Control how much referrer information is shared
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Permissions-Policy: Disable potentially dangerous browser features
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    next();
+  });
+
   // Simple request logger for debugging
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
