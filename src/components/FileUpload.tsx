@@ -79,6 +79,9 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         method: 'POST',
         body: formData,
         headers,
+      },
+      {
+        timeout: 180000,
       });
 
       if (!analysisRes.ok) {
