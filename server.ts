@@ -420,23 +420,40 @@ async function startServer() {
     },
   });
 
-  const concurrentAnalyzeLimiter = rateLimit({
-    keyGenerator: (req: any) => req.ownerId || req.ip,
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 2, // 2 concurrent requests per hour
-    message: {
-      error: {
-        stage: "CONCURRENT_LIMIT",
-        reason: "Too many concurrent analysis requests (max 2 per hour)",
-        recommendation: "Please wait before submitting another analysis request.",
-      },
-    },
-    standardHeaders: false,
-    skip: (req: any) => {
-      const userRole = req.userRole || 'free';
-      return userRole === 'premium' || userRole === 'admin';
-    },
-  });
+  // In-flight concurrency limiter (separate from request-rate limiting)
+  const inFlightAnalyzeByUser = new Map<string, number>();
+
+  const concurrentAnalyzeLimiter = (req: any, res: any, next: any) => {
+    const userRole = req.userRole || 'free';
+    if (userRole === 'premium' || userRole === 'admin') return next();
+
+    const key = String(req.ownerId || req.ip);
+    const current = inFlightAnalyzeByUser.get(key) || 0;
+    if (current >= 2) {
+      return res.status(429).json({
+        error: {
+          stage: "CONCURRENT_LIMIT",
+          reason: "Too many concurrent analysis requests (max 2 at a time)",
+          recommendation: "Please wait for an in-progress analysis to finish before submitting another.",
+        },
+      });
+    }
+
+    inFlightAnalyzeByUser.set(key, current + 1);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      const updated = (inFlightAnalyzeByUser.get(key) || 1) - 1;
+      if (updated <= 0) inFlightAnalyzeByUser.delete(key);
+      else inFlightAnalyzeByUser.set(key, updated);
+    };
+
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+    next();
+  };
 
   // AI Analysis Endpoint
   app.post("/api/analyze", analyzeRateLimiter, concurrentAnalyzeLimiter, upload.single("file"), async (req: any, res) => {
