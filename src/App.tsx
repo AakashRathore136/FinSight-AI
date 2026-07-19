@@ -24,7 +24,8 @@ import {
   Filter,
   Lock,
   Zap,
-  Activity
+  Activity,
+  Sparkles
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -97,6 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
+import { InsightsDashboard } from './components/insights/InsightsDashboard';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -640,6 +642,12 @@ export default function App() {
             label="AI Intelligence" 
             active={activeTab === 'history'} 
             onClick={() => setActiveTab('history')} 
+          />
+          <NavItem 
+            icon={<Sparkles size={20} />} 
+            label="Insights" 
+            active={activeTab === 'insights'} 
+            onClick={() => setActiveTab('insights')} 
           />
           {userProfile?.role === 'admin' && (
             <NavItem 
