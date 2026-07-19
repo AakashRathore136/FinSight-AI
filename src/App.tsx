@@ -638,6 +638,12 @@ export default function App() {
             onClick={() => setActiveTab('documents')} 
           />
           <NavItem 
+            icon={<Wallet size={20} />} 
+            label="Budgets" 
+            active={activeTab === 'budgets'} 
+            onClick={() => setActiveTab('budgets')} 
+          />
+          <NavItem 
             icon={<Clock size={20} />} 
             label="AI Intelligence" 
             active={activeTab === 'history'} 
