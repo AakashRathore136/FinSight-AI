@@ -63,6 +63,13 @@ service cloud.firestore {
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
 
+    match /subscriptions/{subId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isSignedIn(); // Allow app to log actions
