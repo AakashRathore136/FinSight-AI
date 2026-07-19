@@ -24,7 +24,8 @@ import {
   Filter,
   Lock,
   Zap,
-  Activity
+  Activity,
+  Bell
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -97,6 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
+import BillReminders from './components/bills/BillReminders';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -641,6 +643,12 @@ export default function App() {
             active={activeTab === 'history'} 
             onClick={() => setActiveTab('history')} 
           />
+          <NavItem 
+            icon={<Bell size={20} />} 
+            label="Bills" 
+            active={activeTab === 'bills'} 
+            onClick={() => setActiveTab('bills')} 
+          />
           {userProfile?.role === 'admin' && (
             <NavItem 
               icon={<ShieldCheck size={20} />} 
@@ -741,6 +749,18 @@ export default function App() {
                  className="space-y-6"
               >
                 <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+              </motion.div>
+            )}
+
+            {activeTab === 'bills' && (
+              <motion.div 
+                key="bills"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BillReminders user={user} />
               </motion.div>
             )}
 
