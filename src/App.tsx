@@ -638,10 +638,10 @@ export default function App() {
             onClick={() => setActiveTab('documents')} 
           />
           <NavItem 
-            icon={<FileText size={20} />} 
-            label="Reports" 
-            active={activeTab === 'reports'} 
-            onClick={() => setActiveTab('reports')} 
+            icon={<Wallet size={20} />} 
+            label="Budgets" 
+            active={activeTab === 'budgets'} 
+            onClick={() => setActiveTab('budgets')} 
           />
           <NavItem 
             icon={<Clock size={20} />} 
