@@ -24,7 +24,8 @@ import {
   Filter,
   Lock,
   Zap,
-  Activity
+  Activity,
+  Target
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -97,7 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
-import { CategoryTrends } from './components/trends/CategoryTrends';
+import { GoalPlanner } from './components/goals/GoalPlanner';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -643,10 +644,10 @@ export default function App() {
             onClick={() => setActiveTab('history')} 
           />
           <NavItem 
-            icon={<TrendingUp size={20} />} 
-            label="Trends" 
-            active={activeTab === 'trends'} 
-            onClick={() => setActiveTab('trends')} 
+            icon={<Target size={20} />} 
+            label="Goals" 
+            active={activeTab === 'goals'} 
+            onClick={() => setActiveTab('goals')} 
           />
           {userProfile?.role === 'admin' && (
             <NavItem 
@@ -751,15 +752,15 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'trends' && (
+            {activeTab === 'goals' && (
               <motion.div 
-                key="trends"
+                key="goals"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 className="space-y-6"
               >
-                <CategoryTrends user={user} />
+                <GoalPlanner user={user} />
               </motion.div>
             )}
 
