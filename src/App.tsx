@@ -24,7 +24,8 @@ import {
   Filter,
   Lock,
   Zap,
-  Activity
+  Activity,
+  TrendingUp
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -97,6 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
+import { CashFlowDashboard } from './components/cashflow/CashFlowDashboard';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -636,6 +638,12 @@ export default function App() {
             onClick={() => setActiveTab('documents')} 
           />
           <NavItem 
+            icon={<TrendingUp size={20} />} 
+            label="Cash Flow" 
+            active={activeTab === 'cashflow'} 
+            onClick={() => setActiveTab('cashflow')} 
+          />
+          <NavItem 
             icon={<Clock size={20} />} 
             label="AI Intelligence" 
             active={activeTab === 'history'} 
@@ -729,6 +737,18 @@ export default function App() {
                  className="space-y-6"
               >
                 <AnalysisList type="all" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+              </motion.div>
+            )}
+
+            {activeTab === 'cashflow' && (
+              <motion.div 
+                key="cashflow"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <CashFlowDashboard user={user} />
               </motion.div>
             )}
 
