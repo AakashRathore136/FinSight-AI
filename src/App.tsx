@@ -746,17 +746,29 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'history' && (
-              <motion.div 
-                key="history"
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+             {activeTab === 'history' && (
+               <motion.div 
+                 key="history"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                  className="space-y-6"
+               >
+                 <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+               </motion.div>
+             )}
+
+             {activeTab === 'subscriptions' && user && (
+               <motion.div 
+                 key="subscriptions"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
                  className="space-y-6"
-              >
-                <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
-              </motion.div>
-            )}
+               >
+                 <SubscriptionAnalyzer user={user} />
+               </motion.div>
+             )}
 
             {activeTab === 'goals' && (
               <motion.div 
