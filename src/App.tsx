@@ -765,6 +765,24 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'cashflow' && (
+              <motion.div 
+                key="cashflow"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <CashFlowDashboard user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'history' && (
+              <motion.div 
+                key="history"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
              {activeTab === 'history' && (
                <motion.div 
                  key="history"
