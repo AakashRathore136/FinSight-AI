@@ -632,6 +632,12 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
           />
           <NavItem 
+            icon={<AlertTriangle size={20} />} 
+            label="Anomalies" 
+            active={activeTab === 'anomalies'} 
+            onClick={() => setActiveTab('anomalies')} 
+          />
+          <NavItem 
             icon={<FileText size={20} />} 
             label="Documents" 
             active={activeTab === 'documents'} 
@@ -722,19 +728,32 @@ export default function App() {
         <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
           <AnimatePresence mode="wait">
              {activeTab === 'dashboard' && (
-              <motion.div 
-                key="dashboard"
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-8"
-              >
-                <Dashboard user={user} userProfile={userProfile} onAction={(tab) => setActiveTab(tab)} onDocSelect={(id) => openAnalysisView(id, 'dashboard')} />
-              </motion.div>
-            )}
-            
-            {activeTab === 'documents' && (
+               <motion.div 
+                 key="dashboard"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                 transition={{ duration: 0.2 }}
+                 className="space-y-8"
+               >
+                 <Dashboard user={user} userProfile={userProfile} onAction={(tab) => setActiveTab(tab)} onDocSelect={(id) => openAnalysisView(id, 'dashboard')} />
+               </motion.div>
+             )}
+
+             {activeTab === 'anomalies' && (
+               <motion.div 
+                 key="anomalies"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                 transition={{ duration: 0.2 }}
+                 className="space-y-8"
+               >
+                 <AnomalyDashboard user={user} />
+               </motion.div>
+             )}
+             
+             {activeTab === 'documents' && (
               <motion.div 
                 key="documents"
                 initial={false}
