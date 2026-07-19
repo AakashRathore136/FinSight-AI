@@ -25,7 +25,7 @@ import {
   Lock,
   Zap,
   Activity,
-  Sparkles
+  Target
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -98,7 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
-import { InsightsDashboard } from './components/insights/InsightsDashboard';
+import { GoalPlanner } from './components/goals/GoalPlanner';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -644,10 +644,10 @@ export default function App() {
             onClick={() => setActiveTab('history')} 
           />
           <NavItem 
-            icon={<Sparkles size={20} />} 
-            label="Insights" 
-            active={activeTab === 'insights'} 
-            onClick={() => setActiveTab('insights')} 
+            icon={<Target size={20} />} 
+            label="Goals" 
+            active={activeTab === 'goals'} 
+            onClick={() => setActiveTab('goals')} 
           />
           {userProfile?.role === 'admin' && (
             <NavItem 
@@ -749,6 +749,18 @@ export default function App() {
                  className="space-y-6"
               >
                 <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+              </motion.div>
+            )}
+
+            {activeTab === 'goals' && (
+              <motion.div 
+                key="goals"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <GoalPlanner user={user} />
               </motion.div>
             )}
 
