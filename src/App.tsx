@@ -25,7 +25,7 @@ import {
   Lock,
   Zap,
   Activity,
-  Bell
+  Target
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -98,7 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
-import BillReminders from './components/bills/BillReminders';
+import { GoalPlanner } from './components/goals/GoalPlanner';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -644,10 +644,10 @@ export default function App() {
             onClick={() => setActiveTab('history')} 
           />
           <NavItem 
-            icon={<Bell size={20} />} 
-            label="Bills" 
-            active={activeTab === 'bills'} 
-            onClick={() => setActiveTab('bills')} 
+            icon={<Target size={20} />} 
+            label="Goals" 
+            active={activeTab === 'goals'} 
+            onClick={() => setActiveTab('goals')} 
           />
           {userProfile?.role === 'admin' && (
             <NavItem 
@@ -752,15 +752,15 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'bills' && (
+            {activeTab === 'goals' && (
               <motion.div 
-                key="bills"
+                key="goals"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 className="space-y-6"
               >
-                <BillReminders user={user} />
+                <GoalPlanner user={user} />
               </motion.div>
             )}
 

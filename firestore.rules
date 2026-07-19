@@ -68,7 +68,7 @@ service cloud.firestore {
       allow create: if isSignedIn(); // Allow app to log actions
     }
 
-    match /bills/{billId} {
+    match /goals/{goalId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if isOwner(existing().userId) || isAdmin();
