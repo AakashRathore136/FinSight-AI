@@ -97,6 +97,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
+import { ReportExport } from './components/reports/ReportExport';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -636,6 +637,12 @@ export default function App() {
             onClick={() => setActiveTab('documents')} 
           />
           <NavItem 
+            icon={<FileText size={20} />} 
+            label="Reports" 
+            active={activeTab === 'reports'} 
+            onClick={() => setActiveTab('reports')} 
+          />
+          <NavItem 
             icon={<Clock size={20} />} 
             label="AI Intelligence" 
             active={activeTab === 'history'} 
@@ -729,6 +736,18 @@ export default function App() {
                  className="space-y-6"
               >
                 <AnalysisList type="all" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+              </motion.div>
+            )}
+
+            {activeTab === 'reports' && (
+              <motion.div 
+                key="reports"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <ReportExport />
               </motion.div>
             )}
 
