@@ -1,4 +1,5 @@
-import { format, differenceInDays, addMonths, isBefore } from 'date-fns';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 
 export interface Goal {
   id: string;
@@ -14,93 +15,92 @@ export interface Goal {
   completedAt?: string;
 }
 
-export function calculateMonthlyContribution(
-  targetAmount: number,
-  currentAmount: number,
-  deadline: string
-): number {
-  const remaining = targetAmount - currentAmount;
-  if (remaining <= 0) return 0;
-
-  const deadlineDate = new Date(deadline);
+export function calculateMonthlyContribution(targetAmount: number, deadline: Date): number {
   const now = new Date();
-  const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
-
-  return Math.ceil(remaining / monthsRemaining);
-}
-
-export function checkGoalCompletion(goal: Goal): boolean {
-  return goal.currentAmount >= goal.targetAmount && goal.status !== 'completed';
+  const monthsRemaining = Math.max(1, (deadline.getFullYear() - now.getFullYear()) * 12 + (deadline.getMonth() - now.getMonth()));
+  return Math.round(targetAmount / monthsRemaining);
 }
 
 export function calculateDaysRemaining(deadline: string): number {
-  const deadlineDate = new Date(deadline);
   const now = new Date();
-  const days = differenceInDays(deadlineDate, now);
-  return Math.max(0, days);
+  now.setHours(0, 0, 0, 0);
+  const end = new Date(deadline);
+  end.setHours(0, 0, 0, 0);
+  const diff = end.getTime() - now.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-export function generateContributionSuggestions(
-  targetAmount: number,
-  currentAmount: number,
-  deadline: string,
-  options: {
-    conservative?: boolean;
-    aggressive?: boolean;
-  } = {}
-): { label: string; amount: number }[] {
-  const remaining = targetAmount - currentAmount;
-  if (remaining <= 0) return [{ label: 'Goal reached', amount: 0 }];
-
-  const deadlineDate = new Date(deadline);
-  const now = new Date();
-  const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
-  const baseMonthly = Math.ceil(remaining / monthsRemaining);
-
-  const suggestions = [
-    {
-      label: 'Recommended',
-      amount: baseMonthly,
-    },
-    {
-      label: 'Conservative',
-      amount: Math.ceil(baseMonthly * (options.conservative ? 1.2 : 1.1)),
-    },
-    {
-      label: 'Aggressive',
-      amount: Math.max(1, Math.floor(baseMonthly * (options.aggressive ? 0.85 : 0.9))),
-    },
-  ];
-
-  return suggestions;
+export function checkGoalCompletion(goal: Goal): boolean {
+  return goal.currentAmount >= goal.targetAmount;
 }
 
-export function generateTimelineProjection(
-  targetAmount: number,
-  currentAmount: number,
-  monthlyContribution: number
-): { month: string; projected: number }[] {
-  if (monthlyContribution <= 0) return [];
-
-  const now = new Date();
-  const projection: { month: string; projected: number }[] = [];
-  let running = currentAmount;
-
-  for (let i = 1; i <= 24 && running < targetAmount; i++) {
-    running += monthlyContribution;
-    if (running > targetAmount) running = targetAmount;
-    projection.push({
-      month: format(addMonths(now, i), 'MMM yyyy'),
-      projected: Math.round(running),
+export async function fetchUserGoals(userId: string): Promise<Goal[]> {
+  if (!userId) return [];
+  try {
+    const goalsRef = collection(db, 'goals');
+    const q = query(goalsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        userId: data.userId,
+        name: data.name,
+        targetAmount: Number(data.targetAmount) || 0,
+        currentAmount: Number(data.currentAmount) || 0,
+        deadline: data.deadline,
+        category: data.category,
+        suggestedMonthlyContribution: Number(data.suggestedMonthlyContribution) || 0,
+        status: data.status || 'active',
+        createdAt: data.createdAt,
+        completedAt: data.completedAt,
+      };
     });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'goals');
+    return [];
   }
-
-  return projection;
 }
 
-export function getProgressPercentage(currentAmount: number, targetAmount: number): number {
-  if (targetAmount <= 0) return 0;
-  return Math.min(100, Math.round((currentAmount / targetAmount) * 100));
+export async function createGoal(goal: Omit<Goal, 'id'>): Promise<string> {
+  try {
+    const ref = await addDoc(collection(db, 'goals'), {
+      ...goal,
+      createdAt: goal.createdAt || new Date().toISOString(),
+    });
+    return ref.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'goals');
+    throw error;
+  }
+}
+
+export async function updateGoalProgress(goalId: string, amount: number): Promise<void> {
+  try {
+    const ref = doc(db, 'goals', goalId);
+    const snap = await getDocs(query(collection(db, 'goals'), where('__name__', '==', goalId)));
+    if (snap.empty) return;
+    const current = Number(snap.docs[0].data().currentAmount) || 0;
+    const newAmount = current + amount;
+    const updates: any = { currentAmount: newAmount };
+    if (newAmount >= Number(snap.docs[0].data().targetAmount)) {
+      updates.status = 'completed';
+      updates.completedAt = new Date().toISOString();
+    }
+    await updateDoc(ref, updates);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `goals/${goalId}`);
+    throw error;
+  }
+}
+
+export async function deleteGoal(goalId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'goals', goalId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `goals/${goalId}`);
+    throw error;
+  }
 }
 
 export function formatCurrency(amount: number): string {
@@ -110,17 +110,4 @@ export function formatCurrency(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
-}
-
-export function getGoalStatus(goal: Goal): { label: string; color: string } {
-  const daysRemaining = calculateDaysRemaining(goal.deadline);
-  if (goal.status === 'completed') return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
-  if (goal.status === 'paused') return { label: 'Paused', color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' };
-
-  const progress = getProgressPercentage(goal.currentAmount, goal.targetAmount);
-  if (progress >= 100) return { label: 'Ready to Complete', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
-  if (daysRemaining <= 30) return { label: 'Urgent', color: 'bg-red-500/10 text-red-400 border-red-500/30' };
-  if (daysRemaining <= 90) return { label: 'At Risk', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
-
-  return { label: 'On Track', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' };
 }

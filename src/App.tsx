@@ -25,16 +25,7 @@ import {
   Lock,
   Zap,
   Activity,
-  Target,
-  Bell,
-  Trophy,
-  Calculator,
-  RefreshCw,
-  HeartPulse,
-  MessageSquare,
-  LineChart,
-  Globe,
-  Shield
+  Target
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -107,18 +98,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { CommandPalette } from './components/dashboard/CommandPalette';
-import { CurrencyManager } from './components/currency/CurrencyManager';
-import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
-import { BillReminders } from './components/bills/BillReminders';
-import { RolloverManager } from './components/rollover/RolloverManager';
-import { ChallengesDashboard } from './components/challenges/ChallengesDashboard';
-import { TaxEstimation } from './components/tax/TaxEstimation';
-import { EmergencyFundPlanner } from './components/emergency/EmergencyFundPlanner';
-import { HealthScoreDashboard } from './components/health/HealthScoreDashboard';
-import { ChatAssistant } from './components/chat/ChatAssistant';
-import { ForecastComparison } from './components/forecast/ForecastComparison';
-import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -652,22 +632,22 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
           />
           <NavItem 
+            icon={<AlertTriangle size={20} />} 
+            label="Anomalies" 
+            active={activeTab === 'anomalies'} 
+            onClick={() => setActiveTab('anomalies')} 
+          />
+          <NavItem 
             icon={<FileText size={20} />} 
             label="Documents" 
             active={activeTab === 'documents'} 
             onClick={() => setActiveTab('documents')} 
           />
           <NavItem 
-            icon={<Clock size={20} />} 
-            label="AI Intelligence" 
-            active={activeTab === 'history'} 
-            onClick={() => setActiveTab('history')} 
-          />
-          <NavItem 
-            icon={<TrendingUp size={20} />} 
-            label="Trends" 
-            active={activeTab === 'trends'} 
-            onClick={() => setActiveTab('trends')} 
+            icon={<Wallet size={20} />} 
+            label="Budgets" 
+            active={activeTab === 'budgets'} 
+            onClick={() => setActiveTab('budgets')} 
           />
           <NavItem 
             icon={<Clock size={20} />} 
@@ -676,64 +656,10 @@ export default function App() {
             onClick={() => setActiveTab('history')} 
           />
           <NavItem 
-            icon={<Globe size={20} />} 
-            label="Currencies" 
-            active={activeTab === 'currencies'} 
-            onClick={() => setActiveTab('currencies')} 
-          />
-          <NavItem
-            icon={<Bell size={20} />}
-            label="Bills"
-            active={activeTab === 'bills'}
-            onClick={() => setActiveTab('bills')}
-          />
-          <NavItem
-            icon={<RefreshCw size={20} />}
-            label="Rollover"
-            active={activeTab === 'rollover'}
-            onClick={() => setActiveTab('rollover')}
-          />
-          <NavItem
-            icon={<Trophy size={20} />}
-            label="Challenges"
-            active={activeTab === 'challenges'}
-            onClick={() => setActiveTab('challenges')}
-          />
-          <NavItem 
-            icon={<Calculator size={20} />} 
-            label="Tax Estimator" 
-            active={activeTab === 'tax'} 
-            onClick={() => setActiveTab('tax')} 
-          />
-          <NavItem 
-            icon={<Shield size={20} />} 
-            label="Emergency Fund" 
-            active={activeTab === 'emergency'} 
-            onClick={() => setActiveTab('emergency')} 
-          />
-          <NavItem
-            icon={<HeartPulse size={20} />}
-            label="Health Score"
-            active={activeTab === 'health'}
-            onClick={() => setActiveTab('health')}
-          />
-          <NavItem
-            icon={<MessageSquare size={20} />}
-            label="AI Chat"
-            active={activeTab === 'chat'}
-            onClick={() => setActiveTab('chat')}
-          />
-          <NavItem
-            icon={<LineChart size={20} />}
-            label="Forecast"
-            active={activeTab === 'forecast'}
-            onClick={() => setActiveTab('forecast')}
-          />
-          <NavItem
-            icon={<Briefcase size={20} />}
-            label="Portfolio"
-            active={activeTab === 'portfolio'}
-            onClick={() => setActiveTab('portfolio')}
+            icon={<Target size={20} />} 
+            label="Goals" 
+            active={activeTab === 'goals'} 
+            onClick={() => setActiveTab('goals')} 
           />
           {userProfile?.role === 'admin' && (
             <NavItem 
@@ -802,19 +728,32 @@ export default function App() {
         <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
           <AnimatePresence mode="wait">
              {activeTab === 'dashboard' && (
-              <motion.div 
-                key="dashboard"
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-8"
-              >
-                <Dashboard user={user} userProfile={userProfile} onAction={(tab) => setActiveTab(tab)} onDocSelect={(id) => openAnalysisView(id, 'dashboard')} />
-              </motion.div>
-            )}
-            
-            {activeTab === 'documents' && (
+               <motion.div 
+                 key="dashboard"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                 transition={{ duration: 0.2 }}
+                 className="space-y-8"
+               >
+                 <Dashboard user={user} userProfile={userProfile} onAction={(tab) => setActiveTab(tab)} onDocSelect={(id) => openAnalysisView(id, 'dashboard')} />
+               </motion.div>
+             )}
+
+             {activeTab === 'anomalies' && (
+               <motion.div 
+                 key="anomalies"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                 transition={{ duration: 0.2 }}
+                 className="space-y-8"
+               >
+                 <AnomalyDashboard user={user} />
+               </motion.div>
+             )}
+             
+             {activeTab === 'documents' && (
               <motion.div 
                 key="documents"
                 initial={false}
@@ -826,15 +765,57 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'cashflow' && (
+              <motion.div 
+                key="cashflow"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <CashFlowDashboard user={user} />
+              </motion.div>
+            )}
+
             {activeTab === 'history' && (
               <motion.div 
                 key="history"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
+             {activeTab === 'history' && (
+               <motion.div 
+                 key="history"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
+                  className="space-y-6"
+               >
+                 <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+               </motion.div>
+             )}
+
+             {activeTab === 'subscriptions' && user && (
+               <motion.div 
+                 key="subscriptions"
+                 initial={false}
+                 animate={{ opacity: 1, x: 0 }}
+                 exit={{ opacity: 0, x: -10 }}
                  className="space-y-6"
+               >
+                 <SubscriptionAnalyzer user={user} />
+               </motion.div>
+             )}
+
+            {activeTab === 'goals' && (
+              <motion.div 
+                key="goals"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
               >
-                <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+                <GoalPlanner user={user} />
               </motion.div>
             )}
 

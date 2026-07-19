@@ -1,292 +1,328 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  where,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  addDoc,
-  orderBy,
-  deleteDoc,
-  writeBatch,
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
-import { toDate } from './utils';
-
-export interface BudgetCategory {
+export interface Transaction {
   id: string;
   userId: string;
-  name: string;
-  monthlyLimit: number;
-  rolloverEnabled: boolean;
-  rolloverPercentage: number;
-  rolledOverAmount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RolloverEntry {
-  id: string;
-  userId: string;
-  fromMonth: string;
-  toMonth: string;
-  category: string;
   amount: number;
-  percentage: number;
-  createdAt: string;
+  category: string;
+  type: 'income' | 'expense';
+  date: Date;
+  description?: string;
 }
 
-export interface BudgetCategoryInput {
-  name: string;
-  monthlyLimit: number;
-  rolloverEnabled?: boolean;
-  rolloverPercentage?: number;
+export interface CategoryBudgetSuggestion {
+  category: string;
+  suggestedAmount: number;
+  averageSpending: number;
+  previousMonthSpending: number;
+  status: 'accepted' | 'rejected' | 'modified';
+  modifiedAmount?: number;
 }
 
-export const DEFAULT_CATEGORIES = [
-  'Housing',
-  'Food & Dining',
-  'Transportation',
-  'Utilities',
-  'Entertainment',
-  'Healthcare',
-  'Shopping',
-  'Education',
-  'Savings',
-  'Other',
-];
+export interface BudgetData {
+  userId: string;
+  month: string;
+  totalBudget: number;
+  categoryBudgets: Record<string, number>;
+  confidenceScore: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BudgetComparison {
+  category: string;
+  suggested: number;
+  previous: number;
+  difference: number;
+  percentChange: number;
+}
+
+function getStartOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getEndOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+function getPreviousMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+}
+
+function formatMonthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
+  if (!userId) return [];
+
+  try {
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+
+    const transactionsRef = collection(db, 'transactions');
+    const q = query(
+      transactionsRef,
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(threeMonthsAgo)),
+      orderBy('date', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    const transactions: Transaction[] = snapshot.docs.map(doc => {
+      const data = doc.data();
+      let date: Date;
+      if (data.date instanceof Timestamp) {
+        date = data.date.toDate();
+      } else if (data.date instanceof Date) {
+        date = data.date;
+      } else if (typeof data.date === 'string' || typeof data.date === 'number') {
+        date = new Date(data.date);
+      } else {
+        date = new Date();
+      }
+
+      return {
+        id: doc.id,
+        userId: data.userId || '',
+        amount: Number(data.amount) || 0,
+        category: data.category || 'Other',
+        type: data.type === 'income' ? 'income' : 'expense',
+        date,
+        description: data.description,
+      };
+    });
+
+    return transactions;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'transactions');
+    return [];
+  }
+}
+
+export async function fetchPreviousMonthTransactions(userId: string): Promise<Transaction[]> {
+  if (!userId) return [];
+
+  try {
+    const now = new Date();
+    const prevMonthStart = getStartOfMonth(getPreviousMonth(now));
+    const prevMonthEnd = getEndOfMonth(getPreviousMonth(now));
+
+    const transactionsRef = collection(db, 'transactions');
+    const q = query(
+      transactionsRef,
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(prevMonthStart)),
+      where('date', '<=', Timestamp.fromDate(prevMonthEnd)),
+      orderBy('date', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    const transactions: Transaction[] = snapshot.docs.map(doc => {
+      const data = doc.data();
+      let date: Date;
+      if (data.date instanceof Timestamp) {
+        date = data.date.toDate();
+      } else if (data.date instanceof Date) {
+        date = data.date;
+      } else if (typeof data.date === 'string' || typeof data.date === 'number') {
+        date = new Date(data.date);
+      } else {
+        date = new Date();
+      }
+
+      return {
+        id: doc.id,
+        userId: data.userId || '',
+        amount: Number(data.amount) || 0,
+        category: data.category || 'Other',
+        type: data.type === 'income' ? 'income' : 'expense',
+        date,
+        description: data.description,
+      };
+    });
+
+    return transactions;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'transactions');
+    return [];
+  }
+}
+
+export function calculateAverageSpending(transactions: Transaction[]): Record<string, number> {
+  const categoryTotals: Record<string, number> = {};
+  const categoryMonths: Record<string, Set<string>> = {};
+
+  const expenseTransactions = transactions.filter(t => t.type === 'expense');
+
+  expenseTransactions.forEach(t => {
+    const monthKey = formatMonthKey(t.date);
+    categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+    if (!categoryMonths[t.category]) {
+      categoryMonths[t.category] = new Set();
+    }
+    categoryMonths[t.category].add(monthKey);
+  });
+
+  const averages: Record<string, number> = {};
+  Object.keys(categoryTotals).forEach(category => {
+    const months = categoryMonths[category]?.size || 1;
+    averages[category] = categoryTotals[category] / Math.max(months, 1);
+  });
+
+  return averages;
+}
+
+export function calculateCategorySpending(transactions: Transaction[]): Record<string, number> {
+  const categoryTotals: Record<string, number> = {};
+
+  transactions.filter(t => t.type === 'expense').forEach(t => {
+    categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+  });
+
+  return categoryTotals;
+}
+
+export function calculateConfidenceScore(
+  transactions: Transaction[],
+  averages: Record<string, number>
+): number {
+  if (transactions.length === 0) return 0;
+
+  const expenseTransactions = transactions.filter(t => t.type === 'expense');
+  if (expenseTransactions.length === 0) return 0;
+
+  const categories = Object.keys(averages);
+  if (categories.length === 0) return 0;
+
+  const monthsWithData = new Set(
+    expenseTransactions.map(t => formatMonthKey(t.date))
+  ).size;
+
+  const dataConsistencyScore = Math.min(monthsWithData / 3, 1) * 40;
+
+  const transactionCountScore = Math.min(expenseTransactions.length / 30, 1) * 35;
+
+  const categoryDiversityScore = Math.min(categories.length / 8, 1) * 25;
+
+  const totalScore = Math.round(dataConsistencyScore + transactionCountScore + categoryDiversityScore);
+
+  return Math.min(totalScore, 100);
+}
+
+export function generateBudgetSuggestions(
+  transactions: Transaction[],
+  previousMonthSpending: Record<string, number>
+): CategoryBudgetSuggestion[] {
+  const averages = calculateAverageSpending(transactions);
+
+  const suggestions: CategoryBudgetSuggestion[] = Object.entries(averages).map(([category, avgSpending]) => {
+    const prevSpending = previousMonthSpending[category] || avgSpending;
+
+    const trend = prevSpending > 0 ? (avgSpending - prevSpending) / prevSpending : 0;
+
+    let suggestedAmount = avgSpending;
+    if (trend > 0.2) {
+      suggestedAmount = avgSpending * 0.9;
+    } else if (trend < -0.2) {
+      suggestedAmount = avgSpending * 1.1;
+    }
+
+    suggestedAmount = Math.round(suggestedAmount * 100) / 100;
+
+    return {
+      category,
+      suggestedAmount,
+      averageSpending: Math.round(avgSpending * 100) / 100,
+      previousMonthSpending: Math.round(prevSpending * 100) / 100,
+      status: 'accepted',
+    };
+  });
+
+  return suggestions.sort((a, b) => b.suggestedAmount - a.suggestedAmount);
+}
+
+export function calculateTotalBudget(suggestions: CategoryBudgetSuggestion[]): number {
+  return suggestions.reduce((total, s) => {
+    const amount = s.status === 'rejected' ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
+    return total + amount;
+  }, 0);
+}
+
+export async function saveBudgetToFirestore(budget: BudgetData): Promise<void> {
+  if (!budget.userId) return;
+
+  try {
+    const { doc, setDoc } = await import('firebase/firestore');
+    const budgetRef = doc(db, 'budgets', `${budget.userId}_${budget.month}`);
+    await setDoc(budgetRef, {
+      ...budget,
+      createdAt: budget.createdAt || new Date(),
+      updatedAt: new Date(),
+    }, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.BUDGET, 'budgets');
+    throw error;
+  }
+}
+
+export async function fetchBudgetFromFirestore(userId: string, month: string): Promise<BudgetData | null> {
+  if (!userId || !month) return null;
+
+  try {
+    const { doc, getDoc } = await import('firebase/firestore');
+    const budgetRef = doc(db, 'budgets', `${userId}_${month}`);
+    const snapshot = await getDoc(budgetRef);
+
+    if (!snapshot.exists()) return null;
+
+    const data = snapshot.data();
+    return {
+      userId: data.userId,
+      month: data.month,
+      totalBudget: Number(data.totalBudget) || 0,
+      categoryBudgets: data.categoryBudgets || {},
+      confidenceScore: Number(data.confidenceScore) || 0,
+      createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+      updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, 'budgets');
+    return null;
+  }
+}
+
+export function generateBudgetComparison(
+  suggestions: CategoryBudgetSuggestion[],
+  previousMonthSpending: Record<string, number>
+): BudgetComparison[] {
+  return suggestions.map(s => {
+    const suggested = s.status === 'rejected' ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
+    const previous = previousMonthSpending[s.category] || s.averageSpending;
+    const difference = suggested - previous;
+    const percentChange = previous > 0 ? Math.round((difference / previous) * 100) : 0;
+
+    return {
+      category: s.category,
+      suggested,
+      previous: Math.round(previous * 100) / 100,
+      difference: Math.round(difference * 100) / 100,
+      percentChange,
+    };
+  }).sort((a, b) => b.difference - a.difference);
+}
 
 export function getCurrentMonthKey(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return formatMonthKey(now);
 }
 
-export function getPreviousMonthKey(): string {
-  const now = new Date();
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-}
-
-export function getMonthLabel(monthKey: string): string {
-  const [year, month] = monthKey.split('-').map(Number);
-  const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
-
-export async function fetchBudgetCategories(userId: string): Promise<BudgetCategory[]> {
-  try {
-    const ref = collection(db, 'budget_categories');
-    const q = query(ref, where('userId', '==', userId), orderBy('name', 'asc'));
-    const snapshot = await getDocs(q);
-    const categories: BudgetCategory[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      categories.push({
-        id: docSnap.id,
-        userId: data.userId || '',
-        name: data.name || '',
-        monthlyLimit: data.monthlyLimit || 0,
-        rolloverEnabled: data.rolloverEnabled || false,
-        rolloverPercentage: data.rolloverPercentage || 100,
-        rolledOverAmount: data.rolledOverAmount || 0,
-        createdAt: data.createdAt || '',
-        updatedAt: data.updatedAt || '',
-      });
-    });
-    return categories;
-  } catch (error) {
-    console.error('Error fetching budget categories:', error);
-    handleFirestoreError(error, OperationType.LIST, 'budget_categories');
-    return [];
-  }
-}
-
-export async function createBudgetCategory(
-  userId: string,
-  input: BudgetCategoryInput
-): Promise<BudgetCategory | null> {
-  try {
-    const id = doc(collection(db, 'budget_categories')).id;
-    const now = new Date().toISOString();
-    const category: Omit<BudgetCategory, 'id'> = {
-      userId,
-      name: input.name.trim(),
-      monthlyLimit: input.monthlyLimit,
-      rolloverEnabled: input.rolloverEnabled ?? false,
-      rolloverPercentage: input.rolloverPercentage ?? 100,
-      rolledOverAmount: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await setDoc(doc(db, 'budget_categories', id), {
-      ...category,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return { ...category, id };
-  } catch (error) {
-    console.error('Error creating budget category:', error);
-    handleFirestoreError(error, OperationType.CREATE, 'budget_categories');
-    return null;
-  }
-}
-
-export async function updateBudgetCategory(
-  id: string,
-  updates: Partial<Omit<BudgetCategory, 'id' | 'userId' | 'name' | 'createdAt'>>
-): Promise<boolean> {
-  try {
-    const ref = doc(db, 'budget_categories', id);
-    await updateDoc(ref, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
-    return true;
-  } catch (error) {
-    console.error('Error updating budget category:', error);
-    handleFirestoreError(error, OperationType.UPDATE, `budget_categories/${id}`);
-    return false;
-  }
-}
-
-export async function deleteBudgetCategory(id: string): Promise<boolean> {
-  try {
-    await deleteDoc(doc(db, 'budget_categories', id));
-    return true;
-  } catch (error) {
-    console.error('Error deleting budget category:', error);
-    handleFirestoreError(error, OperationType.DELETE, `budget_categories/${id}`);
-    return false;
-  }
-}
-
-export async function fetchRolloverHistory(userId: string): Promise<RolloverEntry[]> {
-  try {
-    const ref = collection(db, 'budget_rollovers');
-    const q = query(ref, where('userId', '==', userId), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    const entries: RolloverEntry[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      entries.push({
-        id: docSnap.id,
-        userId: data.userId || '',
-        fromMonth: data.fromMonth || '',
-        toMonth: data.toMonth || '',
-        category: data.category || '',
-        amount: data.amount || 0,
-        percentage: data.percentage || 0,
-        createdAt: data.createdAt || '',
-      });
-    });
-    return entries;
-  } catch (error) {
-    console.error('Error fetching rollover history:', error);
-    handleFirestoreError(error, OperationType.LIST, 'budget_rollovers');
-    return [];
-  }
-}
-
-export async function createRolloverEntry(
-  userId: string,
-  fromMonth: string,
-  toMonth: string,
-  category: string,
-  amount: number,
-  percentage: number
-): Promise<RolloverEntry | null> {
-  try {
-    const id = doc(collection(db, 'budget_rollovers')).id;
-    const entry: Omit<RolloverEntry, 'id'> = {
-      userId,
-      fromMonth,
-      toMonth,
-      category,
-      amount,
-      percentage,
-      createdAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, 'budget_rollovers', id), {
-      ...entry,
-      createdAt: serverTimestamp(),
-    });
-    return { ...entry, id };
-  } catch (error) {
-    console.error('Error creating rollover entry:', error);
-    handleFirestoreError(error, OperationType.CREATE, 'budget_rollovers');
-    return null;
-  }
-}
-
-export async function resetAllRollovers(userId: string): Promise<boolean> {
-  try {
-    const batch = writeBatch(db);
-    const ref = collection(db, 'budget_categories');
-    const q = query(ref, where('userId', '==', userId));
-    const snapshot = await getDocs(q);
-    snapshot.forEach((docSnap) => {
-      batch.update(docSnap.ref, {
-        rolledOverAmount: 0,
-        rolloverEnabled: false,
-        updatedAt: serverTimestamp(),
-      });
-    });
-    await batch.commit();
-    return true;
-  } catch (error) {
-    console.error('Error resetting rollovers:', error);
-    handleFirestoreError(error, OperationType.WRITE, 'budget_categories');
-    return false;
-  }
-}
-
-export async function resetCategoryRollover(userId: string, categoryId: string): Promise<boolean> {
-  try {
-    const ref = doc(db, 'budget_categories', categoryId);
-    await updateDoc(ref, {
-      rolledOverAmount: 0,
-      rolloverEnabled: false,
-      rolloverPercentage: 100,
-      updatedAt: serverTimestamp(),
-    });
-    return true;
-  } catch (error) {
-    console.error('Error resetting category rollover:', error);
-    handleFirestoreError(error, OperationType.UPDATE, `budget_categories/${categoryId}`);
-    return false;
-  }
-}
-
-export function calculateRolloverAmount(unusedBudget: number, percentage: number): number {
-  if (unusedBudget <= 0) return 0;
-  return Math.round(unusedBudget * (percentage / 100) * 100) / 100;
-}
-
-export function getRolloverStats(entries: RolloverEntry[], category?: string) {
-  const filtered = category ? entries.filter((e) => e.category === category) : entries;
-  const totalRolledOver = filtered.reduce((sum, e) => sum + e.amount, 0);
-  const count = filtered.length;
-  return { totalRolledOver, count };
-}
-
-export function initializeDefaultCategories(userId: string): BudgetCategory[] {
-  const now = new Date().toISOString();
-  return DEFAULT_CATEGORIES.map((name) => ({
-    id: `${userId}_${name.replace(/\s+/g, '_').toLowerCase()}`,
-    userId,
-    name,
-    monthlyLimit: 0,
-    rolloverEnabled: false,
-    rolloverPercentage: 100,
-    rolledOverAmount: 0,
-    createdAt: now,
-    updatedAt: now,
-  }));
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
