@@ -1,80 +1,99 @@
-import { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
-import { 
-  FileText, 
-  MoreVertical, 
-  Trash2, 
-  Eye, 
+import { useState, useEffect } from "react";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
+import {
+  FileText,
+  MoreVertical,
+  Trash2,
+  Eye,
   ExternalLink,
   Search,
   Filter,
   FileSearch,
   AlertCircle,
   Clock,
-  CheckCircle2
-} from 'lucide-react';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/src/components/ui/table';
-import { Badge } from '@/src/components/ui/badge';
-import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
-import { 
+  CheckCircle2,
+} from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/src/components/ui/table";
+import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
-} from '@/src/components/ui/dropdown-menu';
-import { Skeleton } from '@/src/components/ui/skeleton';
-import { toast } from 'sonner';
-import { formatDateSafe } from '@/src/lib/utils';
+  DropdownMenuSeparator,
+} from "@/src/components/ui/dropdown-menu";
+import { Skeleton } from "@/src/components/ui/skeleton";
+import { toast } from "sonner";
+import { formatDateSafe } from "@/src/lib/utils";
 
 export function AnalysisList({ type, user, onSelect }: any) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (!user) return;
 
     let docsQuery = query(
-      collection(db, 'documents'),
-      where('ownerId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      collection(db, "documents"),
+      where("ownerId", "==", user.uid),
+      orderBy("createdAt", "desc"),
     );
 
-    if (type === 'completed') {
+    if (type === "completed") {
       docsQuery = query(
-        collection(db, 'documents'),
-        where('ownerId', '==', user.uid),
-        where('status', '==', 'completed'),
-        orderBy('createdAt', 'desc')
+        collection(db, "documents"),
+        where("ownerId", "==", user.uid),
+        where("status", "==", "completed"),
+        orderBy("createdAt", "desc"),
       );
     }
 
-    const unsubscribe = onSnapshot(docsQuery, (snapshot) => {
-      setDocuments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'documents');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      docsQuery,
+      (snapshot) => {
+        setDocuments(
+          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
+        setLoading(false);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, "documents");
+        setLoading(false);
+      },
+    );
 
     return () => unsubscribe();
   }, [user, type]);
 
   const handleDelete = async (id: string, fileName: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${fileName}? This will also delete the analysis.`)) return;
-    
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${fileName}? This will also delete the analysis.`,
+      )
+    )
+      return;
+
     try {
-      await deleteDoc(doc(db, 'documents', id));
+      await deleteDoc(doc(db, "documents", id));
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
@@ -82,23 +101,32 @@ export function AnalysisList({ type, user, onSelect }: any) {
     }
   };
 
-  const filteredDocs = documents.filter(doc => 
-    String(doc.fileName || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredDocs = documents.filter((doc) =>
+    String(doc.fileName || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()),
   );
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-          <Input 
-            placeholder="Search records..." 
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+            size={16}
+          />
+          <Input
+            placeholder="Search records..."
             className="pl-10 h-10 bg-slate-900 border-slate-800 text-white focus-visible:border-indigo-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <Button variant="outline" size="sm" className="h-10 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-10 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+        >
           <Filter className="mr-2" size={14} /> Refine View
         </Button>
       </div>
@@ -107,10 +135,18 @@ export function AnalysisList({ type, user, onSelect }: any) {
         <Table>
           <TableHeader className="bg-slate-900">
             <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="w-[400px] text-[10px] font-bold uppercase tracking-widest text-slate-500 px-6 py-5">Account & Entity</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Risk Assessment</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">System Status</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ingested At</TableHead>
+              <TableHead className="w-[400px] text-[10px] font-bold uppercase tracking-widest text-slate-500 px-6 py-5">
+                Account & Entity
+              </TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Risk Assessment
+              </TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                System Status
+              </TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Ingested At
+              </TableHead>
               <TableHead className="w-[80px] text-right px-6"></TableHead>
             </TableRow>
           </TableHeader>
@@ -118,11 +154,21 @@ export function AnalysisList({ type, user, onSelect }: any) {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i} className="border-slate-800/50">
-                  <TableCell className="px-6 py-5"><Skeleton className="h-12 w-full bg-slate-800/50" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-20 bg-slate-800/50" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-24 bg-slate-800/50" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-28 bg-slate-800/50" /></TableCell>
-                  <TableCell className="px-6"><Skeleton className="h-8 w-8 ml-auto bg-slate-800/50" /></TableCell>
+                  <TableCell className="px-6 py-5">
+                    <Skeleton className="h-12 w-full bg-slate-800/50" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-6 w-20 bg-slate-800/50" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-6 w-24 bg-slate-800/50" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28 bg-slate-800/50" />
+                  </TableCell>
+                  <TableCell className="px-6">
+                    <Skeleton className="h-8 w-8 ml-auto bg-slate-800/50" />
+                  </TableCell>
                 </TableRow>
               ))
             ) : filteredDocs.length === 0 ? (
@@ -133,65 +179,102 @@ export function AnalysisList({ type, user, onSelect }: any) {
                       <FileSearch size={32} />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-base font-semibold text-white">No documents found</p>
-                      <p className="text-sm max-w-xs mx-auto">Either you haven't uploaded any documents, or your search parameters returned 0 results.</p>
+                      <p className="text-base font-semibold text-white">
+                        No documents found
+                      </p>
+                      <p className="text-sm max-w-xs mx-auto">
+                        Either you haven't uploaded any documents, or your
+                        search parameters returned 0 results.
+                      </p>
                     </div>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
               filteredDocs.map((doc) => (
-                <TableRow key={doc.id} className="border-slate-800/50 hover:bg-slate-800/20 transition-colors group">
+                <TableRow
+                  key={doc.id}
+                  className="border-slate-800/50 hover:bg-slate-800/20 transition-colors group"
+                >
                   <TableCell className="px-6 py-5">
                     <div className="flex items-center gap-4">
                       <div className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl bg-slate-800 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-lg">
                         <FileText size={22} />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-white tracking-tight truncate max-w-[300px]">{doc.fileName}</p>
+                        <p className="font-bold text-white tracking-tight truncate max-w-[300px]">
+                          {doc.fileName}
+                        </p>
                         <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">
-                          {(Number(doc.fileSize || 0) / 1024 / 1024).toFixed(2)} MB - {String(doc.fileType || '').split('/')[1]?.toUpperCase() || 'DOC'}
+                          {(Number(doc.fileSize || 0) / 1024 / 1024).toFixed(2)}{" "}
+                          MB -{" "}
+                          {String(doc.fileType || "")
+                            .split("/")[1]
+                            ?.toUpperCase() || "DOC"}
                         </p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     {doc.riskLevel ? (
-                      <Badge className={`
+                      <Badge
+                        className={`
                         capitalize font-bold text-[9px] px-2.5 py-0.5 tracking-wider rounded-md border-0
-                        ${doc.riskLevel === 'high' ? 'bg-red-500/10 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 
-                          doc.riskLevel === 'medium' ? 'bg-amber-500/10 text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.1)]' : 
-                          'bg-emerald-500/10 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]'}
-                      `}>
+                        ${
+                          doc.riskLevel === "high"
+                            ? "bg-red-500/10 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.1)]"
+                            : doc.riskLevel === "medium"
+                              ? "bg-amber-500/10 text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                              : "bg-emerald-500/10 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+                        }
+                      `}
+                      >
                         {doc.riskLevel} Risk
                       </Badge>
                     ) : (
-                      <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">In Assessment</span>
+                      <span className="text-[9px] text-slate-600 font-black uppercase tracking-widest">
+                        In Assessment
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={doc.status} />
                   </TableCell>
                   <TableCell className="text-sm font-semibold text-slate-500 tabular-nums">
-                    {formatDateSafe(doc.createdAt, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDateSafe(doc.createdAt, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
                   </TableCell>
                   <TableCell className="px-6 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 text-slate-500 hover:text-white hover:bg-slate-800">
                         <MoreVertical size={18} />
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-300">
-                        <DropdownMenuItem onClick={() => onSelect(doc.id)} className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg">
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-300"
+                      >
+                        <DropdownMenuItem
+                          onClick={() => onSelect(doc.id)}
+                          className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg"
+                        >
                           <Eye size={16} /> View Intelligence Report
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg p-0">
-                          <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 w-full h-full px-2 py-1">
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 w-full h-full px-2 py-1"
+                          >
                             <ExternalLink size={16} /> Open Source File
                           </a>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-800" />
-                        <DropdownMenuItem 
-                          onClick={() => handleDelete(doc.id, doc.fileName)} 
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(doc.id, doc.fileName)}
                           className="gap-3 py-2.5 text-red-500 focus:text-red-400 focus:bg-red-500/10 rounded-lg"
                         >
                           <Trash2 size={16} /> Purge Record
@@ -211,19 +294,35 @@ export function AnalysisList({ type, user, onSelect }: any) {
 
 function StatusBadge({ status }: { status: string }) {
   const config: any = {
-    completed: { label: 'Completed', className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    processing: { label: 'Analyzing', className: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
-    pending: { label: 'Queueing', className: 'bg-slate-800 text-slate-500 border-slate-700' },
-    failed: { label: 'Failure', className: 'bg-red-500/10 text-red-400 border-red-500/20' },
+    completed: {
+      label: "Completed",
+      className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    },
+    processing: {
+      label: "Analyzing",
+      className: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    },
+    pending: {
+      label: "Queueing",
+      className: "bg-slate-800 text-slate-500 border-slate-700",
+    },
+    failed: {
+      label: "Failure",
+      className: "bg-red-500/10 text-red-400 border-red-500/20",
+    },
   };
 
   const { label, className } = config[status] || config.pending;
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${className} shadow-[0_2px_10px_-3px_rgba(0,0,0,0.5)]`}>
-      {status === 'processing' && <Clock size={10} className="animate-spin duration-1000" />}
-      {status === 'completed' && <CheckCircle2 size={10} />}
-      {status === 'failed' && <AlertCircle size={10} />}
+    <div
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${className} shadow-[0_2px_10px_-3px_rgba(0,0,0,0.5)]`}
+    >
+      {status === "processing" && (
+        <Clock size={10} className="animate-spin duration-1000" />
+      )}
+      {status === "completed" && <CheckCircle2 size={10} />}
+      {status === "failed" && <AlertCircle size={10} />}
       {label}
     </div>
   );
@@ -231,16 +330,16 @@ function StatusBadge({ status }: { status: string }) {
 
 function CheckCircle2Icon(props: any) {
   return (
-    <svg 
+    <svg
       {...props}
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />

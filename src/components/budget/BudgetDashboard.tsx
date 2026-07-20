@@ -1,14 +1,35 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
-import { Button } from '@/src/components/ui/button';
-import { Progress } from '@/src/components/ui/progress';
+import { useState, useEffect } from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, Legend
-} from 'recharts';
-import { Wallet, Loader2, TrendingUp, TrendingDown, Calendar, Target, RefreshCw } from 'lucide-react';
-import { BudgetRecommendations } from '@/src/components/budget/BudgetRecommendations';
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
+import { Progress } from "@/src/components/ui/progress";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  Legend,
+} from "recharts";
+import {
+  Wallet,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  Target,
+  RefreshCw,
+} from "lucide-react";
+import { BudgetRecommendations } from "@/src/components/budget/BudgetRecommendations";
 import {
   fetchLast3MonthsTransactions,
   fetchPreviousMonthTransactions,
@@ -23,16 +44,26 @@ import {
   BudgetComparison,
   Transaction,
   formatCurrency,
-} from '@/src/lib/budgetUtils';
+} from "@/src/lib/budgetUtils";
 
 const CHART_COLORS = [
-  '#6366f1', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981',
-  '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316',
+  "#6366f1",
+  "#8b5cf6",
+  "#3b82f6",
+  "#06b6d4",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
 ];
 
 export function BudgetDashboard({ user }: { user: any }) {
   const [loading, setLoading] = useState(true);
-  const [suggestions, setSuggestions] = useState<CategoryBudgetSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<CategoryBudgetSuggestion[]>(
+    [],
+  );
   const [totalBudget, setTotalBudget] = useState(0);
   const [confidenceScore, setConfidenceScore] = useState(0);
   const [comparison, setComparison] = useState<BudgetComparison[]>([]);
@@ -57,45 +88,64 @@ export function BudgetDashboard({ user }: { user: any }) {
         fetchPreviousMonthTransactions(user.uid),
       ]);
 
-      const previousSpending = previousMonthTransactions.reduce<Record<string, number>>((acc, t) => {
-        if (t.type === 'expense') {
+      const previousSpending = previousMonthTransactions.reduce<
+        Record<string, number>
+      >((acc, t) => {
+        if (t.type === "expense") {
           acc[t.category] = (acc[t.category] || 0) + t.amount;
         }
         return acc;
       }, {});
 
-      const generatedSuggestions = generateBudgetSuggestions(transactions, previousSpending);
-      const confidence = calculateConfidenceScore(transactions, generatedSuggestions.reduce((acc, s) => {
-        acc[s.category] = s.averageSpending;
-        return acc;
-      }, {} as Record<string, number>));
+      const generatedSuggestions = generateBudgetSuggestions(
+        transactions,
+        previousSpending,
+      );
+      const confidence = calculateConfidenceScore(
+        transactions,
+        generatedSuggestions.reduce(
+          (acc, s) => {
+            acc[s.category] = s.averageSpending;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+      );
 
-      const savedBudget = await fetchBudgetFromFirestore(user.uid, currentMonth);
+      const savedBudget = await fetchBudgetFromFirestore(
+        user.uid,
+        currentMonth,
+      );
 
       let finalSuggestions = generatedSuggestions;
       let finalTotal = calculateTotalBudget(generatedSuggestions);
       let finalConfidence = confidence;
 
       if (savedBudget && savedBudget.categoryBudgets) {
-        finalSuggestions = generatedSuggestions.map(s => ({
+        finalSuggestions = generatedSuggestions.map((s) => ({
           ...s,
-          suggestedAmount: savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          modifiedAmount: savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          status: 'accepted' as const,
+          suggestedAmount:
+            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
+          modifiedAmount:
+            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
+          status: "accepted" as const,
         }));
         finalTotal = savedBudget.totalBudget;
         finalConfidence = savedBudget.confidenceScore;
         setSaved(true);
       }
 
-      const budgetComparison = generateBudgetComparison(finalSuggestions, previousSpending);
+      const budgetComparison = generateBudgetComparison(
+        finalSuggestions,
+        previousSpending,
+      );
 
       setSuggestions(finalSuggestions);
       setTotalBudget(finalTotal);
       setConfidenceScore(finalConfidence);
       setComparison(budgetComparison);
     } catch (error) {
-      console.error('Failed to load budget data:', error);
+      console.error("Failed to load budget data:", error);
     } finally {
       setLoading(false);
     }
@@ -105,8 +155,9 @@ export function BudgetDashboard({ user }: { user: any }) {
     if (!user) return;
 
     const categoryBudgets: Record<string, number> = {};
-    newSuggestions.forEach(s => {
-      const amount = s.status === 'rejected' ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
+    newSuggestions.forEach((s) => {
+      const amount =
+        s.status === "rejected" ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
       categoryBudgets[s.category] = amount;
     });
 
@@ -125,7 +176,7 @@ export function BudgetDashboard({ user }: { user: any }) {
       setTotalBudget(budgetData.totalBudget);
       setSaved(true);
     } catch (error) {
-      console.error('Failed to save budget:', error);
+      console.error("Failed to save budget:", error);
     }
   }
 
@@ -136,20 +187,21 @@ export function BudgetDashboard({ user }: { user: any }) {
   }
 
   const getConfidenceColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 80) return "text-emerald-400";
+    if (score >= 60) return "text-amber-400";
+    return "text-red-400";
   };
 
   const getConfidenceBg = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500';
-    if (score >= 60) return 'bg-amber-500';
-    return 'bg-red-500';
+    if (score >= 80) return "bg-emerald-500";
+    if (score >= 60) return "bg-amber-500";
+    return "bg-red-500";
   };
 
   const previousTotal = comparison.reduce((acc, c) => acc + c.previous, 0);
   const budgetChange = totalBudget - previousTotal;
-  const budgetChangePercent = previousTotal > 0 ? Math.round((budgetChange / previousTotal) * 100) : 0;
+  const budgetChangePercent =
+    previousTotal > 0 ? Math.round((budgetChange / previousTotal) * 100) : 0;
 
   if (loading) {
     return (
@@ -167,7 +219,9 @@ export function BudgetDashboard({ user }: { user: any }) {
         <Card className="bg-slate-900 border-slate-800 rounded-2xl">
           <CardContent className="p-8 flex flex-col items-center justify-center min-h-[400px]">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-            <p className="text-sm font-medium text-slate-500 mt-4">Analyzing spending patterns...</p>
+            <p className="text-sm font-medium text-slate-500 mt-4">
+              Analyzing spending patterns...
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -197,7 +251,9 @@ export function BudgetDashboard({ user }: { user: any }) {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
           </Button>
         </div>
       </section>
@@ -224,13 +280,18 @@ export function BudgetDashboard({ user }: { user: any }) {
                       ) : (
                         <TrendingDown className="h-3 w-3 text-red-400" />
                       )}
-                      <span className={`text-xs font-bold ${budgetChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {budgetChange > 0 ? '+' : ''}{formatCurrency(budgetChange)} ({budgetChangePercent}%)
+                      <span
+                        className={`text-xs font-bold ${budgetChange > 0 ? "text-emerald-400" : "text-red-400"}`}
+                      >
+                        {budgetChange > 0 ? "+" : ""}
+                        {formatCurrency(budgetChange)} ({budgetChangePercent}%)
                       </span>
                     </>
                   )}
                   {budgetChange === 0 && (
-                    <span className="text-xs font-bold text-slate-500">vs last month</span>
+                    <span className="text-xs font-bold text-slate-500">
+                      vs last month
+                    </span>
                   )}
                 </div>
               </div>
@@ -248,11 +309,14 @@ export function BudgetDashboard({ user }: { user: any }) {
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Confidence Score
                 </p>
-                <p className={`text-2xl font-black mt-0.5 ${getConfidenceColor(confidenceScore)}`}>
+                <p
+                  className={`text-2xl font-black mt-0.5 ${getConfidenceColor(confidenceScore)}`}
+                >
                   {confidenceScore}%
                 </p>
                 <p className="text-xs font-bold text-slate-500 mt-1">
-                  {getConfidenceColor(confidenceScore).replace('text-', '')} confidence
+                  {getConfidenceColor(confidenceScore).replace("text-", "")}{" "}
+                  confidence
                 </p>
               </div>
             </div>
@@ -309,19 +373,30 @@ export function BudgetDashboard({ user }: { user: any }) {
             <CardContent className="p-5">
               {comparison.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[200px] text-slate-500">
-                  <p className="text-xs font-medium">No comparison data available</p>
+                  <p className="text-xs font-medium">
+                    No comparison data available
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={comparison} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <BarChart
+                    data={comparison}
+                    margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#1e293b"
+                      vertical={false}
+                    />
                     <XAxis
                       dataKey="category"
                       stroke="#64748b"
                       fontSize={10}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(val) => val.length > 8 ? val.slice(0, 8) + '...' : val}
+                      tickFormatter={(val) =>
+                        val.length > 8 ? val.slice(0, 8) + "..." : val
+                      }
                     />
                     <YAxis
                       stroke="#64748b"
@@ -331,16 +406,41 @@ export function BudgetDashboard({ user }: { user: any }) {
                       tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#0f1219', border: '1px solid #1e293b', borderRadius: '8px' }}
-                      itemStyle={{ color: '#f8fafc' }}
-                      labelStyle={{ color: '#94a3b8' }}
-                      formatter={(value: number) => [formatCurrency(value), 'Amount']}
+                      contentStyle={{
+                        backgroundColor: "#0f1219",
+                        border: "1px solid #1e293b",
+                        borderRadius: "8px",
+                      }}
+                      itemStyle={{ color: "#f8fafc" }}
+                      labelStyle={{ color: "#94a3b8" }}
+                      formatter={(value: number) => [
+                        formatCurrency(value),
+                        "Amount",
+                      ]}
                     />
                     <Legend />
-                    <Bar dataKey="previous" name="Previous Month" fill="#64748b" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="suggested" name="Suggested Budget" radius={[3, 3, 0, 0]}>
+                    <Bar
+                      dataKey="previous"
+                      name="Previous Month"
+                      fill="#64748b"
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="suggested"
+                      name="Suggested Budget"
+                      radius={[3, 3, 0, 0]}
+                    >
                       {comparison.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.difference > 0 ? '#6366f1' : entry.difference < 0 ? '#ef4444' : '#64748b'} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.difference > 0
+                              ? "#6366f1"
+                              : entry.difference < 0
+                                ? "#ef4444"
+                                : "#64748b"
+                          }
+                        />
                       ))}
                     </Bar>
                   </BarChart>
@@ -358,28 +458,43 @@ export function BudgetDashboard({ user }: { user: any }) {
             <CardContent className="p-5">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-400">Data Consistency</span>
+                  <span className="text-xs font-medium text-slate-400">
+                    Data Consistency
+                  </span>
                   <span className="text-xs font-bold text-white">
                     {Math.min(Math.round(confidenceScore * 0.4), 40)}%
                   </span>
                 </div>
-                <Progress value={Math.min(confidenceScore * 0.4, 40)} className="h-1.5" />
-                
+                <Progress
+                  value={Math.min(confidenceScore * 0.4, 40)}
+                  className="h-1.5"
+                />
+
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-400">Transaction Volume</span>
+                  <span className="text-xs font-medium text-slate-400">
+                    Transaction Volume
+                  </span>
                   <span className="text-xs font-bold text-white">
                     {Math.min(Math.round(confidenceScore * 0.35), 35)}%
                   </span>
                 </div>
-                <Progress value={Math.min(confidenceScore * 0.35, 35)} className="h-1.5" />
-                
+                <Progress
+                  value={Math.min(confidenceScore * 0.35, 35)}
+                  className="h-1.5"
+                />
+
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-400">Category Diversity</span>
+                  <span className="text-xs font-medium text-slate-400">
+                    Category Diversity
+                  </span>
                   <span className="text-xs font-bold text-white">
                     {Math.min(Math.round(confidenceScore * 0.25), 25)}%
                   </span>
                 </div>
-                <Progress value={Math.min(confidenceScore * 0.25, 25)} className="h-1.5" />
+                <Progress
+                  value={Math.min(confidenceScore * 0.25, 25)}
+                  className="h-1.5"
+                />
               </div>
             </CardContent>
           </Card>

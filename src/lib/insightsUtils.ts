@@ -13,7 +13,7 @@
  *  - Calculating category trends (week-over-week, month-over-month)
  */
 
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from "firebase/firestore";
 import {
   startOfWeek,
   endOfWeek,
@@ -23,16 +23,16 @@ import {
   subMonths,
   eachMonthOfInterval,
   format,
-} from 'date-fns';
-import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
-import { toDate } from '@/src/lib/utils';
+} from "date-fns";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { toDate } from "@/src/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type InsightType = 'weekly' | 'monthly' | 'anomaly' | 'opportunity';
-export type Severity = 'low' | 'medium' | 'high';
+export type InsightType = "weekly" | "monthly" | "anomaly" | "opportunity";
+export type Severity = "low" | "medium" | "high";
 
 export interface Transaction {
   id: string;
@@ -120,8 +120,8 @@ export function normalizeAmount(value: any): number {
 
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
+    style: "currency",
+    currency: "USD",
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value || 0);
 }
@@ -140,7 +140,7 @@ function inRange(tx: Transaction, start: Date, end: Date): boolean {
 function sumByCategory(transactions: Transaction[]): CategoryTotal[] {
   const map = new Map<string, CategoryTotal>();
   for (const tx of transactions) {
-    const category = tx.category || 'Uncategorized';
+    const category = tx.category || "Uncategorized";
     const existing = map.get(category) || { category, total: 0, count: 0 };
     existing.total += normalizeAmount(tx.amount);
     existing.count += 1;
@@ -165,28 +165,30 @@ function total(transactions: Transaction[]): number {
  * Returns an empty array (never throws) so the dashboard can render an
  * onboarding/empty state gracefully when no data exists yet.
  */
-export async function fetchTransactions(userId: string): Promise<Transaction[]> {
+export async function fetchTransactions(
+  userId: string,
+): Promise<Transaction[]> {
   if (!userId) return [];
   try {
     const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', userId),
+      collection(db, "transactions"),
+      where("userId", "==", userId),
     );
     const snap = await getDocs(q);
     return snap.docs.map((doc) => {
-      const data = doc.data() as Omit<Transaction, 'id'>;
+      const data = doc.data() as Omit<Transaction, "id">;
       return {
         id: doc.id,
         userId: data.userId,
         amount: normalizeAmount(data.amount),
-        category: data.category || 'Uncategorized',
-        description: data.description || '',
-        merchant: (data as any).merchant || '',
+        category: data.category || "Uncategorized",
+        description: data.description || "",
+        merchant: (data as any).merchant || "",
         date: data.date,
       } as Transaction;
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'transactions');
+    handleFirestoreError(error, OperationType.LIST, "transactions");
     return [];
   }
 }
@@ -216,7 +218,7 @@ export function detectAnomalies(
 ): Insight[] {
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
-    const key = tx.category || 'Uncategorized';
+    const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
     byCategory.set(key, list);
@@ -233,23 +235,23 @@ export function detectAnomalies(
       const ratio = amount / avg;
       if (ratio >= threshold) {
         const severity: Severity =
-          ratio >= 4 ? 'high' : ratio >= 3 ? 'medium' : 'low';
+          ratio >= 4 ? "high" : ratio >= 3 ? "medium" : "low";
         const d = toDate(tx.date);
         const label = tx.merchant || tx.description || category;
         anomalies.push({
           id: uid(),
           userId,
-          type: 'anomaly',
+          type: "anomaly",
           category,
           title: `Unusual ${category} charge`,
           description:
             `A ${formatCurrency(amount)} transaction${
-              tx.merchant ? ` at ${tx.merchant}` : ''
+              tx.merchant ? ` at ${tx.merchant}` : ""
             } is ${ratio.toFixed(1)}x your typical ${category} spend of ` +
             `${formatCurrency(avg)}. Review "${label}" to confirm it's expected.`,
           severity,
           amount,
-          period: d ? format(d, 'MMM d, yyyy') : 'Recent',
+          period: d ? format(d, "MMM d, yyyy") : "Recent",
           createdAt: new Date().toISOString(),
         });
       }
@@ -264,22 +266,22 @@ export function detectAnomalies(
 // ---------------------------------------------------------------------------
 
 const SUBSCRIPTION_HINTS = [
-  'subscription',
-  'netflix',
-  'spotify',
-  'hulu',
-  'disney',
-  'prime',
-  'youtube',
-  'icloud',
-  'dropbox',
-  'gym',
-  'membership',
-  'adobe',
-  'notion',
-  'patreon',
-  'audible',
-  'apple.com/bill',
+  "subscription",
+  "netflix",
+  "spotify",
+  "hulu",
+  "disney",
+  "prime",
+  "youtube",
+  "icloud",
+  "dropbox",
+  "gym",
+  "membership",
+  "adobe",
+  "notion",
+  "patreon",
+  "audible",
+  "apple.com/bill",
 ];
 
 /**
@@ -302,7 +304,7 @@ export function identifyOpportunities(
   // --- 1. Subscriptions -----------------------------------------------------
   const merchantGroups = new Map<string, Transaction[]>();
   for (const tx of transactions) {
-    const key = (tx.merchant || tx.description || '').trim().toLowerCase();
+    const key = (tx.merchant || tx.description || "").trim().toLowerCase();
     if (!key) continue;
     const list = merchantGroups.get(key) || [];
     list.push(tx);
@@ -320,16 +322,17 @@ export function identifyOpportunities(
     opportunities.push({
       id: uid(),
       userId,
-      type: 'opportunity',
-      category: list[0].category || 'Subscriptions',
+      type: "opportunity",
+      category: list[0].category || "Subscriptions",
       title: `Recurring charge: ${display}`,
       description:
         `You've been charged by ${display} ${list.length} times ` +
         `(~${formatCurrency(monthly)}/charge). Cancelling could save roughly ` +
         `${formatCurrency(annualized)} per year if you no longer use it.`,
-      severity: annualized >= 500 ? 'high' : annualized >= 150 ? 'medium' : 'low',
+      severity:
+        annualized >= 500 ? "high" : annualized >= 150 ? "medium" : "low",
       amount: annualized,
-      period: 'Ongoing',
+      period: "Ongoing",
       createdAt: new Date().toISOString(),
     });
   }
@@ -337,7 +340,7 @@ export function identifyOpportunities(
   // --- 2. High-frequency small purchases ------------------------------------
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
-    const key = tx.category || 'Uncategorized';
+    const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
     byCategory.set(key, list);
@@ -352,16 +355,17 @@ export function identifyOpportunities(
     opportunities.push({
       id: uid(),
       userId,
-      type: 'opportunity',
+      type: "opportunity",
       category,
       title: `Small ${category} purchases add up`,
       description:
         `${small.length} small ${category} purchases (avg ${formatCurrency(avg)}) ` +
         `totalled ${formatCurrency(smallTotal)}. Bundling or cutting a few could ` +
         `free up meaningful cash each month.`,
-      severity: smallTotal >= 400 ? 'high' : smallTotal >= 150 ? 'medium' : 'low',
+      severity:
+        smallTotal >= 400 ? "high" : smallTotal >= 150 ? "medium" : "low",
       amount: smallTotal,
-      period: 'All time',
+      period: "All time",
       createdAt: new Date().toISOString(),
     });
   }
@@ -380,16 +384,16 @@ export function identifyOpportunities(
       opportunities.push({
         id: uid(),
         userId,
-        type: 'opportunity',
+        type: "opportunity",
         category,
         title: `Dormant ${category} spending`,
         description:
           `You spent ${formatCurrency(spent)} on ${category} historically but ` +
           `nothing in the last 30 days. If this was a recurring service, ` +
           `double-check it isn't still billing you.`,
-        severity: 'low',
+        severity: "low",
         amount: spent,
-        period: 'Last 30 days',
+        period: "Last 30 days",
         createdAt: new Date().toISOString(),
       });
     }
@@ -466,7 +470,7 @@ export function calculateCategoryTrends(
     const totalsMap = new Map(totals.map((t) => [t.category, t.total]));
 
     const point: TrendPoint = {
-      period: format(monthStart, 'MMM yyyy'),
+      period: format(monthStart, "MMM yyyy"),
       timestamp: monthStart.getTime(),
       total: total(monthTx),
     };
@@ -512,7 +516,7 @@ export function generatePlainSummary(summary: PeriodSummary): string {
   const parts: string[] = [];
   parts.push(
     `You spent ${formatCurrency(summary.total)} across ${summary.transactionCount} transaction${
-      summary.transactionCount === 1 ? '' : 's'
+      summary.transactionCount === 1 ? "" : "s"
     } ${summary.label.toLowerCase()}.`,
   );
 
@@ -525,7 +529,7 @@ export function generatePlainSummary(summary: PeriodSummary): string {
   }
 
   if (summary.changePct !== null) {
-    const dir = summary.changePct >= 0 ? 'up' : 'down';
+    const dir = summary.changePct >= 0 ? "up" : "down";
     parts.push(
       `That's ${dir} ${Math.abs(Math.round(summary.changePct))}% versus the previous period.`,
     );
@@ -533,25 +537,25 @@ export function generatePlainSummary(summary: PeriodSummary): string {
     parts.push(`This is the first period we have data to compare against.`);
   }
 
-  return parts.join(' ');
+  return parts.join(" ");
 }
 
 /** Turn a period summary into a persistable Insight record. */
 export function summaryToInsight(
   summary: PeriodSummary,
-  type: 'weekly' | 'monthly',
+  type: "weekly" | "monthly",
   userId?: string,
 ): Insight {
-  let severity: Severity = 'low';
+  let severity: Severity = "low";
   if (summary.changePct !== null) {
-    if (summary.changePct >= 25) severity = 'high';
-    else if (summary.changePct >= 10) severity = 'medium';
+    if (summary.changePct >= 25) severity = "high";
+    else if (summary.changePct >= 10) severity = "medium";
   }
   return {
     id: uid(),
     userId,
     type,
-    category: summary.topCategories[0]?.category || 'Overall',
+    category: summary.topCategories[0]?.category || "Overall",
     title: `${summary.label} summary`,
     description: generatePlainSummary(summary),
     severity,
@@ -593,8 +597,8 @@ export function buildInsights(
   const thisMonth = filterByPeriod(transactions, thisMonthStart, thisMonthEnd);
   const lastMonth = filterByPeriod(transactions, lastMonthStart, lastMonthEnd);
 
-  const weeklySummary = buildPeriodSummary('This Week', thisWeek, lastWeek);
-  const monthlySummary = buildPeriodSummary('This Month', thisMonth, lastMonth);
+  const weeklySummary = buildPeriodSummary("This Week", thisWeek, lastWeek);
+  const monthlySummary = buildPeriodSummary("This Month", thisMonth, lastMonth);
 
   const { trends, categories } = calculateCategoryTrends(transactions, 6);
 

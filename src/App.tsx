@@ -3,18 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { auth, db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
-import { onAuthStateChanged, User, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { 
-  TrendingUp, 
-  LayoutDashboard, 
-  FileText, 
-  ShieldCheck, 
-  Settings, 
-  LogOut, 
-  Upload, 
+import { useState, useEffect, useRef } from "react";
+import {
+  auth,
+  db,
+  handleFirestoreError,
+  OperationType,
+} from "@/src/lib/firebase";
+import {
+  onAuthStateChanged,
+  User,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+} from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  TrendingUp,
+  LayoutDashboard,
+  FileText,
+  ShieldCheck,
+  Settings,
+  LogOut,
+  Upload,
   Search,
   Clock,
   Briefcase,
@@ -25,24 +39,44 @@ import {
   Lock,
   Zap,
   Activity,
-  Target
-} from 'lucide-react';
-import { Toaster, toast } from 'sonner';
-import { motion, AnimatePresence } from 'motion/react';
-import { getSharedDocId, setSharedDocId, clearSharedDocId } from '@/src/lib/utils';
+  Target,
+} from "lucide-react";
+import { Toaster, toast } from "sonner";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  getSharedDocId,
+  setSharedDocId,
+  clearSharedDocId,
+} from "@/src/lib/utils";
 
 // Components
-import { Button } from '@/src/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
-import { Badge } from '@/src/components/ui/badge';
-import { Input } from '@/src/components/ui/input';
-import { Skeleton } from '@/src/components/ui/skeleton';
-import { ScrollArea } from '@/src/components/ui/scroll-area';
+import { Button } from "@/src/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/src/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/src/components/ui/tabs";
+import { Badge } from "@/src/components/ui/badge";
+import { Input } from "@/src/components/ui/input";
+import { Skeleton } from "@/src/components/ui/skeleton";
+import { ScrollArea } from "@/src/components/ui/scroll-area";
 
 export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className={className}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <defs>
         <linearGradient id="logoGrad" x1="0%" y1="100%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#8b5cf6" />
@@ -54,15 +88,55 @@ export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
       </defs>
-      
+
       {/* Network Nodes in background */}
-      <g stroke="url(#logoGrad)" strokeWidth="2.5" opacity="0.6" filter="url(#glow)">
-        <line x1="60" y1="90" x2="90" y2="40" stroke="url(#logoGrad)" strokeWidth="2" />
-        <line x1="90" y1="40" x2="110" y2="75" stroke="url(#logoGrad)" strokeWidth="2" />
-        <line x1="60" y1="90" x2="90" y2="135" stroke="url(#logoGrad)" strokeWidth="2" />
-        <line x1="90" y1="135" x2="115" y2="105" stroke="url(#logoGrad)" strokeWidth="2" />
-        <line x1="90" y1="135" x2="90" y2="175" stroke="url(#logoGrad)" strokeWidth="2" />
-        
+      <g
+        stroke="url(#logoGrad)"
+        strokeWidth="2.5"
+        opacity="0.6"
+        filter="url(#glow)"
+      >
+        <line
+          x1="60"
+          y1="90"
+          x2="90"
+          y2="40"
+          stroke="url(#logoGrad)"
+          strokeWidth="2"
+        />
+        <line
+          x1="90"
+          y1="40"
+          x2="110"
+          y2="75"
+          stroke="url(#logoGrad)"
+          strokeWidth="2"
+        />
+        <line
+          x1="60"
+          y1="90"
+          x2="90"
+          y2="135"
+          stroke="url(#logoGrad)"
+          strokeWidth="2"
+        />
+        <line
+          x1="90"
+          y1="135"
+          x2="115"
+          y2="105"
+          stroke="url(#logoGrad)"
+          strokeWidth="2"
+        />
+        <line
+          x1="90"
+          y1="135"
+          x2="90"
+          y2="175"
+          stroke="url(#logoGrad)"
+          strokeWidth="2"
+        />
+
         <circle cx="90" cy="40" r="4.5" fill="#a855f7" />
         <circle cx="60" cy="90" r="4.5" fill="#6366f1" />
         <circle cx="90" cy="135" r="4.5" fill="#8b5cf6" />
@@ -70,21 +144,21 @@ export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
         <circle cx="110" cy="75" r="3" fill="#a855f7" />
         <circle cx="115" cy="105" r="3" fill="#8b5cf6" />
       </g>
-      
+
       {/* Bold F Arrow Trend Foreground */}
-      <path 
-        d="M 45 125 L 85 90 L 115 115 L 165 45 M 165 45 L 130 45 M 165 45 L 165 80" 
-        stroke="url(#logoGrad)" 
-        strokeWidth="11" 
-        strokeLinecap="round" 
+      <path
+        d="M 45 125 L 85 90 L 115 115 L 165 45 M 165 45 L 130 45 M 165 45 L 165 80"
+        stroke="url(#logoGrad)"
+        strokeWidth="11"
+        strokeLinecap="round"
         strokeLinejoin="round"
         filter="url(#glow)"
       />
-      <path 
-        d="M 85 90 L 135 90" 
-        stroke="url(#logoGrad)" 
-        strokeWidth="9" 
-        strokeLinecap="round" 
+      <path
+        d="M 85 90 L 135 90"
+        stroke="url(#logoGrad)"
+        strokeWidth="9"
+        strokeLinecap="round"
         filter="url(#glow)"
       />
     </svg>
@@ -92,30 +166,34 @@ export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
 }
 
 // Pages (defined in separate files eventually, for now as sub-components)
-import { Dashboard } from './components/Dashboard';
-import { AnalysisList } from './components/AnalysisList';
-import { FileUpload } from './components/FileUpload';
-import { AnalysisDetail } from './components/AnalysisDetail';
-import { AdminPanel } from './components/AdminPanel';
-import { CommandPalette } from './components/dashboard/CommandPalette';
-import { GoalPlanner } from './components/goals/GoalPlanner';
+import { Dashboard } from "./components/Dashboard";
+import { AnalysisList } from "./components/AnalysisList";
+import { FileUpload } from "./components/FileUpload";
+import { AnalysisDetail } from "./components/AnalysisDetail";
+import { AdminPanel } from "./components/AdminPanel";
+import { CommandPalette } from "./components/dashboard/CommandPalette";
+import { GoalPlanner } from "./components/goals/GoalPlanner";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(() => getSharedDocId() ? 'detail' : 'dashboard');
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(() => getSharedDocId());
+  const [activeTab, setActiveTab] = useState(() =>
+    getSharedDocId() ? "detail" : "dashboard",
+  );
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(() =>
+    getSharedDocId(),
+  );
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
-  
-  type ViewRole = 'junior_analyst' | 'senior_pm' | 'cro' | 'compliance';
-  
+
+  type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
+
   // Email auth state
   const [isSignup, setIsSignup] = useState(false);
-  const [signupRole, setSignupRole] = useState<ViewRole>('junior_analyst');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [signupRole, setSignupRole] = useState<ViewRole>("junior_analyst");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [emailAuthLoading, setEmailAuthLoading] = useState(false);
   const [showVerificationScreen, setShowVerificationScreen] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
@@ -123,44 +201,52 @@ export default function App() {
   // Validation regexes
   const usernameRegex = /^[A-Za-z][A-Za-z0-9_]{2,19}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  const passwordRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
   const validateUsername = (username: string): string | null => {
-    if (!username) return 'Username is required';
+    if (!username) return "Username is required";
     if (!usernameRegex.test(username)) {
-      return 'Username must be 3-20 characters, start with a letter, contain only letters, numbers, or underscore';
+      return "Username must be 3-20 characters, start with a letter, contain only letters, numbers, or underscore";
     }
     return null;
   };
 
   const validateEmail = (email: string): string | null => {
-    if (!email) return 'Email is required';
-    if (!emailRegex.test(email)) return 'Invalid email address';
+    if (!email) return "Email is required";
+    if (!emailRegex.test(email)) return "Invalid email address";
     return null;
   };
 
   const validatePassword = (password: string): string | null => {
-    if (!password) return 'Password is required';
-    if (password.length < 8) return 'Password must be at least 8 characters';
-    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
-    if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
-    if (!/\d/.test(password)) return 'Password must contain at least one number';
-    if (!/[@$!%*?&]/.test(password)) return 'Password must contain at least one special character (@$!%*?&)';
+    if (!password) return "Password is required";
+    if (password.length < 8) return "Password must be at least 8 characters";
+    if (!/[A-Z]/.test(password))
+      return "Password must contain at least one uppercase letter";
+    if (!/[a-z]/.test(password))
+      return "Password must contain at least one lowercase letter";
+    if (!/\d/.test(password))
+      return "Password must contain at least one number";
+    if (!/[@$!%*?&]/.test(password))
+      return "Password must contain at least one special character (@$!%*?&)";
     return null;
   };
 
-  const openAnalysisView = (docId: string, source: 'upload' | 'dashboard' | 'list') => {
+  const openAnalysisView = (
+    docId: string,
+    source: "upload" | "dashboard" | "list",
+  ) => {
     if (!docId) return;
 
     selectedDocIdRef.current = docId;
     setSelectedDocId(docId);
     setSharedDocId(docId);
-    console.log('App selectedDocId set to ...', docId);
-    console.log('App switching to analysis view for ...', docId);
-    setActiveTab('detail');
+    console.log("App selectedDocId set to ...", docId);
+    console.log("App switching to analysis view for ...", docId);
+    setActiveTab("detail");
 
-    if (source === 'upload') {
-      console.log('App received uploaded docId ...', docId);
+    if (source === "upload") {
+      console.log("App received uploaded docId ...", docId);
     }
   };
 
@@ -190,18 +276,21 @@ export default function App() {
         }
 
         // Sync user profile for verified users
-        const userRef = doc(db, 'users', currentUser.uid);
+        const userRef = doc(db, "users", currentUser.uid);
         try {
           const userSnap = await getDoc(userRef);
-          
+
           if (!userSnap.exists()) {
             const profile = {
               uid: currentUser.uid,
-              username: currentUser.displayName || '',
+              username: currentUser.displayName || "",
               email: currentUser.email,
               emailVerified: currentUser.emailVerified,
-              role: currentUser.email === 'aakash.ra613@gmail.com' ? 'admin' : 'junior_analyst',
-              createdAt: new Date().toISOString()
+              role:
+                currentUser.email === "aakash.ra613@gmail.com"
+                  ? "admin"
+                  : "junior_analyst",
+              createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, profile);
             setUserProfile(profile);
@@ -209,7 +298,7 @@ export default function App() {
             setUserProfile(userSnap.data());
           }
         } catch (error) {
-          handleFirestoreError(error, OperationType.GET, 'users');
+          handleFirestoreError(error, OperationType.GET, "users");
         }
       } else {
         setUserProfile(null);
@@ -227,18 +316,22 @@ export default function App() {
       await signInWithPopup(auth, provider);
       toast.success("Welcome back to FinSight AI");
     } catch (error: any) {
-      const code = error?.code || 'unknown';
+      const code = error?.code || "unknown";
       console.error("Auth error:", error);
       // Common error codes:
       // auth/popup-blocked → allow popups in your browser
       // auth/operation-not-allowed → enable Google sign-in in Firebase Console
       // auth/unauthorized-domain → add domain to Firebase Auth allowed list
-      if (code === 'auth/popup-blocked') {
-        toast.error("Popup blocked — please allow popups for localhost in your browser");
-      } else if (code === 'auth/operation-not-allowed') {
+      if (code === "auth/popup-blocked") {
+        toast.error(
+          "Popup blocked — please allow popups for localhost in your browser",
+        );
+      } else if (code === "auth/operation-not-allowed") {
         toast.error("Google sign-in is not enabled in Firebase Console");
-      } else if (code === 'auth/unauthorized-domain') {
-        toast.error("Domain not authorized in Firebase — add localhost to Auth settings");
+      } else if (code === "auth/unauthorized-domain") {
+        toast.error(
+          "Domain not authorized in Firebase — add localhost to Auth settings",
+        );
       } else {
         toast.error(`Sign-in failed: ${code}`);
       }
@@ -264,41 +357,45 @@ export default function App() {
       toast.error(passwordError);
       return;
     }
-    
+
     setEmailAuthLoading(true);
     try {
       // Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       const newUser = userCredential.user;
 
       // Create Firestore user profile
-      await setDoc(doc(db, 'users', newUser.uid), {
+      await setDoc(doc(db, "users", newUser.uid), {
         uid: newUser.uid,
         username: username,
         email: email,
         emailVerified: false,
         role: signupRole,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       });
 
       // Send verification email
       await sendEmailVerification(newUser);
 
-      toast.success('Account created!');
-      setUsername('');
-      setEmail('');
-      setPassword('');
+      toast.success("Account created!");
+      setUsername("");
+      setEmail("");
+      setPassword("");
       setIsSignup(false);
       setShowVerificationScreen(true);
     } catch (error: any) {
-      const code = error?.code || 'unknown';
-      console.error('Signup error:', error);
-      if (code === 'auth/email-already-in-use') {
-        toast.error('Email is already registered. Please sign in instead.');
-      } else if (code === 'auth/weak-password') {
-        toast.error('Password should be at least 6 characters');
-      } else if (code === 'auth/invalid-email') {
-        toast.error('Invalid email address');
+      const code = error?.code || "unknown";
+      console.error("Signup error:", error);
+      if (code === "auth/email-already-in-use") {
+        toast.error("Email is already registered. Please sign in instead.");
+      } else if (code === "auth/weak-password") {
+        toast.error("Password should be at least 6 characters");
+      } else if (code === "auth/invalid-email") {
+        toast.error("Invalid email address");
       } else {
         toast.error(`Sign up failed: ${code}`);
       }
@@ -315,31 +412,35 @@ export default function App() {
     }
 
     if (!password) {
-      toast.error('Password is required');
+      toast.error("Password is required");
       return;
     }
-    
+
     setEmailAuthLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       if (!userCredential.user.emailVerified) {
         setShowVerificationScreen(true);
-        setEmail('');
-        setPassword('');
+        setEmail("");
+        setPassword("");
       } else {
-        toast.success('Welcome back to FinSight AI');
-        setEmail('');
-        setPassword('');
+        toast.success("Welcome back to FinSight AI");
+        setEmail("");
+        setPassword("");
       }
     } catch (error: any) {
-      const code = error?.code || 'unknown';
-      console.error('Login error:', error);
-      if (code === 'auth/user-not-found') {
-        toast.error('No account found with this email. Please sign up first.');
-      } else if (code === 'auth/wrong-password') {
-        toast.error('Incorrect password. Please try again.');
-      } else if (code === 'auth/invalid-email') {
-        toast.error('Invalid email address');
+      const code = error?.code || "unknown";
+      console.error("Login error:", error);
+      if (code === "auth/user-not-found") {
+        toast.error("No account found with this email. Please sign up first.");
+      } else if (code === "auth/wrong-password") {
+        toast.error("Incorrect password. Please try again.");
+      } else if (code === "auth/invalid-email") {
+        toast.error("Invalid email address");
       } else {
         toast.error(`Sign in failed: ${code}`);
       }
@@ -350,11 +451,11 @@ export default function App() {
 
   const handleLogout = () => {
     signOut(auth);
-    setActiveTab('dashboard');
+    setActiveTab("dashboard");
     setShowVerificationScreen(false);
-    setUsername('');
-    setEmail('');
-    setPassword('');
+    setUsername("");
+    setEmail("");
+    setPassword("");
     toast.success("Signed out successfully");
   };
 
@@ -363,10 +464,10 @@ export default function App() {
     setVerificationLoading(true);
     try {
       await sendEmailVerification(auth.currentUser);
-      toast.success('Verification email sent!');
+      toast.success("Verification email sent!");
     } catch (error: any) {
-      console.error('Resend verification error:', error);
-      toast.error('Failed to send verification email');
+      console.error("Resend verification error:", error);
+      toast.error("Failed to send verification email");
     } finally {
       setVerificationLoading(false);
     }
@@ -379,13 +480,13 @@ export default function App() {
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
         setShowVerificationScreen(false);
-        toast.success('Email verified! Welcome to FinSight AI');
+        toast.success("Email verified! Welcome to FinSight AI");
       } else {
-        toast.error('Email not verified yet. Please check your inbox.');
+        toast.error("Email not verified yet. Please check your inbox.");
       }
     } catch (error: any) {
-      console.error('Verification check error:', error);
-      toast.error('Failed to check verification status');
+      console.error("Verification check error:", error);
+      toast.error("Failed to check verification status");
     } finally {
       setVerificationLoading(false);
     }
@@ -396,7 +497,9 @@ export default function App() {
       <div className="flex h-screen w-full items-center justify-center bg-[#0a0c10]">
         <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
-          <p className="text-sm font-medium text-slate-500">Initializing FinSight AI...</p>
+          <p className="text-sm font-medium text-slate-500">
+            Initializing FinSight AI...
+          </p>
         </div>
       </div>
     );
@@ -411,14 +514,14 @@ export default function App() {
           <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
         </div>
 
-        <motion.div 
+        <motion.div
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           className="w-full max-w-md space-y-8 text-center relative z-10"
         >
           <div className="space-y-4">
-            <motion.div 
+            <motion.div
               initial={false}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -427,43 +530,55 @@ export default function App() {
               <AlertTriangle className="h-12 w-12 text-white" />
             </motion.div>
             <div className="space-y-1">
-              <h1 className="text-4xl font-black tracking-tighter text-white">Verify Your Email</h1>
-              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-4">Almost there!</p>
+              <h1 className="text-4xl font-black tracking-tighter text-white">
+                Verify Your Email
+              </h1>
+              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs mt-4">
+                Almost there!
+              </p>
             </div>
           </div>
-          
+
           <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-3xl overflow-hidden shadow-black/80">
             <CardHeader className="p-10 pb-6">
-              <CardTitle className="text-xl font-bold text-white tracking-tight">Email Verification Required</CardTitle>
+              <CardTitle className="text-xl font-bold text-white tracking-tight">
+                Email Verification Required
+              </CardTitle>
               <CardDescription className="text-slate-500 mt-3 text-sm">
-                We've sent a verification email to <strong className="text-slate-300">{user.email}</strong>. Click the link in the email to verify your account.
+                We've sent a verification email to{" "}
+                <strong className="text-slate-300">{user.email}</strong>. Click
+                the link in the email to verify your account.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-10 pt-0 space-y-6">
-              <Button 
+              <Button
                 onClick={handleCheckVerification}
                 disabled={verificationLoading}
                 className="w-full bg-indigo-600 h-14 text-white hover:bg-indigo-700 font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-900/40 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
-                {verificationLoading ? 'Checking...' : '✓ I\'ve Verified My Email'}
+                {verificationLoading
+                  ? "Checking..."
+                  : "✓ I've Verified My Email"}
               </Button>
 
-              <Button 
+              <Button
                 onClick={handleResendVerification}
                 disabled={verificationLoading}
                 variant="outline"
                 className="w-full h-12 text-slate-300 border-slate-700 hover:bg-slate-800 font-bold text-sm uppercase tracking-widest rounded-2xl disabled:opacity-50"
               >
-                {verificationLoading ? 'Sending...' : 'Resend Verification Email'}
+                {verificationLoading
+                  ? "Sending..."
+                  : "Resend Verification Email"}
               </Button>
 
-              <Button 
+              <Button
                 onClick={() => {
                   signOut(auth);
                   setShowVerificationScreen(false);
-                  setUsername('');
-                  setEmail('');
-                  setPassword('');
+                  setUsername("");
+                  setEmail("");
+                  setPassword("");
                 }}
                 variant="ghost"
                 className="w-full h-12 text-slate-500 hover:text-slate-300 font-semibold text-sm uppercase rounded-2xl"
@@ -472,7 +587,8 @@ export default function App() {
               </Button>
 
               <p className="text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto uppercase font-bold tracking-wider">
-                Didn't receive the email? Check your spam folder or request a new verification link.
+                Didn't receive the email? Check your spam folder or request a
+                new verification link.
               </p>
             </CardContent>
           </Card>
@@ -491,14 +607,14 @@ export default function App() {
           <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
         </div>
 
-        <motion.div 
+        <motion.div
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           className="w-full max-w-md space-y-10 text-center relative z-10"
         >
           <div className="space-y-4">
-            <motion.div 
+            <motion.div
               initial={false}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -507,20 +623,26 @@ export default function App() {
               <LogoIcon className="h-14 w-14" />
             </motion.div>
             <div className="space-y-1">
-              <h1 className="text-5xl font-black tracking-tighter text-white">FinSight AI</h1>
-              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">Tier-1 Institutional Risk Analytics</p>
+              <h1 className="text-5xl font-black tracking-tighter text-white">
+                FinSight AI
+              </h1>
+              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">
+                Tier-1 Institutional Risk Analytics
+              </p>
             </div>
           </div>
-          
+
           <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-3xl overflow-hidden shadow-black/80">
             <CardHeader className="p-10 pb-6">
-              <CardTitle className="text-2xl font-bold text-white tracking-tight">Security Gateway</CardTitle>
+              <CardTitle className="text-2xl font-bold text-white tracking-tight">
+                Security Gateway
+              </CardTitle>
               <CardDescription className="text-slate-500 mt-2">
                 Unified access to military-grade financial intelligence.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-10 pt-0 space-y-8">
-              <Button 
+              <Button
                 onClick={handleLogin}
                 className="w-full bg-indigo-500 h-14 text-white hover:bg-indigo-400 active:bg-indigo-600 font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-500/50 rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] border border-indigo-400/40"
               >
@@ -532,7 +654,9 @@ export default function App() {
                   <span className="w-full border-t border-slate-800" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-slate-900 px-4 text-slate-600 font-black tracking-[0.3em]">Or Email</span>
+                  <span className="bg-slate-900 px-4 text-slate-600 font-black tracking-[0.3em]">
+                    Or Email
+                  </span>
                 </div>
               </div>
 
@@ -549,12 +673,18 @@ export default function App() {
                     />
                     <select
                       value={signupRole}
-                      onChange={(e) => setSignupRole(e.target.value as ViewRole)}
+                      onChange={(e) =>
+                        setSignupRole(e.target.value as ViewRole)
+                      }
                       disabled={emailAuthLoading}
                       className="w-full bg-slate-900 border border-slate-800 text-slate-300 h-12 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
                     >
-                      <option value="junior_analyst">Junior Risk Analyst</option>
-                      <option value="senior_pm">Senior Portfolio Manager</option>
+                      <option value="junior_analyst">
+                        Junior Risk Analyst
+                      </option>
+                      <option value="senior_pm">
+                        Senior Portfolio Manager
+                      </option>
                       <option value="cro">Chief Risk Officer</option>
                       <option value="compliance">Compliance Officer</option>
                     </select>
@@ -578,12 +708,16 @@ export default function App() {
                 />
               </div>
 
-              <Button 
+              <Button
                 onClick={isSignup ? handleEmailSignup : handleEmailSignin}
                 disabled={emailAuthLoading}
                 className="w-full bg-slate-700 border border-slate-500 h-14 text-white hover:bg-slate-600 active:bg-slate-800 disabled:opacity-50 active:bg-slate-800 font-black text-sm uppercase tracking-widest shadow-xl rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
               >
-                {emailAuthLoading ? 'Loading...' : isSignup ? 'Create Account' : 'Sign In'}
+                {emailAuthLoading
+                  ? "Loading..."
+                  : isSignup
+                    ? "Create Account"
+                    : "Sign In"}
               </Button>
 
               <button
@@ -591,15 +725,20 @@ export default function App() {
                 disabled={emailAuthLoading}
                 className="w-full text-xs text-slate-400 hover:text-indigo-400 transition-colors duration-200 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isSignup ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                {isSignup
+                  ? "Already have an account? Sign In"
+                  : "Don't have an account? Sign Up"}
               </button>
 
               <div className="flex justify-center gap-4">
-                 {[ShieldCheck, Lock, Activity].map((Icon, i) => (
-                   <div key={i} className="h-10 w-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
-                      <Icon size={18} />
-                   </div>
-                 ))}
+                {[ShieldCheck, Lock, Activity].map((Icon, i) => (
+                  <div
+                    key={i}
+                    className="h-10 w-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500"
+                  >
+                    <Icon size={18} />
+                  </div>
+                ))}
               </div>
 
               <p className="text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto uppercase font-bold tracking-wider">
@@ -621,52 +760,54 @@ export default function App() {
           <div className="h-9 w-9 bg-slate-900 border border-slate-800 rounded flex items-center justify-center shadow-lg shadow-indigo-950/50">
             <LogoIcon className="h-7 w-7" />
           </div>
-          <span className="text-white font-semibold text-lg tracking-tight">FinSight AI</span>
+          <span className="text-white font-semibold text-lg tracking-tight">
+            FinSight AI
+          </span>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          <NavItem 
-            icon={<LayoutDashboard size={20} />} 
-            label="Dashboard" 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
+          <NavItem
+            icon={<LayoutDashboard size={20} />}
+            label="Dashboard"
+            active={activeTab === "dashboard"}
+            onClick={() => setActiveTab("dashboard")}
           />
-          <NavItem 
-            icon={<AlertTriangle size={20} />} 
-            label="Anomalies" 
-            active={activeTab === 'anomalies'} 
-            onClick={() => setActiveTab('anomalies')} 
+          <NavItem
+            icon={<AlertTriangle size={20} />}
+            label="Anomalies"
+            active={activeTab === "anomalies"}
+            onClick={() => setActiveTab("anomalies")}
           />
-          <NavItem 
-            icon={<FileText size={20} />} 
-            label="Documents" 
-            active={activeTab === 'documents'} 
-            onClick={() => setActiveTab('documents')} 
+          <NavItem
+            icon={<FileText size={20} />}
+            label="Documents"
+            active={activeTab === "documents"}
+            onClick={() => setActiveTab("documents")}
           />
-          <NavItem 
-            icon={<Wallet size={20} />} 
-            label="Budgets" 
-            active={activeTab === 'budgets'} 
-            onClick={() => setActiveTab('budgets')} 
+          <NavItem
+            icon={<Wallet size={20} />}
+            label="Budgets"
+            active={activeTab === "budgets"}
+            onClick={() => setActiveTab("budgets")}
           />
-          <NavItem 
-            icon={<Clock size={20} />} 
-            label="AI Intelligence" 
-            active={activeTab === 'history'} 
-            onClick={() => setActiveTab('history')} 
+          <NavItem
+            icon={<Clock size={20} />}
+            label="AI Intelligence"
+            active={activeTab === "history"}
+            onClick={() => setActiveTab("history")}
           />
-          <NavItem 
-            icon={<Target size={20} />} 
-            label="Goals" 
-            active={activeTab === 'goals'} 
-            onClick={() => setActiveTab('goals')} 
+          <NavItem
+            icon={<Target size={20} />}
+            label="Goals"
+            active={activeTab === "goals"}
+            onClick={() => setActiveTab("goals")}
           />
-          {userProfile?.role === 'admin' && (
-            <NavItem 
-              icon={<ShieldCheck size={20} />} 
-              label="Admin Portal" 
-              active={activeTab === 'admin'} 
-              onClick={() => setActiveTab('admin')} 
+          {userProfile?.role === "admin" && (
+            <NavItem
+              icon={<ShieldCheck size={20} />}
+              label="Admin Portal"
+              active={activeTab === "admin"}
+              onClick={() => setActiveTab("admin")}
             />
           )}
         </nav>
@@ -675,16 +816,29 @@ export default function App() {
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl items-center gap-3 flex">
             <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-indigo-200 flex items-center justify-center text-indigo-900 font-bold overflow-hidden shadow-lg">
               {user.photoURL ? (
-                <img src={user.photoURL} alt="User profile" className="h-full w-full object-cover" />
+                <img
+                  src={user.photoURL}
+                  alt="User profile"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 user.displayName?.[0] || user.email?.[0]
               )}
             </div>
             <div className="min-w-0 overflow-hidden flex-1">
-              <p className="truncate text-sm font-semibold text-white">{user.displayName || user.email}</p>
-              <p className="text-xs text-slate-500">{userProfile?.role || 'Compliance Officer'}</p>
+              <p className="truncate text-sm font-semibold text-white">
+                {user.displayName || user.email}
+              </p>
+              <p className="text-xs text-slate-500">
+                {userProfile?.role || "Compliance Officer"}
+              </p>
             </div>
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-red-500 hover:bg-slate-800" onClick={handleLogout}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-slate-500 hover:text-red-500 hover:bg-slate-800"
+              onClick={handleLogout}
+            >
               <LogOut size={18} />
             </Button>
           </div>
@@ -697,9 +851,12 @@ export default function App() {
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0d1017]">
           <div className="flex items-center gap-4 w-1/3">
             <div className="relative w-full group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
-              <Input 
-                placeholder="Search portfolios, assets, or records... (Win+O or Ctrl+Space)" 
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors"
+                size={16}
+              />
+              <Input
+                placeholder="Search portfolios, assets, or records... (Win+O or Ctrl+Space)"
                 className="bg-slate-900/50 border-slate-800 shadow-inner pl-10 focus-visible:border-indigo-500 focus-visible:ring-1 focus-visible:ring-indigo-500/50 transition-all"
               />
             </div>
@@ -707,17 +864,19 @@ export default function App() {
           <div className="flex items-center gap-4">
             {userProfile?.role && (
               <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Active Role</span>
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+                  Active Role
+                </span>
                 <span className="text-sm text-indigo-400 font-medium capitalize">
-                  {userProfile.role.replace('_', ' ')}
+                  {userProfile.role.replace("_", " ")}
                 </span>
               </div>
             )}
-            <Button 
-               className="bg-indigo-600 hover:bg-indigo-700 h-9 px-4 text-white font-semibold text-sm shadow-lg shadow-indigo-900/20"
-               onClick={() => {
-                 setActiveTab('upload');
-               }}
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 h-9 px-4 text-white font-semibold text-sm shadow-lg shadow-indigo-900/20"
+              onClick={() => {
+                setActiveTab("upload");
+              }}
             >
               <Upload className="mr-2" size={16} />
               New Analysis
@@ -727,46 +886,55 @@ export default function App() {
 
         <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
           <AnimatePresence mode="wait">
-             {activeTab === 'dashboard' && (
-               <motion.div 
-                 key="dashboard"
-                 initial={false}
-                 animate={{ opacity: 1, x: 0 }}
-                 exit={{ opacity: 0, x: -10 }}
-                 transition={{ duration: 0.2 }}
-                 className="space-y-8"
-               >
-                 <Dashboard user={user} userProfile={userProfile} onAction={(tab) => setActiveTab(tab)} onDocSelect={(id) => openAnalysisView(id, 'dashboard')} />
-               </motion.div>
-             )}
+            {activeTab === "dashboard" && (
+              <motion.div
+                key="dashboard"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-8"
+              >
+                <Dashboard
+                  user={user}
+                  userProfile={userProfile}
+                  onAction={(tab) => setActiveTab(tab)}
+                  onDocSelect={(id) => openAnalysisView(id, "dashboard")}
+                />
+              </motion.div>
+            )}
 
-             {activeTab === 'anomalies' && (
-               <motion.div 
-                 key="anomalies"
-                 initial={false}
-                 animate={{ opacity: 1, x: 0 }}
-                 exit={{ opacity: 0, x: -10 }}
-                 transition={{ duration: 0.2 }}
-                 className="space-y-8"
-               >
-                 <AnomalyDashboard user={user} />
-               </motion.div>
-             )}
-             
-             {activeTab === 'documents' && (
-              <motion.div 
+            {activeTab === "anomalies" && (
+              <motion.div
+                key="anomalies"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-8"
+              >
+                <AnomalyDashboard user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === "documents" && (
+              <motion.div
                 key="documents"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                 className="space-y-6"
+                className="space-y-6"
               >
-                <AnalysisList type="all" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
+                <AnalysisList
+                  type="all"
+                  user={user}
+                  onSelect={(id) => openAnalysisView(id, "list")}
+                />
               </motion.div>
             )}
 
-            {activeTab === 'cashflow' && (
-              <motion.div 
+            {activeTab === "cashflow" && (
+              <motion.div
                 key="cashflow"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -777,38 +945,36 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'history' && (
-              <motion.div 
+            {activeTab === "history" && (
+              <motion.div
                 key="history"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-             {activeTab === 'history' && (
-               <motion.div 
-                 key="history"
-                 initial={false}
-                 animate={{ opacity: 1, x: 0 }}
-                 exit={{ opacity: 0, x: -10 }}
-                  className="space-y-6"
-               >
-                 <AnalysisList type="completed" user={user} onSelect={(id) => openAnalysisView(id, 'list')} />
-               </motion.div>
-             )}
+                className="space-y-6"
+              >
+                <AnalysisList
+                  type="completed"
+                  user={user}
+                  onSelect={(id) => openAnalysisView(id, "list")}
+                />
+              </motion.div>
+            )}
 
-             {activeTab === 'subscriptions' && user && (
-               <motion.div 
-                 key="subscriptions"
-                 initial={false}
-                 animate={{ opacity: 1, x: 0 }}
-                 exit={{ opacity: 0, x: -10 }}
-                 className="space-y-6"
-               >
-                 <SubscriptionAnalyzer user={user} />
-               </motion.div>
-             )}
+            {activeTab === "subscriptions" && user && (
+              <motion.div
+                key="subscriptions"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <SubscriptionAnalyzer user={user} />
+              </motion.div>
+            )}
 
-            {activeTab === 'goals' && (
-              <motion.div 
+            {activeTab === "goals" && (
+              <motion.div
                 key="goals"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -819,35 +985,43 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'upload' && (
-              <motion.div 
+            {activeTab === "upload" && (
+              <motion.div
                 key="upload"
                 initial={false}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="max-w-2xl mx-auto"
               >
-                <FileUpload user={user} onComplete={(id) => openAnalysisView(id, 'upload')} onCancel={() => setActiveTab('dashboard')} />
+                <FileUpload
+                  user={user}
+                  onComplete={(id) => openAnalysisView(id, "upload")}
+                  onCancel={() => setActiveTab("dashboard")}
+                />
               </motion.div>
             )}
 
-            {activeTab === 'detail' && activeDocId && (
-              <motion.div 
+            {activeTab === "detail" && activeDocId && (
+              <motion.div
                 key="detail"
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 className="h-full"
               >
-                <AnalysisDetail docId={activeDocId} user={user} onBack={() => {
-                  clearSharedDocId();
-                  setActiveTab('documents');
-                }} />
+                <AnalysisDetail
+                  docId={activeDocId}
+                  user={user}
+                  onBack={() => {
+                    clearSharedDocId();
+                    setActiveTab("documents");
+                  }}
+                />
               </motion.div>
             )}
 
-            {activeTab === 'admin' && userProfile?.role === 'admin' && (
-              <motion.div 
+            {activeTab === "admin" && userProfile?.role === "admin" && (
+              <motion.div
                 key="admin"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -860,9 +1034,9 @@ export default function App() {
         </div>
       </main>
       {user && (
-        <CommandPalette 
-          onAction={setActiveTab} 
-          onDocSelect={(id) => openAnalysisView(id, 'dashboard')} 
+        <CommandPalette
+          onAction={setActiveTab}
+          onDocSelect={(id) => openAnalysisView(id, "dashboard")}
         />
       )}
       <Toaster position="bottom-right" richColors />
@@ -870,22 +1044,31 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+function NavItem({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       className={`
         flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors
-        ${active 
-          ? 'bg-slate-800/50 text-white' 
-          : 'text-slate-400 hover:bg-slate-800/30'
+        ${
+          active
+            ? "bg-slate-800/50 text-white"
+            : "text-slate-400 hover:bg-slate-800/30"
         }
       `}
     >
-      <span className={`${active ? 'opacity-80' : 'opacity-60'}`}>{icon}</span>
+      <span className={`${active ? "opacity-80" : "opacity-60"}`}>{icon}</span>
       {label}
     </button>
   );
 }
-
-

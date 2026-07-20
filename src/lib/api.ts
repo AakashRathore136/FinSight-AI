@@ -4,7 +4,7 @@
 
 // Save original fetch
 const originalFetch =
-  typeof window !== 'undefined' ? window.fetch.bind(window) : null;
+  typeof window !== "undefined" ? window.fetch.bind(window) : null;
 
 interface ApiFetchOptions {
   timeout?: number;
@@ -17,15 +17,15 @@ interface ApiFetchOptions {
 export async function apiFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
-  options?: ApiFetchOptions
+  options?: ApiFetchOptions,
 ): Promise<Response> {
   const timeout = options?.timeout ?? 10000;
 
   const fetchImpl =
-    originalFetch ?? (typeof fetch !== 'undefined' ? fetch : null);
+    originalFetch ?? (typeof fetch !== "undefined" ? fetch : null);
 
   if (!fetchImpl) {
-    throw new Error('Fetch API is not available in this environment');
+    throw new Error("Fetch API is not available in this environment");
   }
 
   // Create a new controller for this request
@@ -37,9 +37,9 @@ export async function apiFetch(
       controller.abort(init.signal.reason);
     } else {
       init.signal.addEventListener(
-        'abort',
+        "abort",
         () => controller.abort(init.signal?.reason),
-        { once: true }
+        { once: true },
       );
     }
   }
@@ -57,7 +57,7 @@ export async function apiFetch(
   } catch (error) {
     if (
       error instanceof DOMException &&
-      error.name === 'AbortError' &&
+      error.name === "AbortError" &&
       !init?.signal?.aborted
     ) {
       throw new Error(`Request timed out after ${timeout}ms`);

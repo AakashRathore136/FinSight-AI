@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
+import { useState, useEffect } from "react";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
   collection,
   query,
@@ -12,7 +12,7 @@ import {
   orderBy,
   limit,
   getDocs,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   fetchUserTransactions,
   calculateCategoryBaseline,
@@ -23,21 +23,30 @@ import {
   Anomaly,
   Transaction,
   CategoryBaseline,
-} from '@/src/lib/anomalyUtils';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
-import { Button } from '@/src/components/ui/button';
-import { Progress } from '@/src/components/ui/progress';
-import { Skeleton } from '@/src/components/ui/skeleton';
-import { AlertTriangle, RefreshCw, BarChart3, DollarSign } from 'lucide-react';
-import { AnomalyCard } from '@/src/components/anomaly/AnomalyCard';
-import { formatDateSafe } from '@/src/lib/utils';
+} from "@/src/lib/anomalyUtils";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
+import { Progress } from "@/src/components/ui/progress";
+import { Skeleton } from "@/src/components/ui/skeleton";
+import { AlertTriangle, RefreshCw, BarChart3, DollarSign } from "lucide-react";
+import { AnomalyCard } from "@/src/components/anomaly/AnomalyCard";
+import { formatDateSafe } from "@/src/lib/utils";
 
 interface AnomalyDashboardProps {
   user: { uid: string; [key: string]: any } | null;
 }
 
-type AnomalyWithHistory = Anomaly & { historicalCount: number; historicalLabel?: string };
+type AnomalyWithHistory = Anomaly & {
+  historicalCount: number;
+  historicalLabel?: string;
+};
 
 export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
   const [loading, setLoading] = useState(true);
@@ -51,11 +60,11 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
     if (!user?.uid) return;
 
     const anomaliesQuery = query(
-      collection(db, 'anomalies'),
-      where('userId', '==', user.uid),
-      where('dismissed', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      collection(db, "anomalies"),
+      where("userId", "==", user.uid),
+      where("dismissed", "==", false),
+      orderBy("createdAt", "desc"),
+      limit(50),
     );
 
     const unsubscribe = onSnapshot(
@@ -66,15 +75,17 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
           ...d.data(),
         })) as Anomaly[];
         setAnomalies(docs);
-        setLargeTxCount(docs.filter((a) => a.type === 'large_transaction').length);
-        setSpikeCount(docs.filter((a) => a.type === 'category_spike').length);
+        setLargeTxCount(
+          docs.filter((a) => a.type === "large_transaction").length,
+        );
+        setSpikeCount(docs.filter((a) => a.type === "category_spike").length);
         setTotalAnomalyAmount(docs.reduce((sum, a) => sum + a.amount, 0));
         setLoading(false);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'anomalies');
+        handleFirestoreError(error, OperationType.LIST, "anomalies");
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -86,7 +97,7 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
     try {
       await runDetection(user.uid);
     } catch (error) {
-      console.error('Detection error:', error);
+      console.error("Detection error:", error);
     } finally {
       setRefreshing(false);
     }
@@ -101,10 +112,10 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
       if (!mounted) return;
 
       const existingQuery = query(
-        collection(db, 'anomalies'),
-        where('userId', '==', user.uid),
-        where('dismissed', '==', false),
-        limit(1)
+        collection(db, "anomalies"),
+        where("userId", "==", user.uid),
+        where("dismissed", "==", false),
+        limit(1),
       );
       const existingSnap = await getDocs(existingQuery);
       if (existingSnap.empty) {
@@ -121,18 +132,24 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
 
   const handleDismiss = async (anomalyId: string) => {
     try {
-      const ref = doc(db, 'anomalies', anomalyId);
+      const ref = doc(db, "anomalies", anomalyId);
       await updateDoc(ref, {
         dismissed: true,
         dismissedAt: serverTimestamp(),
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `anomalies/${anomalyId}`);
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        `anomalies/${anomalyId}`,
+      );
     }
   };
 
-  const largeTransactions = anomalies.filter((a) => a.type === 'large_transaction');
-  const categorySpikes = anomalies.filter((a) => a.type === 'category_spike');
+  const largeTransactions = anomalies.filter(
+    (a) => a.type === "large_transaction",
+  );
+  const categorySpikes = anomalies.filter((a) => a.type === "category_spike");
   const weeklyAnomalies = groupByWeek(anomalies);
 
   if (loading) {
@@ -174,8 +191,11 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
           disabled={refreshing}
           className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest h-10 px-4 rounded-xl shadow-lg shadow-indigo-900/20"
         >
-          <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Scanning...' : 'Rescan'}
+          <RefreshCw
+            size={16}
+            className={`mr-2 ${refreshing ? "animate-spin" : ""}`}
+          />
+          {refreshing ? "Scanning..." : "Rescan"}
         </Button>
       </section>
 
@@ -211,7 +231,8 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
             </div>
             <p className="text-slate-400 font-medium">No anomalies detected</p>
             <p className="text-xs text-slate-500">
-              Your spending patterns appear normal based on the last 3 months of data.
+              Your spending patterns appear normal based on the last 3 months of
+              data.
             </p>
           </CardContent>
         </Card>
@@ -271,13 +292,17 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
             </h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {weeklyAnomalies.map((week) => (
-                <Card key={week.label} className="bg-slate-900 border-slate-800 rounded-xl">
+                <Card
+                  key={week.label}
+                  className="bg-slate-900 border-slate-800 rounded-xl"
+                >
                   <CardHeader className="pb-3">
                     <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-400">
                       {week.label}
                     </CardTitle>
                     <CardDescription className="text-slate-500">
-                      {week.count} {week.count === 1 ? 'anomaly' : 'anomalies'} detected
+                      {week.count} {week.count === 1 ? "anomaly" : "anomalies"}{" "}
+                      detected
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0 space-y-3">
@@ -306,7 +331,7 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
                           variant="outline"
                           className="text-[9px] font-black uppercase tracking-widest border-slate-700 text-slate-400"
                         >
-                          {t.replace('_', ' ')}
+                          {t.replace("_", " ")}
                         </Badge>
                       ))}
                     </div>
@@ -329,19 +354,19 @@ async function runDetection(userId: string) {
   const largeTxAnomalies = detectLargeTransactions(transactions, baseline);
   const categorySpikeAnomalies = detectCategorySpikes(transactions, baseline);
 
-  const newAnomalies: Omit<Anomaly, 'id'>[] = [];
+  const newAnomalies: Omit<Anomaly, "id">[] = [];
 
   largeTxAnomalies.forEach((tx) => {
     const catBaseline = baseline.get(tx.category)!;
     const confidence = calculateConfidenceScore(
-      'large_transaction',
+      "large_transaction",
       tx.amount,
       catBaseline.mean,
-      catBaseline.stdDev
+      catBaseline.stdDev,
     );
     newAnomalies.push({
       userId,
-      type: 'large_transaction',
+      type: "large_transaction",
       category: tx.category,
       amount: tx.amount,
       description: `Transaction of $${tx.amount.toLocaleString()} in ${tx.category} exceeds the category average by more than 2 standard deviations.`,
@@ -354,36 +379,43 @@ async function runDetection(userId: string) {
 
   categorySpikeAnomalies.forEach((spike) => {
     const confidence = calculateConfidenceScore(
-      'category_spike',
+      "category_spike",
       spike.amount,
       spike.baseline.mean,
-      spike.baseline.stdDev
+      spike.baseline.stdDev,
     );
-    const lastMonthTotal = spike.baseline.monthlyTotals[spike.baseline.monthlyTotals.length - 1];
-    const avgMonthly = spike.baseline.monthlyTotals.reduce((a, b) => a + b, 0) / spike.baseline.monthlyTotals.length;
-    const pctOver = avgMonthly > 0 ? Math.round((lastMonthTotal / avgMonthly - 1) * 100) : 0;
+    const lastMonthTotal =
+      spike.baseline.monthlyTotals[spike.baseline.monthlyTotals.length - 1];
+    const avgMonthly =
+      spike.baseline.monthlyTotals.reduce((a, b) => a + b, 0) /
+      spike.baseline.monthlyTotals.length;
+    const pctOver =
+      avgMonthly > 0 ? Math.round((lastMonthTotal / avgMonthly - 1) * 100) : 0;
 
     newAnomalies.push({
       userId,
-      type: 'category_spike',
+      type: "category_spike",
       category: spike.category,
       amount: spike.amount,
       description: `${spike.category} spending is ${pctOver}% above the 3-month average.`,
       confidenceScore: confidence,
-      transactionId: spike.transactions[spike.transactions.length - 1]?.id || '',
+      transactionId:
+        spike.transactions[spike.transactions.length - 1]?.id || "",
       dismissed: false,
-      createdAt: spike.transactions[spike.transactions.length - 1]?.date || new Date().toISOString(),
+      createdAt:
+        spike.transactions[spike.transactions.length - 1]?.date ||
+        new Date().toISOString(),
     });
   });
 
   for (const anomaly of newAnomalies) {
     try {
       const existingQuery = query(
-        collection(db, 'anomalies'),
-        where('userId', '==', userId),
-        where('transactionId', '==', anomaly.transactionId),
-        where('type', '==', anomaly.type),
-        where('dismissed', '==', false)
+        collection(db, "anomalies"),
+        where("userId", "==", userId),
+        where("transactionId", "==", anomaly.transactionId),
+        where("type", "==", anomaly.type),
+        where("dismissed", "==", false),
       );
       const existingSnap = await getDocs(existingQuery);
       if (existingSnap.empty) {
@@ -391,15 +423,15 @@ async function runDetection(userId: string) {
           userId,
           anomaly.category,
           anomaly.type,
-          anomaly.amount
+          anomaly.amount,
         );
-        await addDoc(collection(db, 'anomalies'), {
+        await addDoc(collection(db, "anomalies"), {
           ...anomaly,
           createdAt: anomaly.createdAt || serverTimestamp(),
         });
       }
     } catch (error) {
-      console.error('Failed to save anomaly:', error);
+      console.error("Failed to save anomaly:", error);
     }
   }
 }
@@ -427,7 +459,8 @@ function groupByWeek(anomalies: Anomaly[]): Array<{
       label,
       count: items.length,
       totalAmount: items.reduce((sum, a) => sum + a.amount, 0),
-      avgConfidence: items.reduce((sum, a) => sum + a.confidenceScore, 0) / items.length,
+      avgConfidence:
+        items.reduce((sum, a) => sum + a.confidenceScore, 0) / items.length,
       types: Array.from(new Set(items.map((a) => a.type))),
     }))
     .sort((a, b) => b.label.localeCompare(a.label));
@@ -438,7 +471,7 @@ function getWeekKey(date: Date): string {
   start.setDate(date.getDate() - date.getDay());
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  return `${formatDateSafe(start, { month: 'short', day: 'numeric' })} - ${formatDateSafe(end, { month: 'short', day: 'numeric' })}`;
+  return `${formatDateSafe(start, { month: "short", day: "numeric" })} - ${formatDateSafe(end, { month: "short", day: "numeric" })}`;
 }
 
 function toDate(value: any): Date | null {
@@ -446,11 +479,11 @@ function toDate(value: any): Date | null {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
   }
-  if (typeof value?.toDate === 'function') {
+  if (typeof value?.toDate === "function") {
     const d = value.toDate();
     return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
   }
-  if (typeof value?.seconds === 'number') {
+  if (typeof value?.seconds === "number") {
     const d = new Date(value.seconds * 1000);
     return Number.isNaN(d.getTime()) ? null : d;
   }
@@ -474,14 +507,18 @@ function StatCard({
   return (
     <Card className="bg-slate-900 border-slate-800 rounded-2xl">
       <CardContent className="p-6 flex items-center gap-5">
-        <div className={`h-12 w-12 rounded-xl ${bg} ${color} flex items-center justify-center shadow-inner`}>
+        <div
+          className={`h-12 w-12 rounded-xl ${bg} ${color} flex items-center justify-center shadow-inner`}
+        >
           {icon}
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
             {title}
           </p>
-          <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{value}</p>
+          <p className="text-2xl font-bold text-white tabular-nums mt-0.5">
+            {value}
+          </p>
         </div>
       </CardContent>
     </Card>

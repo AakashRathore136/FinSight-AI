@@ -16,14 +16,14 @@ If you find the project useful, please consider starring the repository to suppo
 
 You can contribute by:
 
-* Fixing bugs
-* Improving financial data processing workflows
-* Enhancing AI-powered analysis pipelines
-* Improving portfolio risk assessment features
-* Enhancing dashboards and reporting
-* Improving documentation
-* Adding test coverage
-* Strengthening security and compliance features
+- Fixing bugs
+- Improving financial data processing workflows
+- Enhancing AI-powered analysis pipelines
+- Improving portfolio risk assessment features
+- Enhancing dashboards and reporting
+- Improving documentation
+- Adding test coverage
+- Strengthening security and compliance features
 
 ---
 
@@ -52,11 +52,11 @@ git checkout -b feature/your-feature-name
 
 Please ensure that:
 
-* Code follows the project's architecture and coding standards.
-* Changes remain focused on a single issue.
-* New functionality includes appropriate tests.
-* Documentation is updated when necessary.
-* Security and data privacy best practices are followed.
+- Code follows the project's architecture and coding standards.
+- Changes remain focused on a single issue.
+- New functionality includes appropriate tests.
+- Documentation is updated when necessary.
+- Security and data privacy best practices are followed.
 
 ---
 
@@ -71,10 +71,10 @@ npm test
 
 Please ensure:
 
-* All lint checks pass.
-* Existing tests pass successfully.
-* New features include relevant tests where applicable.
-* No unrelated files are included in the PR.
+- All lint checks pass.
+- Existing tests pass successfully.
+- New features include relevant tests where applicable.
+- No unrelated files are included in the PR.
 
 ---
 
@@ -82,11 +82,11 @@ Please ensure:
 
 Before opening a PR:
 
-* Test your changes locally.
-* Perform a self-review.
-* Reference the related issue.
-* Include screenshots for UI changes.
-* Keep PRs focused and easy to review.
+- Test your changes locally.
+- Perform a self-review.
+- Reference the related issue.
+- Include screenshots for UI changes.
+- Keep PRs focused and easy to review.
 
 Example:
 
@@ -100,11 +100,11 @@ Fixes #123
 
 As FinSight AI operates in the BFSI domain:
 
-* Respect data privacy and confidentiality.
-* Avoid exposing sensitive financial information.
-* Clearly communicate AI limitations.
-* Promote transparency and explainability.
-* Follow responsible AI development practices.
+- Respect data privacy and confidentiality.
+- Avoid exposing sensitive financial information.
+- Clearly communicate AI limitations.
+- Promote transparency and explainability.
+- Follow responsible AI development practices.
 
 ---
 

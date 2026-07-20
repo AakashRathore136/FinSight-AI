@@ -1,12 +1,20 @@
-import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  Timestamp,
+} from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 
 export interface Transaction {
   id: string;
   userId: string;
   amount: number;
   category: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   date: Date;
   description?: string;
 }
@@ -26,13 +34,13 @@ export interface BalanceProjection {
 
 export interface RecurringTransaction {
   category: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   averageAmount: number;
-  frequency: 'weekly' | 'monthly' | 'quarterly';
+  frequency: "weekly" | "monthly" | "quarterly";
 }
 
 function getMonthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function getNextMonths(count: number): string[] {
@@ -45,69 +53,80 @@ function getNextMonths(count: number): string[] {
   return months;
 }
 
-export async function fetchUserTransactions(userId: string, months: number = 6): Promise<Transaction[]> {
+export async function fetchUserTransactions(
+  userId: string,
+  months: number = 6,
+): Promise<Transaction[]> {
   if (!userId) return [];
   try {
     const now = new Date();
     const startDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
-    const transactionsRef = collection(db, 'transactions');
+    const transactionsRef = collection(db, "transactions");
     const q = query(
       transactionsRef,
-      where('userId', '==', userId),
-      where('date', '>=', Timestamp.fromDate(startDate)),
-      orderBy('date', 'desc')
+      where("userId", "==", userId),
+      where("date", ">=", Timestamp.fromDate(startDate)),
+      orderBy("date", "desc"),
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
+    return snapshot.docs.map((doc) => {
       const data = doc.data();
       let date: Date;
       if (data.date instanceof Timestamp) {
         date = data.date.toDate();
       } else if (data.date instanceof Date) {
         date = data.date;
-      } else if (typeof data.date === 'string' || typeof data.date === 'number') {
+      } else if (
+        typeof data.date === "string" ||
+        typeof data.date === "number"
+      ) {
         date = new Date(data.date);
       } else {
         date = new Date();
       }
       return {
         id: doc.id,
-        userId: data.userId || '',
+        userId: data.userId || "",
         amount: Number(data.amount) || 0,
-        category: data.category || 'Other',
-        type: data.type === 'income' ? 'income' : 'expense',
+        category: data.category || "Other",
+        type: data.type === "income" ? "income" : "expense",
         date,
         description: data.description,
       };
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'transactions');
+    handleFirestoreError(error, OperationType.LIST, "transactions");
     return [];
   }
 }
 
-export function calculateMonthlyForecast(transactions: Transaction[]): ForecastData[] {
+export function calculateMonthlyForecast(
+  transactions: Transaction[],
+): ForecastData[] {
   const months = getNextMonths(6);
   const incomeByMonth: Record<string, number> = {};
   const expenseByMonth: Record<string, Record<string, number>> = {};
 
-  transactions.forEach(t => {
+  transactions.forEach((t) => {
     const monthKey = getMonthKey(t.date);
-    if (t.type === 'income') {
+    if (t.type === "income") {
       incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + t.amount;
     } else {
       if (!expenseByMonth[monthKey]) expenseByMonth[monthKey] = {};
-      expenseByMonth[monthKey][t.category] = (expenseByMonth[monthKey][t.category] || 0) + t.amount;
+      expenseByMonth[monthKey][t.category] =
+        (expenseByMonth[monthKey][t.category] || 0) + t.amount;
     }
   });
 
-  const avgIncome = Object.values(incomeByMonth).length > 0
-    ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) / Object.values(incomeByMonth).length
-    : 0;
+  const avgIncome =
+    Object.values(incomeByMonth).length > 0
+      ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
+        Object.values(incomeByMonth).length
+      : 0;
 
   const categoryTotals: Record<string, number> = {};
   const categoryCounts: Record<string, number> = {};
-  Object.values(expenseByMonth).forEach(monthData => {
+  Object.values(expenseByMonth).forEach((monthData) => {
     Object.entries(monthData).forEach(([cat, amt]) => {
       categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
@@ -118,8 +137,11 @@ export function calculateMonthlyForecast(transactions: Transaction[]): ForecastD
     avgByCategory[cat] = total / (categoryCounts[cat] || 1);
   });
 
-  return months.map(month => {
-    const projectedExpenses = Object.values(avgByCategory).reduce((a, b) => a + b, 0);
+  return months.map((month) => {
+    const projectedExpenses = Object.values(avgByCategory).reduce(
+      (a, b) => a + b,
+      0,
+    );
     return {
       month,
       projectedIncome: Math.round(avgIncome * 100) / 100,
@@ -130,14 +152,17 @@ export function calculateMonthlyForecast(transactions: Transaction[]): ForecastD
   });
 }
 
-export function calculateBalanceProjection(transactions: Transaction[], forecast: ForecastData[]): BalanceProjection[] {
+export function calculateBalanceProjection(
+  transactions: Transaction[],
+  forecast: ForecastData[],
+): BalanceProjection[] {
   let currentBalance = 0;
-  transactions.forEach(t => {
-    if (t.type === 'income') currentBalance += t.amount;
+  transactions.forEach((t) => {
+    if (t.type === "income") currentBalance += t.amount;
     else currentBalance -= t.amount;
   });
 
-  return forecast.map(f => {
+  return forecast.map((f) => {
     currentBalance += f.projectedNet;
     return {
       month: f.month,
@@ -146,9 +171,14 @@ export function calculateBalanceProjection(transactions: Transaction[], forecast
   });
 }
 
-export function identifyRecurringTransactions(transactions: Transaction[]): RecurringTransaction[] {
-  const categoryMap: Record<string, { amounts: number[]; type: 'income' | 'expense' }> = {};
-  transactions.forEach(t => {
+export function identifyRecurringTransactions(
+  transactions: Transaction[],
+): RecurringTransaction[] {
+  const categoryMap: Record<
+    string,
+    { amounts: number[]; type: "income" | "expense" }
+  > = {};
+  transactions.forEach((t) => {
     if (!categoryMap[t.category]) {
       categoryMap[t.category] = { amounts: [], type: t.type };
     }
@@ -159,13 +189,15 @@ export function identifyRecurringTransactions(transactions: Transaction[]): Recu
   Object.entries(categoryMap).forEach(([category, data]) => {
     if (data.amounts.length >= 3) {
       const avg = data.amounts.reduce((a, b) => a + b, 0) / data.amounts.length;
-      const variance = data.amounts.reduce((sum, amt) => sum + Math.abs(amt - avg), 0) / data.amounts.length;
+      const variance =
+        data.amounts.reduce((sum, amt) => sum + Math.abs(amt - avg), 0) /
+        data.amounts.length;
       if (variance / avg < 0.3) {
         recurring.push({
           category,
           type: data.type,
           averageAmount: Math.round(avg * 100) / 100,
-          frequency: 'monthly',
+          frequency: "monthly",
         });
       }
     }
@@ -174,20 +206,24 @@ export function identifyRecurringTransactions(transactions: Transaction[]): Recu
   return recurring.sort((a, b) => b.averageAmount - a.averageAmount);
 }
 
-export function calculateConfidenceScore(transactions: Transaction[], forecast: ForecastData[]): number {
+export function calculateConfidenceScore(
+  transactions: Transaction[],
+  forecast: ForecastData[],
+): number {
   if (transactions.length === 0) return 0;
-  const monthsWithData = new Set(transactions.map(t => getMonthKey(t.date))).size;
+  const monthsWithData = new Set(transactions.map((t) => getMonthKey(t.date)))
+    .size;
   const dataScore = Math.min(monthsWithData / 6, 1) * 40;
   const volumeScore = Math.min(transactions.length / 60, 1) * 35;
-  const categories = new Set(transactions.map(t => t.category)).size;
+  const categories = new Set(transactions.map((t) => t.category)).size;
   const diversityScore = Math.min(categories / 10, 1) * 25;
   return Math.round(dataScore + volumeScore + diversityScore);
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

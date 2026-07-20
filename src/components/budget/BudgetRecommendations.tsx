@@ -1,11 +1,28 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
-import { Badge } from '@/src/components/ui/badge';
-import { Progress } from '@/src/components/ui/progress';
-import { Check, X, Edit3, Save, RotateCcw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { CategoryBudgetSuggestion, formatCurrency } from '@/src/lib/budgetUtils';
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/src/components/ui/card";
+import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
+import { Badge } from "@/src/components/ui/badge";
+import { Progress } from "@/src/components/ui/progress";
+import {
+  Check,
+  X,
+  Edit3,
+  Save,
+  RotateCcw,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from "lucide-react";
+import {
+  CategoryBudgetSuggestion,
+  formatCurrency,
+} from "@/src/lib/budgetUtils";
 
 interface BudgetRecommendationsProps {
   suggestions: CategoryBudgetSuggestion[];
@@ -25,23 +42,26 @@ export function BudgetRecommendations({
   isLoading = false,
 }: BudgetRecommendationsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
-  const [localSuggestions, setLocalSuggestions] = useState<CategoryBudgetSuggestion[]>(suggestions);
+  const [editValue, setEditValue] = useState<string>("");
+  const [localSuggestions, setLocalSuggestions] =
+    useState<CategoryBudgetSuggestion[]>(suggestions);
 
   const handleEdit = (suggestion: CategoryBudgetSuggestion) => {
     setEditingId(suggestion.category);
-    setEditValue(String(suggestion.modifiedAmount ?? suggestion.suggestedAmount));
+    setEditValue(
+      String(suggestion.modifiedAmount ?? suggestion.suggestedAmount),
+    );
   };
 
   const handleSaveEdit = (category: string) => {
     const value = parseFloat(editValue);
     if (!isNaN(value) && value >= 0) {
-      setLocalSuggestions(prev =>
-        prev.map(s =>
+      setLocalSuggestions((prev) =>
+        prev.map((s) =>
           s.category === category
-            ? { ...s, modifiedAmount: value, status: 'modified' as const }
-            : s
-        )
+            ? { ...s, modifiedAmount: value, status: "modified" as const }
+            : s,
+        ),
       );
     }
     setEditingId(null);
@@ -49,16 +69,23 @@ export function BudgetRecommendations({
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditValue('');
+    setEditValue("");
   };
 
-  const handleStatusChange = (category: string, status: 'accepted' | 'rejected') => {
-    setLocalSuggestions(prev =>
-      prev.map(s =>
+  const handleStatusChange = (
+    category: string,
+    status: "accepted" | "rejected",
+  ) => {
+    setLocalSuggestions((prev) =>
+      prev.map((s) =>
         s.category === category
-          ? { ...s, status, modifiedAmount: status === 'rejected' ? 0 : s.suggestedAmount }
-          : s
-      )
+          ? {
+              ...s,
+              status,
+              modifiedAmount: status === "rejected" ? 0 : s.suggestedAmount,
+            }
+          : s,
+      ),
     );
   };
 
@@ -68,20 +95,22 @@ export function BudgetRecommendations({
   };
 
   const getConfidenceColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 80) return "text-emerald-400";
+    if (score >= 60) return "text-amber-400";
+    return "text-red-400";
   };
 
   const getConfidenceLabel = (score: number) => {
-    if (score >= 80) return 'High';
-    if (score >= 60) return 'Medium';
-    return 'Low';
+    if (score >= 80) return "High";
+    if (score >= 60) return "Medium";
+    return "Low";
   };
 
   const getTrendIcon = (current: number, previous: number) => {
-    if (current > previous) return <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />;
-    if (current < previous) return <TrendingDown className="h-3.5 w-3.5 text-red-400" />;
+    if (current > previous)
+      return <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />;
+    if (current < previous)
+      return <TrendingDown className="h-3.5 w-3.5 text-red-400" />;
     return <Minus className="h-3.5 w-3.5 text-slate-500" />;
   };
 
@@ -90,7 +119,9 @@ export function BudgetRecommendations({
       <Card className="bg-slate-900 border-slate-800 rounded-2xl">
         <CardContent className="p-8 flex flex-col items-center justify-center min-h-[300px]">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-          <p className="text-sm font-medium text-slate-500 mt-4">Generating AI budget recommendations...</p>
+          <p className="text-sm font-medium text-slate-500 mt-4">
+            Generating AI budget recommendations...
+          </p>
         </CardContent>
       </Card>
     );
@@ -100,8 +131,12 @@ export function BudgetRecommendations({
     return (
       <Card className="bg-slate-900 border-slate-800 rounded-2xl">
         <CardContent className="p-8 flex flex-col items-center justify-center min-h-[300px]">
-          <p className="text-slate-500 text-sm font-medium">No budget suggestions available.</p>
-          <p className="text-slate-600 text-xs mt-2">Add transactions to generate personalized recommendations.</p>
+          <p className="text-slate-500 text-sm font-medium">
+            No budget suggestions available.
+          </p>
+          <p className="text-slate-600 text-xs mt-2">
+            Add transactions to generate personalized recommendations.
+          </p>
         </CardContent>
       </Card>
     );
@@ -125,7 +160,9 @@ export function BudgetRecommendations({
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Confidence
                 </span>
-                <span className={`text-lg font-black ${getConfidenceColor(confidenceScore)}`}>
+                <span
+                  className={`text-lg font-black ${getConfidenceColor(confidenceScore)}`}
+                >
                   {confidenceScore}%
                 </span>
               </div>
@@ -139,19 +176,22 @@ export function BudgetRecommendations({
           <div className="grid gap-4">
             {localSuggestions.map((suggestion) => {
               const isEditing = editingId === suggestion.category;
-              const displayAmount = suggestion.status === 'rejected' ? 0 : (suggestion.modifiedAmount ?? suggestion.suggestedAmount);
-              const isModified = suggestion.status === 'modified';
-              const isRejected = suggestion.status === 'rejected';
+              const displayAmount =
+                suggestion.status === "rejected"
+                  ? 0
+                  : (suggestion.modifiedAmount ?? suggestion.suggestedAmount);
+              const isModified = suggestion.status === "modified";
+              const isRejected = suggestion.status === "rejected";
 
               return (
                 <div
                   key={suggestion.category}
                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border transition-all ${
                     isRejected
-                      ? 'bg-red-500/5 border-red-500/20 opacity-60'
+                      ? "bg-red-500/5 border-red-500/20 opacity-60"
                       : isModified
-                        ? 'bg-amber-500/5 border-amber-500/20'
-                        : 'bg-slate-800/30 border-slate-800 hover:border-slate-700'
+                        ? "bg-amber-500/5 border-amber-500/20"
+                        : "bg-slate-800/30 border-slate-800 hover:border-slate-700"
                   }`}
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -177,9 +217,13 @@ export function BudgetRecommendations({
                         </span>
                         <span className="text-slate-700">|</span>
                         <div className="flex items-center gap-1">
-                          {getTrendIcon(displayAmount, suggestion.previousMonthSpending)}
+                          {getTrendIcon(
+                            displayAmount,
+                            suggestion.previousMonthSpending,
+                          )}
                           <span className="text-xs text-slate-500 font-medium">
-                            Prev: {formatCurrency(suggestion.previousMonthSpending)}
+                            Prev:{" "}
+                            {formatCurrency(suggestion.previousMonthSpending)}
                           </span>
                         </div>
                       </div>
@@ -196,8 +240,9 @@ export function BudgetRecommendations({
                           className="w-28 h-9 text-sm bg-slate-900 border-slate-700 text-white rounded-lg"
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit(suggestion.category);
-                            if (e.key === 'Escape') handleCancelEdit();
+                            if (e.key === "Enter")
+                              handleSaveEdit(suggestion.category);
+                            if (e.key === "Escape") handleCancelEdit();
                           }}
                         />
                         <Button
@@ -229,7 +274,12 @@ export function BudgetRecommendations({
                               size="icon"
                               variant="ghost"
                               className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                              onClick={() => handleStatusChange(suggestion.category, 'accepted')}
+                              onClick={() =>
+                                handleStatusChange(
+                                  suggestion.category,
+                                  "accepted",
+                                )
+                              }
                             >
                               <Check className="h-4 w-4" />
                             </Button>
@@ -247,7 +297,12 @@ export function BudgetRecommendations({
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                onClick={() => handleStatusChange(suggestion.category, 'rejected')}
+                                onClick={() =>
+                                  handleStatusChange(
+                                    suggestion.category,
+                                    "rejected",
+                                  )
+                                }
                               >
                                 <X className="h-4 w-4" />
                               </Button>

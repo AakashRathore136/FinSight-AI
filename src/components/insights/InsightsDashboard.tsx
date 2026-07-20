@@ -13,7 +13,7 @@
  *  - Plain-language explanations throughout
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -23,7 +23,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-} from 'recharts';
+} from "recharts";
 import {
   Sparkles,
   Lightbulb,
@@ -34,19 +34,24 @@ import {
   TrendingUp,
   Loader2,
   Wallet,
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/src/components/ui/card";
 import {
   buildInsights,
   fetchTransactions,
   formatCurrency,
   generatePlainSummary,
   type InsightsBundle,
-} from '@/src/lib/insightsUtils';
-import { handleFirestoreError, OperationType } from '@/src/lib/firebase';
-import { InsightCard, CategoryDeltaRow } from './InsightCard';
+} from "@/src/lib/insightsUtils";
+import { handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { InsightCard, CategoryDeltaRow } from "./InsightCard";
 
-const LINE_COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f472b6', '#22d3ee'];
+const LINE_COLORS = ["#818cf8", "#34d399", "#fbbf24", "#f472b6", "#22d3ee"];
 
 interface InsightsDashboardProps {
   user: { uid: string } | null;
@@ -70,7 +75,7 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
         if (!active) return;
         setBundle(buildInsights(transactions, user.uid));
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'transactions');
+        handleFirestoreError(error, OperationType.LIST, "transactions");
         if (active) setBundle(buildInsights([], user.uid));
       } finally {
         if (active) setLoading(false);
@@ -129,12 +134,12 @@ function Header() {
           Spending Insights
         </h1>
         <p className="text-slate-500 text-sm">
-          AI-generated analysis of your spending patterns, anomalies, and savings
-          opportunities.
+          AI-generated analysis of your spending patterns, anomalies, and
+          savings opportunities.
         </p>
       </div>
       <div className="text-xs font-mono text-slate-500 uppercase">
-        AI Engine Active{' '}
+        AI Engine Active{" "}
         <span className="inline-block w-2 h-2 ml-2 bg-emerald-500 rounded-full animate-pulse" />
       </div>
     </section>
@@ -155,9 +160,7 @@ function SectionHeading({
       <span className="text-indigo-400">{icon}</span>
       <div>
         <h2 className="text-lg font-bold text-white leading-none">{title}</h2>
-        {subtitle && (
-          <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
       </div>
     </div>
   );
@@ -283,8 +286,10 @@ function MonthlySection({ bundle }: { bundle: InsightsBundle }) {
                         {cat.category}
                       </span>
                       <span className="text-sm font-semibold text-white tabular-nums">
-                        {formatCurrency(cat.total)}{' '}
-                        <span className="text-xs text-slate-500">({share}%)</span>
+                        {formatCurrency(cat.total)}{" "}
+                        <span className="text-xs text-slate-500">
+                          ({share}%)
+                        </span>
                       </span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
@@ -345,7 +350,11 @@ function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
                 data={trends}
                 margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#1e293b"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="period"
                   stroke="#64748b"
@@ -363,15 +372,15 @@ function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0f1219',
-                    border: '1px solid #1e293b',
-                    borderRadius: '8px',
+                    backgroundColor: "#0f1219",
+                    border: "1px solid #1e293b",
+                    borderRadius: "8px",
                   }}
-                  itemStyle={{ color: '#f8fafc' }}
-                  labelStyle={{ color: '#94a3b8' }}
+                  itemStyle={{ color: "#f8fafc" }}
+                  labelStyle={{ color: "#94a3b8" }}
                   formatter={(value) => formatCurrency(Number(value))}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />
                 {trendCategories.map((category, i) => (
                   <Line
                     key={category}
@@ -458,7 +467,7 @@ function ChangePill({
   if (changePct === null) {
     return (
       <span className="mt-2 inline-block text-xs font-medium text-slate-500">
-        {previous === 0 ? 'No prior period to compare' : ''}
+        {previous === 0 ? "No prior period to compare" : ""}
       </span>
     );
   }
@@ -466,11 +475,11 @@ function ChangePill({
   return (
     <span
       className={`mt-2 inline-flex items-center gap-1 text-xs font-bold ${
-        up ? 'text-amber-300' : 'text-emerald-300'
+        up ? "text-amber-300" : "text-emerald-300"
       }`}
     >
-      <TrendingUp size={13} className={up ? '' : 'rotate-180'} />
-      {up ? '+' : ''}
+      <TrendingUp size={13} className={up ? "" : "rotate-180"} />
+      {up ? "+" : ""}
       {Math.round(changePct)}% vs previous
     </span>
   );
@@ -494,7 +503,9 @@ function EmptyState() {
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300 mb-4">
           <Sparkles size={30} />
         </div>
-        <h3 className="text-lg font-bold text-white">No transactions to analyze yet</h3>
+        <h3 className="text-lg font-bold text-white">
+          No transactions to analyze yet
+        </h3>
         <p className="mt-2 max-w-md text-sm text-slate-500">
           Once transactions are added to your account, FinSight AI will surface
           weekly and monthly summaries, flag unusual charges, and identify

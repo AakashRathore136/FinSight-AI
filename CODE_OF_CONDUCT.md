@@ -10,29 +10,29 @@ FinSight AI focuses on financial intelligence, risk assessment, and AI-powered d
 
 Examples of positive behavior include:
 
-* Being respectful and professional.
-* Providing constructive feedback.
-* Supporting new contributors.
-* Encouraging collaboration and knowledge sharing.
-* Promoting transparency and responsible AI development.
+- Being respectful and professional.
+- Providing constructive feedback.
+- Supporting new contributors.
+- Encouraging collaboration and knowledge sharing.
+- Promoting transparency and responsible AI development.
 
 Examples of unacceptable behavior include:
 
-* Harassment, discrimination, or hateful conduct.
-* Personal attacks or intimidation.
-* Publishing confidential information.
-* Deliberately introducing malicious or misleading code.
-* Misrepresenting financial analysis or model capabilities.
+- Harassment, discrimination, or hateful conduct.
+- Personal attacks or intimidation.
+- Publishing confidential information.
+- Deliberately introducing malicious or misleading code.
+- Misrepresenting financial analysis or model capabilities.
 
 ## Responsible AI and Financial Data
 
 Contributors should:
 
-* Respect privacy and confidentiality.
-* Avoid exposing sensitive financial information.
-* Clearly communicate model limitations.
-* Follow ethical AI and data-handling practices.
-* Prioritize transparency, reliability, and security.
+- Respect privacy and confidentiality.
+- Avoid exposing sensitive financial information.
+- Clearly communicate model limitations.
+- Follow ethical AI and data-handling practices.
+- Prioritize transparency, reliability, and security.
 
 ## Enforcement Responsibilities
 

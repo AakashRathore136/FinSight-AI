@@ -1,5 +1,16 @@
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, Timestamp, orderBy } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  deleteDoc,
+  Timestamp,
+  orderBy,
+} from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 
 export interface Bill {
   id: string;
@@ -7,7 +18,7 @@ export interface Bill {
   name: string;
   amount: number;
   dueDate: string;
-  frequency: 'monthly' | 'weekly' | 'yearly' | 'custom';
+  frequency: "monthly" | "weekly" | "yearly" | "custom";
   category: string;
   isPaid: boolean;
   lastPaidDate?: string;
@@ -15,15 +26,19 @@ export interface Bill {
   nextDueDate?: string;
 }
 
-export type BillFrequency = Bill['frequency'];
+export type BillFrequency = Bill["frequency"];
 
 export async function fetchUserBills(userId: string): Promise<Bill[]> {
   if (!userId) return [];
   try {
-    const billsRef = collection(db, 'bills');
-    const q = query(billsRef, where('userId', '==', userId), orderBy('dueDate', 'asc'));
+    const billsRef = collection(db, "bills");
+    const q = query(
+      billsRef,
+      where("userId", "==", userId),
+      orderBy("dueDate", "asc"),
+    );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => {
+    return snapshot.docs.map((d) => {
       const data = d.data();
       return {
         id: d.id,
@@ -31,8 +46,8 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
         name: data.name,
         amount: Number(data.amount) || 0,
         dueDate: data.dueDate,
-        frequency: data.frequency || 'monthly',
-        category: data.category || 'Bills',
+        frequency: data.frequency || "monthly",
+        category: data.category || "Bills",
         isPaid: data.isPaid || false,
         lastPaidDate: data.lastPaidDate,
         createdAt: data.createdAt,
@@ -40,27 +55,30 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
       };
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'bills');
+    handleFirestoreError(error, OperationType.LIST, "bills");
     return [];
   }
 }
 
-export async function createBill(bill: Omit<Bill, 'id'>): Promise<string> {
+export async function createBill(bill: Omit<Bill, "id">): Promise<string> {
   try {
-    const ref = await addDoc(collection(db, 'bills'), {
+    const ref = await addDoc(collection(db, "bills"), {
       ...bill,
       createdAt: bill.createdAt || new Date().toISOString(),
     });
     return ref.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, 'bills');
+    handleFirestoreError(error, OperationType.CREATE, "bills");
     throw error;
   }
 }
 
-export async function updateBill(billId: string, data: Partial<Bill>): Promise<void> {
+export async function updateBill(
+  billId: string,
+  data: Partial<Bill>,
+): Promise<void> {
   try {
-    await updateDoc(doc(db, 'bills', billId), data);
+    await updateDoc(doc(db, "bills", billId), data);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `bills/${billId}`);
     throw error;
@@ -69,7 +87,7 @@ export async function updateBill(billId: string, data: Partial<Bill>): Promise<v
 
 export async function deleteBill(billId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, 'bills', billId));
+    await deleteDoc(doc(db, "bills", billId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `bills/${billId}`);
     throw error;
@@ -78,7 +96,7 @@ export async function deleteBill(billId: string): Promise<void> {
 
 export async function markBillAsPaid(billId: string): Promise<void> {
   try {
-    await updateDoc(doc(db, 'bills', billId), {
+    await updateDoc(doc(db, "bills", billId), {
       isPaid: true,
       lastPaidDate: new Date().toISOString(),
     });
@@ -88,20 +106,23 @@ export async function markBillAsPaid(billId: string): Promise<void> {
   }
 }
 
-export function calculateNextDueDate(dueDate: string, frequency: BillFrequency): string {
+export function calculateNextDueDate(
+  dueDate: string,
+  frequency: BillFrequency,
+): string {
   const date = new Date(dueDate);
   const now = new Date();
   let next = new Date(date);
 
   while (next <= now) {
     switch (frequency) {
-      case 'weekly':
+      case "weekly":
         next.setDate(next.getDate() + 7);
         break;
-      case 'monthly':
+      case "monthly":
         next.setMonth(next.getMonth() + 1);
         break;
-      case 'yearly':
+      case "yearly":
         next.setFullYear(next.getFullYear() + 1);
         break;
       default:
@@ -109,7 +130,7 @@ export function calculateNextDueDate(dueDate: string, frequency: BillFrequency):
     }
   }
 
-  return next.toISOString().split('T')[0];
+  return next.toISOString().split("T")[0];
 }
 
 export function isOverdue(dueDate: string, isPaid: boolean): boolean {
@@ -137,38 +158,46 @@ export function getDaysUntilDue(dueDate: string): number {
 }
 
 export function getUpcomingBills(bills: Bill[], days: number = 7): Bill[] {
-  return bills.filter(b => !b.isPaid && isUpcoming(b.dueDate, days));
+  return bills.filter((b) => !b.isPaid && isUpcoming(b.dueDate, days));
 }
 
 export function getOverdueBills(bills: Bill[]): Bill[] {
-  return bills.filter(b => !b.isPaid && isOverdue(b.dueDate, false));
+  return bills.filter((b) => !b.isPaid && isOverdue(b.dueDate, false));
 }
 
 export function calculateMonthlyObligations(bills: Bill[]): number {
   return bills
-    .filter(b => !b.isPaid)
+    .filter((b) => !b.isPaid)
     .reduce((total, b) => {
-      if (b.frequency === 'monthly') return total + b.amount;
-      if (b.frequency === 'weekly') return total + b.amount * 4;
-      if (b.frequency === 'yearly') return total + b.amount / 12;
+      if (b.frequency === "monthly") return total + b.amount;
+      if (b.frequency === "weekly") return total + b.amount * 4;
+      if (b.frequency === "yearly") return total + b.amount / 12;
       return total + b.amount;
     }, 0);
 }
 
-export function generateRecurringSchedule(bills: Bill[]): { day: string; count: number }[] {
+export function generateRecurringSchedule(
+  bills: Bill[],
+): { day: string; count: number }[] {
   const schedule: Record<string, number> = {};
-  bills.forEach(b => {
+  bills.forEach((b) => {
     const date = new Date(b.dueDate);
-    const day = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const day = date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
     schedule[day] = (schedule[day] || 0) + 1;
   });
-  return Object.entries(schedule).map(([day, count]) => ({ day, count })).sort((a, b) => a.day.localeCompare(b.day));
+  return Object.entries(schedule)
+    .map(([day, count]) => ({ day, count }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

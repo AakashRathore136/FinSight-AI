@@ -1,8 +1,14 @@
-import { Anomaly } from '@/src/lib/anomalyUtils';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
-import { Button } from '@/src/components/ui/button';
-import { Progress } from '@/src/components/ui/progress';
+import { Anomaly } from "@/src/lib/anomalyUtils";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
+import { Progress } from "@/src/components/ui/progress";
 import {
   DollarSign,
   AlertTriangle,
@@ -10,8 +16,8 @@ import {
   Trash2,
   History,
   BarChart3,
-} from 'lucide-react';
-import { formatRelativeTime, formatDateSafe } from '@/src/lib/utils';
+} from "lucide-react";
+import { formatRelativeTime, formatDateSafe } from "@/src/lib/utils";
 
 interface AnomalyCardProps {
   anomaly: Anomaly;
@@ -22,48 +28,48 @@ interface AnomalyCardProps {
 
 function getTypeIcon(type: string) {
   switch (type) {
-    case 'large_transaction':
+    case "large_transaction":
       return <DollarSign size={18} />;
-    case 'category_spike':
+    case "category_spike":
       return <BarChart3 size={18} />;
-    case 'unusual_pattern':
+    case "unusual_pattern":
       return <TrendingUp size={18} />;
     default:
       return <AlertTriangle size={18} />;
   }
 }
 
-function getSeverity(score: number): 'high' | 'medium' | 'low' {
-  if (score >= 75) return 'high';
-  if (score >= 40) return 'medium';
-  return 'low';
+function getSeverity(score: number): "high" | "medium" | "low" {
+  if (score >= 75) return "high";
+  if (score >= 40) return "medium";
+  return "low";
 }
 
-function getSeverityColor(severity: 'high' | 'medium' | 'low') {
+function getSeverityColor(severity: "high" | "medium" | "low") {
   switch (severity) {
-    case 'high':
+    case "high":
       return {
-        bg: 'bg-red-500/10',
-        border: 'border-red-500/30',
-        text: 'text-red-400',
-        badge: 'bg-red-500/15 text-red-400 border-red-500/30',
-        progress: 'bg-red-500',
+        bg: "bg-red-500/10",
+        border: "border-red-500/30",
+        text: "text-red-400",
+        badge: "bg-red-500/15 text-red-400 border-red-500/30",
+        progress: "bg-red-500",
       };
-    case 'medium':
+    case "medium":
       return {
-        bg: 'bg-amber-500/10',
-        border: 'border-amber-500/30',
-        text: 'text-amber-400',
-        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-        progress: 'bg-amber-500',
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/30",
+        text: "text-amber-400",
+        badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+        progress: "bg-amber-500",
       };
-    case 'low':
+    case "low":
       return {
-        bg: 'bg-slate-500/10',
-        border: 'border-slate-500/30',
-        text: 'text-slate-400',
-        badge: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
-        progress: 'bg-slate-500',
+        bg: "bg-slate-500/10",
+        border: "border-slate-500/30",
+        text: "text-slate-400",
+        badge: "bg-slate-500/15 text-slate-400 border-slate-500/30",
+        progress: "bg-slate-500",
       };
   }
 }
@@ -88,13 +94,18 @@ export function AnomalyCard({
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4 flex-1 min-w-0">
-            <div className={`h-10 w-10 rounded-lg ${colors.badge} flex items-center justify-center flex-shrink-0`}>
+            <div
+              className={`h-10 w-10 rounded-lg ${colors.badge} flex items-center justify-center flex-shrink-0`}
+            >
               {icon}
             </div>
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`${colors.badge} border text-[10px] font-black uppercase tracking-widest`}>
-                  {anomaly.type.replace('_', ' ')}
+                <Badge
+                  variant="outline"
+                  className={`${colors.badge} border text-[10px] font-black uppercase tracking-widest`}
+                >
+                  {anomaly.type.replace("_", " ")}
                 </Badge>
                 <span className="text-xs text-slate-500 font-mono">
                   {anomaly.category}
@@ -107,9 +118,7 @@ export function AnomalyCard({
                 <span className="font-semibold text-white tabular-nums">
                   ${anomaly.amount.toLocaleString()}
                 </span>
-                <span>
-                  {formatRelativeTime(anomaly.createdAt)}
-                </span>
+                <span>{formatRelativeTime(anomaly.createdAt)}</span>
               </div>
             </div>
           </div>
@@ -133,10 +142,7 @@ export function AnomalyCard({
               {anomaly.confidenceScore}%
             </span>
           </div>
-          <Progress
-            value={anomaly.confidenceScore}
-            className="h-1.5"
-          >
+          <Progress value={anomaly.confidenceScore} className="h-1.5">
             <div
               className={`h-full rounded-full transition-all ${colors.progress}`}
               style={{ width: `${anomaly.confidenceScore}%` }}
@@ -148,7 +154,8 @@ export function AnomalyCard({
           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 bg-slate-800/40 rounded-lg px-3 py-2">
             <History size={14} className="text-slate-400" />
             <span>
-              {historicalLabel || `${historicalCount} similar ${historicalCount === 1 ? 'anomaly' : 'anomalies'} detected in the past 6 months`}
+              {historicalLabel ||
+                `${historicalCount} similar ${historicalCount === 1 ? "anomaly" : "anomalies"} detected in the past 6 months`}
             </span>
           </div>
         )}

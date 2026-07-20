@@ -1,9 +1,9 @@
-import { clsx, type ClassValue } from "clsx"
-import { formatDistanceToNow } from "date-fns"
-import { twMerge } from "tailwind-merge"
+import { clsx, type ClassValue } from "clsx";
+import { formatDistanceToNow } from "date-fns";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 export function toDate(value: any): Date | null {
@@ -49,23 +49,23 @@ export function formatRelativeTime(value: any, fallback = "Recently") {
 }
 
 export function getSharedDocId(): string | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
-  return params.get('docId') || sessionStorage.getItem('fin_shared_docId');
+  return params.get("docId") || sessionStorage.getItem("fin_shared_docId");
 }
 
 export function setSharedDocId(id: string) {
-  if (typeof window === 'undefined') return;
-  sessionStorage.setItem('fin_shared_docId', id);
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem("fin_shared_docId", id);
   const url = new URL(window.location.href);
-  url.searchParams.set('docId', id);
-  window.history.replaceState({}, '', url.toString());
+  url.searchParams.set("docId", id);
+  window.history.replaceState({}, "", url.toString());
 }
 
 export function clearSharedDocId() {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem('fin_shared_docId');
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem("fin_shared_docId");
   const url = new URL(window.location.href);
-  url.searchParams.delete('docId');
-  window.history.replaceState({}, '', url.toString());
+  url.searchParams.delete("docId");
+  window.history.replaceState({}, "", url.toString());
 }

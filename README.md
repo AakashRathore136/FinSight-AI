@@ -12,35 +12,35 @@ The platform combines modern web technologies with generative AI to transform co
 
 ### 📄 Secure Document Intelligence
 
-* Secure financial document ingestion workflow
-* Upload and analyze reports, credit reviews, and portfolio summaries
-* Cloud-based document storage with Firebase Storage
+- Secure financial document ingestion workflow
+- Upload and analyze reports, credit reviews, and portfolio summaries
+- Cloud-based document storage with Firebase Storage
 
 ### 🤖 AI-Powered Financial Analysis
 
-* Automated document understanding using Google Gemini API
-* Financial metric extraction from unstructured documents
-* AI-generated executive summaries
-* Intelligent insight generation
+- Automated document understanding using Google Gemini API
+- Financial metric extraction from unstructured documents
+- AI-generated executive summaries
+- Intelligent insight generation
 
 ### 📊 Risk & Portfolio Analytics
 
-* Portfolio risk assessment
-* Sentiment analysis of financial reports
-* Structured financial interpretation
-* Monitoring dashboard for financial insights
+- Portfolio risk assessment
+- Sentiment analysis of financial reports
+- Structured financial interpretation
+- Monitoring dashboard for financial insights
 
 ### 🔐 Authentication & Data Management
 
-* Firebase Authentication for secure user access
-* Cloud Firestore for persistent application data
-* Role-ready architecture for future enterprise expansion
+- Firebase Authentication for secure user access
+- Cloud Firestore for persistent application data
+- Role-ready architecture for future enterprise expansion
 
 ### 🎨 Modern User Experience
 
-* Responsive operational dashboard
-* Dark-mode interface optimized for financial workflows
-* Clean and intuitive BFSI-focused UI
+- Responsive operational dashboard
+- Dark-mode interface optimized for financial workflows
+- Clean and intuitive BFSI-focused UI
 
 ---
 
@@ -69,30 +69,30 @@ Firebase Services
 
 ## Frontend
 
-* React
-* TypeScript
-* TailwindCSS
-* Vite
+- React
+- TypeScript
+- TailwindCSS
+- Vite
 
 ## Backend
 
-* Node.js
-* Express.js
+- Node.js
+- Express.js
 
 ## AI Integration
 
-* Google Gemini API
+- Google Gemini API
 
 ## Database & Cloud Infrastructure
 
-* Firebase Authentication
-* Cloud Firestore
-* Firebase Storage
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Storage
 
 ## Development & Deployment
 
-* Docker
-* Environment-based configuration
+- Docker
+- Environment-based configuration
 
 ---
 
@@ -102,10 +102,10 @@ Firebase Services
 
 Before running the project, make sure you have:
 
-* Node.js 18+
-* Firebase Project
-* Google Gemini API Key
-* Docker (optional)
+- Node.js 18+
+- Firebase Project
+- Google Gemini API Key
+- Docker (optional)
 
 ---
 
@@ -164,22 +164,22 @@ http://localhost:3001
 
 # 📂 Project Highlights
 
-* AI-driven BFSI document intelligence
-* Generative AI powered financial analysis
-* Secure cloud-based document workflows
-* Scalable Firebase architecture
-* Modern responsive dashboard experience
+- AI-driven BFSI document intelligence
+- Generative AI powered financial analysis
+- Secure cloud-based document workflows
+- Scalable Firebase architecture
+- Modern responsive dashboard experience
 
 ---
 
 # 🔮 Future Enhancements
 
-* Advanced portfolio prediction models
-* Real-time financial market integrations
-* Multi-user enterprise collaboration
-* Automated compliance reporting
-* AI chatbot for financial queries
-* Advanced analytics visualization
+- Advanced portfolio prediction models
+- Real-time financial market integrations
+- Multi-user enterprise collaboration
+- Automated compliance reporting
+- AI chatbot for financial queries
+- Advanced analytics visualization
 
 ---
 
