@@ -1,18 +1,18 @@
 // import { useState, useEffect } from 'react';
 // import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 // import { doc, getDoc, collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-// import { 
-//   ArrowLeft, 
-//   Download, 
-//   DownloadIcon, 
-//   Share2, 
-//   FileText, 
-//   AlertTriangle, 
-//   CheckCircle2, 
-//   ChevronRight, 
-//   ShieldAlert, 
-//   Target, 
-//   BarChart3, 
+// import {
+//   ArrowLeft,
+//   Download,
+//   DownloadIcon,
+//   Share2,
+//   FileText,
+//   AlertTriangle,
+//   CheckCircle2,
+//   ChevronRight,
+//   ShieldAlert,
+//   Target,
+//   BarChart3,
 //   MessageSquare,
 //   TrendingUp,
 //   Clock
@@ -127,7 +127,7 @@
 //               <TabsTrigger value="findings" className="flex-1 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400 text-xs font-bold tracking-wider">KEY FINDINGS</TabsTrigger>
 //               <TabsTrigger value="raw" className="flex-1 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400 text-xs font-bold tracking-wider">METRIC LOGS</TabsTrigger>
 //             </TabsList>
-            
+
 //             <TabsContent value="overview" className="mt-8">
 //               <Card className="bg-slate-900 border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
 //                 <CardHeader className="p-8 border-b border-slate-800 bg-slate-900/50">
@@ -231,8 +231,8 @@
 //         <div className="lg:col-span-4 space-y-8">
 //           {/* Risk Card */}
 //           <Card className={`rounded-2xl overflow-hidden border-0 shadow-2xl ${
-//             document.riskLevel === 'high' ? 'bg-gradient-to-br from-red-600/20 to-slate-900 border-l-4 border-red-600' : 
-//             document.riskLevel === 'medium' ? 'bg-gradient-to-br from-amber-600/20 to-slate-900 border-l-4 border-amber-600' : 
+//             document.riskLevel === 'high' ? 'bg-gradient-to-br from-red-600/20 to-slate-900 border-l-4 border-red-600' :
+//             document.riskLevel === 'medium' ? 'bg-gradient-to-br from-amber-600/20 to-slate-900 border-l-4 border-amber-600' :
 //             'bg-gradient-to-br from-emerald-600/20 to-slate-900 border-l-4 border-emerald-600'
 //           }`}>
 //             <CardHeader className="p-8">
@@ -240,7 +240,7 @@
 //                  Security Profile
 //                  <Badge className={`
 //                    uppercase text-[9px] font-black tracking-widest px-3 py-1 border-0
-//                    ${document.riskLevel === 'high' ? 'bg-red-600 text-white shadow-lg shadow-red-900/40' : 
+//                    ${document.riskLevel === 'high' ? 'bg-red-600 text-white shadow-lg shadow-red-900/40' :
 //                      document.riskLevel === 'medium' ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}
 //                  `}>
 //                    {document.riskLevel || 'Low'} Risk Level
@@ -259,9 +259,9 @@
 //                      ))}
 //                   </div>
 //                </div>
-               
+
 //                <Separator className="bg-white/5" />
-               
+
 //                <div className="space-y-4">
 //                   <div className="flex items-center justify-between">
 //                     <span className="text-xs font-bold text-slate-500">Document Tone Confidence</span>
@@ -270,13 +270,13 @@
 //                     </span>
 //                   </div>
 //                   <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-//                      <div 
+//                      <div
 //                        className={`h-full transition-all duration-1000 ${
-//                          ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) > 0.5 ? 'bg-emerald-500' : 
-//                          ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) > 0.3 ? 'bg-indigo-500' : 
+//                          ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) > 0.5 ? 'bg-emerald-500' :
+//                          ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) > 0.3 ? 'bg-indigo-500' :
 //                          'bg-red-500'
 //                        }`}
-//                        style={{ width: `${Math.max(10, ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) * 100)}%` }} 
+//                        style={{ width: `${Math.max(10, ((analysis?.sentiment_score ?? analysis?.sentimentScore) || 0) * 100)}%` }}
 //                      />
 //                   </div>
 //                </div>
@@ -297,16 +297,16 @@
 //                      <p className="truncate text-sm font-bold text-white">{document.fileName}</p>
 //                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">{document.fileType.split('/')[1] || 'DOCX'} - {(document.fileSize/1024/1024).toFixed(2)} MB</p>
 //                   </div>
-//                   <a 
-//                     href={document.fileUrl} 
-//                     target="_blank" 
+//                   <a
+//                     href={document.fileUrl}
+//                     target="_blank"
 //                     rel="noopener noreferrer"
 //                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 text-slate-500 hover:text-white hover:bg-slate-700"
 //                   >
 //                     <Download size={20} />
 //                   </a>
 //                </div>
-               
+
 //                <div className="space-y-4 px-2">
 //                   <SectionInfo label="Registry Source" value="Direct Secure Upload" />
 //                   <SectionInfo label="Cipher Protocol" value="AES-256 GCM" />
@@ -353,13 +353,20 @@
 //   );
 // }
 
-
-
-import { useEffect, useMemo, useState } from 'react';
-import { db } from '@/src/lib/firebase';
-import { doc, getDoc, collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { useEffect, useMemo, useState } from "react";
+import { db } from "@/src/lib/firebase";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+} from "firebase/firestore";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import {
   ArrowLeft,
   Download,
@@ -382,14 +389,24 @@ import {
   Activity,
   PieChart,
   Layers3,
-} from 'lucide-react';
-import { Button } from '@/src/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
-import { Separator } from '@/src/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
-import { Skeleton } from '@/src/components/ui/skeleton';
-import ReactMarkdown from 'react-markdown';
+} from "lucide-react";
+import { Button } from "@/src/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Separator } from "@/src/components/ui/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/src/components/ui/tabs";
+import { Skeleton } from "@/src/components/ui/skeleton";
+import ReactMarkdown from "react-markdown";
 
 const XBrandIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -418,7 +435,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
-  const [shareUrl, setShareUrl] = useState('');
+  const [shareUrl, setShareUrl] = useState("");
 
   useEffect(() => {
     if (!docId) return;
@@ -431,7 +448,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
       let ownerIdFromDoc: string | null = null;
 
       try {
-        const d = await getDoc(doc(db, 'documents', docId));
+        const d = await getDoc(doc(db, "documents", docId));
         if (d.exists()) {
           const data = d.data() as AnyRecord;
           ownerIdFromDoc = data?.ownerId || null;
@@ -440,7 +457,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
           setRecord(null);
         }
       } catch (error) {
-        console.error('Failed to fetch document record', error);
+        console.error("Failed to fetch document record", error);
       }
 
       const ownerId = user?.uid || ownerIdFromDoc;
@@ -452,20 +469,20 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
       const analysesQuery = query(
         collection(db, `documents/${docId}/analyses`),
-        where('ownerId', '==', ownerId),
-        orderBy('processedAt', 'desc'),
-        limit(1)
+        where("ownerId", "==", ownerId),
+        orderBy("processedAt", "desc"),
+        limit(1),
       );
 
       unsubscribeAnalyses = onSnapshot(
         analysesQuery,
         (snapshot) => {
           if (!snapshot.empty) {
-            console.log('Loading latest analysis from subcollection...');
+            console.log("Loading latest analysis from subcollection...");
             const analysisDoc = snapshot.docs[0];
-            console.log('Loaded analysis doc ID:', analysisDoc.id);
+            console.log("Loaded analysis doc ID:", analysisDoc.id);
             const data = analysisDoc.data();
-            console.log('Loaded sentiment_score:', data?.sentiment_score);
+            console.log("Loaded sentiment_score:", data?.sentiment_score);
             setAnalysis(data);
           }
           // Keep the view renderable with any latestAnalysis already stored on the parent doc.
@@ -473,9 +490,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         },
         (error) => {
           // Avoid hard-throwing from snapshot listeners; keep the view renderable with available data.
-          console.error(`Failed to list analyses for documents/${docId}/analyses`, error);
+          console.error(
+            `Failed to list analyses for documents/${docId}/analyses`,
+            error,
+          );
           setLoading(false);
-        }
+        },
       );
     };
 
@@ -487,19 +507,24 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   }, [docId, user?.uid]);
 
   const analysisData = analysis || record?.latestAnalysis || null;
-  const riskLevel = (analysisData?.risk_level || record?.riskLevel || 'low').toString().toLowerCase();
-  const confidenceValue = normalizeConfidence(analysisData?.sentiment_score ?? 0);
-  const fileName = record?.fileName || 'Untitled Document';
+  const riskLevel = (analysisData?.risk_level || record?.riskLevel || "low")
+    .toString()
+    .toLowerCase();
+  const confidenceValue = normalizeConfidence(
+    analysisData?.sentiment_score ?? 0,
+  );
+  const fileName = record?.fileName || "Untitled Document";
   const fileType = getFileTypeLabel(record?.fileType);
   const fileSize = formatBytes(record?.fileSize);
-  const refId = (record?.id || docId || '').slice(0, 8).toUpperCase();
+  const refId = (record?.id || docId || "").slice(0, 8).toUpperCase();
 
   const processedAt = useMemo(() => {
     return formatDateSafe(analysisData?.processedAt || record?.createdAt);
   }, [analysisData?.processedAt, record?.createdAt]);
 
-  const summary = analysisData?.summary || 'No summary available for this analysis.';
-  const fullReport = analysisData?.full_report || '';
+  const summary =
+    analysisData?.summary || "No summary available for this analysis.";
+  const fullReport = analysisData?.full_report || "";
   const keyMetrics = analysisData?.key_metrics || {};
   const actionItems = analysisData?.action_items || [];
   const entities = analysisData?.entities || [];
@@ -516,12 +541,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     const url = new URL(window.location.href);
-    url.searchParams.set('docId', docId);
+    url.searchParams.set("docId", docId);
     setShareUrl(url.toString());
-    setCanNativeShare(typeof navigator !== 'undefined' && 'share' in navigator);
+    setCanNativeShare(typeof navigator !== "undefined" && "share" in navigator);
   }, [docId]);
 
   const handleCopyShareLink = async () => {
@@ -533,7 +558,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   };
 
   const handleNativeShare = async () => {
-    if (typeof navigator === 'undefined' || !('share' in navigator)) return;
+    if (typeof navigator === "undefined" || !("share" in navigator)) return;
 
     try {
       await navigator.share({
@@ -542,8 +567,8 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         url: shareUrl,
       });
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error('Native share failed:', error);
+      if ((error as Error).name !== "AbortError") {
+        console.error("Native share failed:", error);
       }
     }
   };
@@ -551,9 +576,9 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   const handleExport = async () => {
     try {
       const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
       });
 
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -565,15 +590,19 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
       // Title
       pdf.setFontSize(24);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('FinSight AI Financial Intelligence Report', margin, yPosition);
+      pdf.setFont(undefined, "bold");
+      pdf.text("FinSight AI Financial Intelligence Report", margin, yPosition);
       yPosition += 12;
 
       // Metadata
       pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
+      pdf.setFont(undefined, "normal");
       pdf.setTextColor(100);
-      pdf.text(`Reference: ${refId} | Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, margin, yPosition);
+      pdf.text(
+        `Reference: ${refId} | Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+        margin,
+        yPosition,
+      );
       yPosition += 8;
       pdf.line(margin, yPosition, pageWidth - margin, yPosition);
       yPosition += 10;
@@ -583,12 +612,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
       // Document Info Section
       pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Document Information', margin, yPosition);
+      pdf.setFont(undefined, "bold");
+      pdf.text("Document Information", margin, yPosition);
       yPosition += 8;
 
       pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
+      pdf.setFont(undefined, "normal");
       const docInfo = [
         [`File Name:`, fileName],
         [`File Type:`, fileType],
@@ -608,13 +637,16 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
       // Summary Section
       pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Executive Summary', margin, yPosition);
+      pdf.setFont(undefined, "bold");
+      pdf.text("Executive Summary", margin, yPosition);
       yPosition += 8;
 
       pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      const summaryLines = pdf.splitTextToSize(summary || 'No summary available', contentWidth);
+      pdf.setFont(undefined, "normal");
+      const summaryLines = pdf.splitTextToSize(
+        summary || "No summary available",
+        contentWidth,
+      );
       summaryLines.forEach((line: string) => {
         if (yPosition > pageHeight - 20) {
           pdf.addPage();
@@ -634,18 +666,18 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         }
 
         pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Key Metrics', margin, yPosition);
+        pdf.setFont(undefined, "bold");
+        pdf.text("Key Metrics", margin, yPosition);
         yPosition += 8;
 
         pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
+        pdf.setFont(undefined, "normal");
         metricsEntries.forEach(([key, value]) => {
           if (yPosition > pageHeight - 15) {
             pdf.addPage();
             yPosition = margin;
           }
-          const metricLabel = key.replace(/_/g, ' ');
+          const metricLabel = key.replace(/_/g, " ");
           const metricValue = String(value);
           pdf.text(`${metricLabel}: ${metricValue}`, margin + 5, yPosition);
           yPosition += lineHeight;
@@ -664,18 +696,21 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         }
 
         pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Recommended Actions', margin, yPosition);
+        pdf.setFont(undefined, "bold");
+        pdf.text("Recommended Actions", margin, yPosition);
         yPosition += 8;
 
         pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
+        pdf.setFont(undefined, "normal");
         actionItems.forEach((item: string, index: number) => {
           if (yPosition > pageHeight - 15) {
             pdf.addPage();
             yPosition = margin;
           }
-          const itemLines = pdf.splitTextToSize(`${index + 1}. ${item}`, contentWidth - 5);
+          const itemLines = pdf.splitTextToSize(
+            `${index + 1}. ${item}`,
+            contentWidth - 5,
+          );
           itemLines.forEach((line: string) => {
             if (yPosition > pageHeight - 15) {
               pdf.addPage();
@@ -700,13 +735,13 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         }
 
         pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Identified Entities', margin, yPosition);
+        pdf.setFont(undefined, "bold");
+        pdf.text("Identified Entities", margin, yPosition);
         yPosition += 8;
 
         pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        const entitiesText = entities.join(', ');
+        pdf.setFont(undefined, "normal");
+        const entitiesText = entities.join(", ");
         const entitiesLines = pdf.splitTextToSize(entitiesText, contentWidth);
         entitiesLines.forEach((line: string) => {
           if (yPosition > pageHeight - 15) {
@@ -730,19 +765,23 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         }
 
         pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Risk Assessment', margin, yPosition);
+        pdf.setFont(undefined, "bold");
+        pdf.text("Risk Assessment", margin, yPosition);
         yPosition += 8;
 
         pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
+        pdf.setFont(undefined, "normal");
         riskItems.forEach((risk: any, index: number) => {
           if (yPosition > pageHeight - 15) {
             pdf.addPage();
             yPosition = margin;
           }
-          const riskText = typeof risk === 'string' ? risk : risk.description || String(risk);
-          const riskLines = pdf.splitTextToSize(`${index + 1}. ${riskText}`, contentWidth - 5);
+          const riskText =
+            typeof risk === "string" ? risk : risk.description || String(risk);
+          const riskLines = pdf.splitTextToSize(
+            `${index + 1}. ${riskText}`,
+            contentWidth - 5,
+          );
           riskLines.forEach((line: string) => {
             if (yPosition > pageHeight - 15) {
               pdf.addPage();
@@ -761,45 +800,45 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         pdf.setPage(i);
         pdf.setFontSize(9);
         pdf.setTextColor(150);
-        pdf.text(
-          `Page ${i} of ${totalPages}`,
-          pageWidth / 2,
-          pageHeight - 10,
-          { align: 'center' }
-        );
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, {
+          align: "center",
+        });
       }
 
       // Save PDF
       pdf.save(`finsight-ai-report-${refId}-${new Date().getTime()}.pdf`);
     } catch (error) {
-      console.error('Failed to export PDF:', error);
+      console.error("Failed to export PDF:", error);
     }
   };
 
   const sharePlatforms = [
     {
-      name: 'WhatsApp',
+      name: "WhatsApp",
       icon: <Send className="h-5 w-5 text-emerald-400" />,
       url: buildWhatsAppUrl(shareText, shareUrl),
-      bg: 'hover:bg-emerald-500/10 border-emerald-500/20',
+      bg: "hover:bg-emerald-500/10 border-emerald-500/20",
     },
     {
-      name: 'X (Twitter)',
+      name: "X (Twitter)",
       icon: <XBrandIcon className="h-5 w-5 text-sky-400" />,
       url: buildXUrl(shareText, shareUrl),
-      bg: 'hover:bg-sky-500/10 border-sky-500/20',
+      bg: "hover:bg-sky-500/10 border-sky-500/20",
     },
     {
-      name: 'Facebook',
+      name: "Facebook",
       icon: <FacebookIcon className="h-5 w-5 text-blue-400" />,
       url: buildFacebookUrl(shareUrl),
-      bg: 'hover:bg-blue-500/10 border-blue-500/20',
+      bg: "hover:bg-blue-500/10 border-blue-500/20",
     },
     {
-      name: 'Email',
+      name: "Email",
       icon: <Mail className="h-5 w-5 text-orange-400" />,
-      url: buildEmailUrl('FinSight AI Financial Intelligence Report', `${shareText}\n\n${shareUrl}`),
-      bg: 'hover:bg-orange-500/10 border-orange-500/20',
+      url: buildEmailUrl(
+        "FinSight AI Financial Intelligence Report",
+        `${shareText}\n\n${shareUrl}`,
+      ),
+      bg: "hover:bg-orange-500/10 border-orange-500/20",
     },
   ];
 
@@ -842,7 +881,8 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                     Enterprise Risk Signal Review
                   </h1>
                   <p className="mt-3 max-w-4xl break-words text-sm leading-6 text-slate-400">
-                    Ref {refId || 'N/A'} - {fileName} - professional financial intelligence dashboard with operational risk triage.
+                    Ref {refId || "N/A"} - {fileName} - professional financial
+                    intelligence dashboard with operational risk triage.
                   </p>
                 </div>
 
@@ -877,11 +917,11 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
             <TabsList className="flex h-auto w-full justify-start overflow-x-auto rounded-none border-t border-slate-800 bg-slate-900/70 p-2">
               {[
-                ['summary', 'Summary'],
-                ['findings', 'Findings'],
-                ['risks', 'Risks'],
-                ['metrics', 'Metrics'],
-                ['source', 'Source'],
+                ["summary", "Summary"],
+                ["findings", "Findings"],
+                ["risks", "Risks"],
+                ["metrics", "Metrics"],
+                ["source", "Source"],
               ].map(([value, label]) => (
                 <TabsTrigger
                   key={value}
@@ -902,16 +942,32 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   description="High-signal report surface for executive review, AI observations, and operational triage."
                 >
                   <div className="grid gap-4 md:grid-cols-3">
-                    <StatusTile label="Confidence" value={`${confidenceValue}%`} tone="emerald" />
-                    <StatusTile label="Risk" value={riskLevel === 'low' ? 'Stable' : riskLevel} tone={riskTone(riskLevel)} />
-                    <StatusTile label="Sentiment" value={String(analysisData?.sentiment_score ?? 0)} tone="indigo" />
+                    <StatusTile
+                      label="Confidence"
+                      value={`${confidenceValue}%`}
+                      tone="emerald"
+                    />
+                    <StatusTile
+                      label="Risk"
+                      value={riskLevel === "low" ? "Stable" : riskLevel}
+                      tone={riskTone(riskLevel)}
+                    />
+                    <StatusTile
+                      label="Sentiment"
+                      value={String(analysisData?.sentiment_score ?? 0)}
+                      tone="indigo"
+                    />
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                    <h3 className="mb-4 text-lg font-black text-white">Markdown Report</h3>
+                    <h3 className="mb-4 text-lg font-black text-white">
+                      Markdown Report
+                    </h3>
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
                       <div className="prose prose-invert max-w-none break-words prose-p:leading-7 prose-p:text-slate-300 prose-strong:text-white">
-                        <ReactMarkdown>{summary || 'No summary content available.'}</ReactMarkdown>
+                        <ReactMarkdown>
+                          {summary || "No summary content available."}
+                        </ReactMarkdown>
                       </div>
                     </div>
                   </div>
@@ -921,31 +977,50 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   title="AI Observations"
                   description="Prioritized operational observations extracted from the underlying analysis."
                 >
-                  <NumberedList items={actionItems} empty="No action items were found in the current analysis payload." />
+                  <NumberedList
+                    items={actionItems}
+                    empty="No action items were found in the current analysis payload."
+                  />
                 </ReportPanel>
 
                 <ReportPanel
                   title="Strategic Directives"
                   description="Recommended follow-up actions for the financial review cycle."
                 >
-                  <NumberedList items={actionItems} empty="No strategic directives were returned by the model." />
+                  <NumberedList
+                    items={actionItems}
+                    empty="No strategic directives were returned by the model."
+                  />
                 </ReportPanel>
               </TabsContent>
 
               <TabsContent value="findings" className="mt-0 space-y-6">
-                <ReportPanel title="Executive Narrative" description="Full report generated from the uploaded financial document.">
+                <ReportPanel
+                  title="Executive Narrative"
+                  description="Full report generated from the uploaded financial document."
+                >
                   <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6">
                     <div className="prose prose-invert max-w-none break-words prose-p:leading-8 prose-p:text-slate-300 prose-headings:text-white prose-li:text-slate-300 prose-strong:text-white">
-                      <ReactMarkdown>{fullReport || summary || 'No narrative analysis is available for this document.'}</ReactMarkdown>
+                      <ReactMarkdown>
+                        {fullReport ||
+                          summary ||
+                          "No narrative analysis is available for this document."}
+                      </ReactMarkdown>
                     </div>
                   </div>
                 </ReportPanel>
 
-                <ReportPanel title="Discovered Entities" description="Organizations and named entities identified in the report.">
+                <ReportPanel
+                  title="Discovered Entities"
+                  description="Organizations and named entities identified in the report."
+                >
                   <div className="flex flex-wrap gap-2">
                     {entities.length ? (
                       entities.map((entity: string) => (
-                        <Badge key={entity} className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200">
+                        <Badge
+                          key={entity}
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200"
+                        >
                           {entity}
                         </Badge>
                       ))
@@ -957,11 +1032,18 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
               </TabsContent>
 
               <TabsContent value="risks" className="mt-0">
-                <ReportPanel title="Risk Register" description="Risk statements extracted from the model output.">
+                <ReportPanel
+                  title="Risk Register"
+                  description="Risk statements extracted from the model output."
+                >
                   <div className="grid gap-4 md:grid-cols-2">
                     {riskItems.length ? (
                       riskItems.map((risk: any, index: number) => (
-                        <RiskFindingCard key={index} risk={risk} index={index} />
+                        <RiskFindingCard
+                          key={index}
+                          risk={risk}
+                          index={index}
+                        />
                       ))
                     ) : (
                       <EmptyState text="No risk items were extracted from the analysis." />
@@ -971,11 +1053,18 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
               </TabsContent>
 
               <TabsContent value="metrics" className="mt-0">
-                <ReportPanel title="Financial Metrics" description="Structured values parsed from the analysis payload.">
+                <ReportPanel
+                  title="Financial Metrics"
+                  description="Structured values parsed from the analysis payload."
+                >
                   {hasMetrics ? (
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {metricsEntries.map(([key, value]) => (
-                        <MetricCard key={key} label={key.replace(/_/g, ' ')} value={formatMetricValue(value)} />
+                        <MetricCard
+                          key={key}
+                          label={key.replace(/_/g, " ")}
+                          value={formatMetricValue(value)}
+                        />
                       ))}
                     </div>
                   ) : (
@@ -985,16 +1074,38 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
               </TabsContent>
 
               <TabsContent value="source" className="mt-0 space-y-6">
-                <ReportPanel title="Source Metadata" description="Document details used for this intelligence run.">
+                <ReportPanel
+                  title="Source Metadata"
+                  description="Document details used for this intelligence run."
+                >
                   <div className="grid gap-4 md:grid-cols-2">
-                    <InfoBlock label="File Name" value={fileName} description="Original uploaded asset" />
-                    <InfoBlock label="File Type" value={fileType} description="Detected file format" />
-                    <InfoBlock label="File Size" value={fileSize} description="Stored binary size" />
-                    <InfoBlock label="Generated" value={processedAt} description="Latest report timestamp" />
+                    <InfoBlock
+                      label="File Name"
+                      value={fileName}
+                      description="Original uploaded asset"
+                    />
+                    <InfoBlock
+                      label="File Type"
+                      value={fileType}
+                      description="Detected file format"
+                    />
+                    <InfoBlock
+                      label="File Size"
+                      value={fileSize}
+                      description="Stored binary size"
+                    />
+                    <InfoBlock
+                      label="Generated"
+                      value={processedAt}
+                      description="Latest report timestamp"
+                    />
                   </div>
                 </ReportPanel>
 
-                <ReportPanel title="Raw Analysis Payload" description="Debug view of the current analysis object.">
+                <ReportPanel
+                  title="Raw Analysis Payload"
+                  description="Debug view of the current analysis object."
+                >
                   <pre className="max-h-[520px] overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-5 text-xs leading-6 text-slate-300">
                     {JSON.stringify(
                       {
@@ -1006,7 +1117,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                         raw_report: rawReport || fullReport || null,
                       },
                       null,
-                      2
+                      2,
                     )}
                   </pre>
                 </ReportPanel>
@@ -1018,8 +1129,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">Security Profile</p>
-                      <h2 className="mt-4 text-2xl font-black text-white">Risk Summary</h2>
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">
+                        Security Profile
+                      </p>
+                      <h2 className="mt-4 text-2xl font-black text-white">
+                        Risk Summary
+                      </h2>
                     </div>
                     <div
                       className="grid h-20 w-20 place-items-center rounded-full text-lg font-black text-white"
@@ -1034,9 +1149,23 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   </div>
 
                   <div className="mt-6 space-y-3">
-                    <StatusTile label="Confidence Score" value={`${confidenceValue} / 100`} tone="emerald" />
-                    <StatusTile label="Risk Badge" value={riskLevel === 'low' ? 'Stable' : riskLevel} tone={riskTone(riskLevel)} />
-                    <StatusTile label="Action State" value={riskLevel === 'low' ? 'Monitor' : 'Review Required'} tone="indigo" />
+                    <StatusTile
+                      label="Confidence Score"
+                      value={`${confidenceValue} / 100`}
+                      tone="emerald"
+                    />
+                    <StatusTile
+                      label="Risk Badge"
+                      value={riskLevel === "low" ? "Stable" : riskLevel}
+                      tone={riskTone(riskLevel)}
+                    />
+                    <StatusTile
+                      label="Action State"
+                      value={
+                        riskLevel === "low" ? "Monitor" : "Review Required"
+                      }
+                      tone="indigo"
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -1045,10 +1174,35 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                 <CardContent className="p-6">
                   <h2 className="text-xl font-black text-white">Quick Stats</h2>
                   <div className="mt-5 grid grid-cols-2 gap-3">
-                    <StatusTile label="Signals" value={String(riskItems.length)} tone="slate" />
-                    <StatusTile label="Coverage" value={analysisData ? '94%' : '0%'} tone="emerald" />
-                    <StatusTile label="Alerts" value={String(riskItems.filter((risk: any) => riskIconTone(risk) === 'text-amber-500').length)} tone="amber" />
-                    <StatusTile label="Critical" value={String(riskItems.filter((risk: any) => riskIconTone(risk) === 'text-red-500').length)} tone="red" />
+                    <StatusTile
+                      label="Signals"
+                      value={String(riskItems.length)}
+                      tone="slate"
+                    />
+                    <StatusTile
+                      label="Coverage"
+                      value={analysisData ? "94%" : "0%"}
+                      tone="emerald"
+                    />
+                    <StatusTile
+                      label="Alerts"
+                      value={String(
+                        riskItems.filter(
+                          (risk: any) =>
+                            riskIconTone(risk) === "text-amber-500",
+                        ).length,
+                      )}
+                      tone="amber"
+                    />
+                    <StatusTile
+                      label="Critical"
+                      value={String(
+                        riskItems.filter(
+                          (risk: any) => riskIconTone(risk) === "text-red-500",
+                        ).length,
+                      )}
+                      tone="red"
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -1065,13 +1219,18 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                       <FileText size={22} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-white">{fileName}</p>
+                      <p className="truncate text-sm font-bold text-white">
+                        {fileName}
+                      </p>
                       <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                         {fileType} - {fileSize}
                       </p>
                     </div>
                   </div>
-                  <SectionInfo label="Registry Source" value="Direct Secure Upload" />
+                  <SectionInfo
+                    label="Registry Source"
+                    value="Direct Secure Upload"
+                  />
                   <SectionInfo label="Cipher Protocol" value="AES-256 GCM" />
                   <SectionInfo label="Purge Status" value="Scheduled Review" />
                 </CardContent>
@@ -1099,7 +1258,9 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
             </button>
 
             <div className="mb-6 pr-8">
-              <h2 className="text-xl font-black text-white">Share Financial Report</h2>
+              <h2 className="text-xl font-black text-white">
+                Share Financial Report
+              </h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
                 Send a direct access link to this FinSight AI analysis.
               </p>
@@ -1117,7 +1278,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                 size="sm"
                 onClick={handleCopyShareLink}
                 className="h-9 shrink-0 gap-1.5 rounded-xl"
-                variant={copied ? 'default' : 'outline'}
+                variant={copied ? "default" : "outline"}
               >
                 {copied ? (
                   <>
@@ -1142,8 +1303,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   rel="noopener noreferrer"
                   className={`flex flex-col items-center justify-center rounded-2xl border bg-slate-900/50 p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg ${platform.bg}`}
                 >
-                  <div className="mb-2 rounded-xl bg-slate-950 p-2">{platform.icon}</div>
-                  <span className="text-xs font-black text-slate-200">{platform.name}</span>
+                  <div className="mb-2 rounded-xl bg-slate-950 p-2">
+                    {platform.icon}
+                  </div>
+                  <span className="text-xs font-black text-slate-200">
+                    {platform.name}
+                  </span>
                 </a>
               ))}
             </div>
@@ -1167,14 +1332,17 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
 function RiskBadge({ riskLevel }: { riskLevel: string }) {
   const tone =
-    riskLevel === 'high'
-      ? 'bg-red-500/15 text-red-400 border-red-500/25'
-      : riskLevel === 'medium'
-        ? 'bg-amber-500/15 text-amber-400 border-amber-500/25'
-        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25';
+    riskLevel === "high"
+      ? "bg-red-500/15 text-red-400 border-red-500/25"
+      : riskLevel === "medium"
+        ? "bg-amber-500/15 text-amber-400 border-amber-500/25"
+        : "bg-emerald-500/15 text-emerald-400 border-emerald-500/25";
 
   return (
-    <Badge variant="outline" className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${tone}`}>
+    <Badge
+      variant="outline"
+      className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${tone}`}
+    >
       {riskLevel} risk
     </Badge>
   );
@@ -1212,20 +1380,24 @@ function StatusTile({
   tone: string;
 }) {
   const toneClass =
-    tone === 'emerald'
-      ? 'border-emerald-500/25 bg-emerald-500/15 text-emerald-300'
-      : tone === 'amber'
-        ? 'border-amber-500/25 bg-amber-500/15 text-amber-300'
-        : tone === 'red'
-          ? 'border-red-500/25 bg-red-500/15 text-red-300'
-          : tone === 'slate'
-            ? 'border-slate-700 bg-slate-800/70 text-slate-300'
-            : 'border-indigo-500/25 bg-indigo-500/15 text-indigo-300';
+    tone === "emerald"
+      ? "border-emerald-500/25 bg-emerald-500/15 text-emerald-300"
+      : tone === "amber"
+        ? "border-amber-500/25 bg-amber-500/15 text-amber-300"
+        : tone === "red"
+          ? "border-red-500/25 bg-red-500/15 text-red-300"
+          : tone === "slate"
+            ? "border-slate-700 bg-slate-800/70 text-slate-300"
+            : "border-indigo-500/25 bg-indigo-500/15 text-indigo-300";
 
   return (
     <div className={`rounded-2xl border p-4 ${toneClass}`}>
-      <p className="text-xs font-black uppercase tracking-[0.18em] opacity-80">{label}</p>
-      <p className="mt-2 break-words text-xl font-black capitalize text-white">{value}</p>
+      <p className="text-xs font-black uppercase tracking-[0.18em] opacity-80">
+        {label}
+      </p>
+      <p className="mt-2 break-words text-xl font-black capitalize text-white">
+        {value}
+      </p>
     </div>
   );
 }
@@ -1242,11 +1414,16 @@ function NumberedList({ items, empty }: { items: string[]; empty: string }) {
   return (
     <div className="space-y-3">
       {items.map((item, index) => (
-        <div key={`${item}-${index}`} className="flex gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+        <div
+          key={`${item}-${index}`}
+          className="flex gap-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4"
+        >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-400/25 bg-red-500/15 text-sm font-black text-red-200">
             {index + 1}
           </div>
-          <p className="pt-1 text-sm font-semibold leading-7 text-slate-300">{item}</p>
+          <p className="pt-1 text-sm font-semibold leading-7 text-slate-300">
+            {item}
+          </p>
         </div>
       ))}
     </div>
@@ -1254,9 +1431,15 @@ function NumberedList({ items, empty }: { items: string[]; empty: string }) {
 }
 
 function RiskFindingCard({ risk, index }: { risk: any; index: number }) {
-  const description = typeof risk === 'string' ? risk : risk?.description || JSON.stringify(risk);
-  const level = typeof risk === 'string' ? risk : risk?.level || 'medium';
-  const tone = riskIconTone(risk) === 'text-red-500' ? 'red' : riskIconTone(risk) === 'text-amber-500' ? 'amber' : 'emerald';
+  const description =
+    typeof risk === "string" ? risk : risk?.description || JSON.stringify(risk);
+  const level = typeof risk === "string" ? risk : risk?.level || "medium";
+  const tone =
+    riskIconTone(risk) === "text-red-500"
+      ? "red"
+      : riskIconTone(risk) === "text-amber-500"
+        ? "amber"
+        : "emerald";
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
@@ -1266,21 +1449,25 @@ function RiskFindingCard({ risk, index }: { risk: any; index: number }) {
         </Badge>
         <StatusPill tone={tone} label={String(level)} />
       </div>
-      <p className="text-sm font-medium leading-7 text-slate-300">{description}</p>
+      <p className="text-sm font-medium leading-7 text-slate-300">
+        {description}
+      </p>
     </div>
   );
 }
 
 function StatusPill({ tone, label }: { tone: string; label: string }) {
   const className =
-    tone === 'red'
-      ? 'border-red-500/25 bg-red-500/15 text-red-300'
-      : tone === 'amber'
-        ? 'border-amber-500/25 bg-amber-500/15 text-amber-300'
-        : 'border-emerald-500/25 bg-emerald-500/15 text-emerald-300';
+    tone === "red"
+      ? "border-red-500/25 bg-red-500/15 text-red-300"
+      : tone === "amber"
+        ? "border-amber-500/25 bg-amber-500/15 text-amber-300"
+        : "border-emerald-500/25 bg-emerald-500/15 text-emerald-300";
 
   return (
-    <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${className}`}>
+    <span
+      className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${className}`}
+    >
       {label}
     </span>
   );
@@ -1302,11 +1489,17 @@ function SignalCard({
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">{label}</p>
-            <p className="mt-2 text-2xl font-extrabold tracking-tight text-white">{value}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+              {label}
+            </p>
+            <p className="mt-2 text-2xl font-extrabold tracking-tight text-white">
+              {value}
+            </p>
             <p className="mt-2 text-xs leading-6 text-slate-500">{helper}</p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-2 text-indigo-400">{icon}</div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-2 text-indigo-400">
+            {icon}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -1322,16 +1515,16 @@ function MiniStat({
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone: 'indigo' | 'emerald' | 'amber' | 'red';
+  tone: "indigo" | "emerald" | "amber" | "red";
 }) {
   const toneClasses =
-    tone === 'emerald'
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-      : tone === 'amber'
-        ? 'border-amber-500/20 bg-amber-500/10 text-amber-400'
-        : tone === 'red'
-          ? 'border-red-500/20 bg-red-500/10 text-red-400'
-          : 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400';
+    tone === "emerald"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+      : tone === "amber"
+        ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+        : tone === "red"
+          ? "border-red-500/20 bg-red-500/10 text-red-400"
+          : "border-indigo-500/20 bg-indigo-500/10 text-indigo-400";
 
   return (
     <div className={`rounded-2xl border p-4 ${toneClasses}`}>
@@ -1347,8 +1540,12 @@ function MiniStat({
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 transition-colors hover:bg-slate-900">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-3 break-words text-2xl font-extrabold tracking-tight text-white">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-3 break-words text-2xl font-extrabold tracking-tight text-white">
+        {value}
+      </p>
     </div>
   );
 }
@@ -1364,7 +1561,9 @@ function InfoBlock({
 }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+        {label}
+      </p>
       <p className="mt-3 break-words text-sm font-bold text-white">{value}</p>
       <p className="mt-2 text-xs leading-6 text-slate-500">{description}</p>
     </div>
@@ -1374,16 +1573,30 @@ function InfoBlock({
 function SectionInfo({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between border-b border-slate-800/50 pb-2 last:border-0">
-      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{label}</span>
-      <span className="max-w-[55%] truncate text-xs font-bold text-slate-300">{value}</span>
+      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+        {label}
+      </span>
+      <span className="max-w-[55%] truncate text-xs font-bold text-slate-300">
+        {value}
+      </span>
     </div>
   );
 }
 
-function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) {
+function EmptyState({
+  text,
+  compact = false,
+}: {
+  text: string;
+  compact?: boolean;
+}) {
   return (
-    <div className={`rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 ${compact ? 'p-4' : 'p-8'} text-center`}>
-      <p className={`text-slate-500 ${compact ? 'text-xs' : 'text-sm'}`}>{text}</p>
+    <div
+      className={`rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 ${compact ? "p-4" : "p-8"} text-center`}
+    >
+      <p className={`text-slate-500 ${compact ? "text-xs" : "text-sm"}`}>
+        {text}
+      </p>
     </div>
   );
 }
@@ -1420,13 +1633,13 @@ function AnalysisSkeleton() {
 }
 
 function getFileTypeLabel(fileType?: string) {
-  if (!fileType) return 'FILE';
-  const parts = fileType.split('/');
+  if (!fileType) return "FILE";
+  const parts = fileType.split("/");
   return parts[1] ? parts[1].toUpperCase() : parts[0].toUpperCase();
 }
 
 function formatBytes(bytes?: number) {
-  if (!bytes || Number.isNaN(bytes)) return '0 MB';
+  if (!bytes || Number.isNaN(bytes)) return "0 MB";
   const mb = bytes / (1024 * 1024);
   if (mb >= 1) return `${mb.toFixed(2)} MB`;
   const kb = bytes / 1024;
@@ -1440,42 +1653,44 @@ function normalizeConfidence(value: any) {
 }
 
 function formatDateSafe(input: any) {
-  if (!input) return 'Unknown';
+  if (!input) return "Unknown";
   try {
-    if (typeof input?.toDate === 'function') {
-      return input.toDate().toLocaleDateString(undefined, { dateStyle: 'full' });
+    if (typeof input?.toDate === "function") {
+      return input
+        .toDate()
+        .toLocaleDateString(undefined, { dateStyle: "full" });
     }
     const d = new Date(input);
-    if (Number.isNaN(d.getTime())) return 'Unknown';
-    return d.toLocaleDateString(undefined, { dateStyle: 'full' });
+    if (Number.isNaN(d.getTime())) return "Unknown";
+    return d.toLocaleDateString(undefined, { dateStyle: "full" });
   } catch {
-    return 'Unknown';
+    return "Unknown";
   }
 }
 
 function formatMetricValue(value: any) {
-  if (value == null) return '-';
-  if (typeof value === 'number') {
+  if (value == null) return "-";
+  if (typeof value === "number") {
     if (Math.abs(value) >= 1000) return value.toLocaleString();
     return String(value);
   }
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (Array.isArray(value)) return value.join(', ');
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
 function riskTone(riskLevel: string) {
-  if (riskLevel === 'high') return 'red';
-  if (riskLevel === 'medium') return 'amber';
-  return 'emerald';
+  if (riskLevel === "high") return "red";
+  if (riskLevel === "medium") return "amber";
+  return "emerald";
 }
 
 function riskIconTone(risk: any) {
-  const level = typeof risk === 'string' ? risk : risk?.level;
-  if (level === 'high') return 'text-red-500';
-  if (level === 'medium') return 'text-amber-500';
-  return 'text-emerald-500';
+  const level = typeof risk === "string" ? risk : risk?.level;
+  if (level === "high") return "text-red-500";
+  if (level === "medium") return "text-amber-500";
+  return "text-emerald-500";
 }
 
 function buildAnalysisShareText({
@@ -1489,7 +1704,7 @@ function buildAnalysisShareText({
   confidenceValue: number;
   refId: string;
 }) {
-  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- Confidence: ${confidenceValue}/100\n- Ref: ${refId || 'N/A'}\n\nReview the analysis here:`;
+  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- Confidence: ${confidenceValue}/100\n- Ref: ${refId || "N/A"}\n\nReview the analysis here:`;
 }
 
 function buildWhatsAppUrl(text: string, url: string): string {
@@ -1510,22 +1725,22 @@ function buildEmailUrl(subject: string, body: string): string {
 
 async function copyToClipboard(url: string): Promise<boolean> {
   try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
       return true;
     }
 
-    const textarea = document.createElement('textarea');
+    const textarea = document.createElement("textarea");
     textarea.value = url;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
-    const successful = document.execCommand('copy');
+    const successful = document.execCommand("copy");
     document.body.removeChild(textarea);
     return successful;
   } catch (error) {
-    console.error('Failed to copy clipboard:', error);
+    console.error("Failed to copy clipboard:", error);
     return false;
   }
 }

@@ -1,36 +1,54 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
-import { Button } from '@/src/components/ui/button';
-import { Progress } from '@/src/components/ui/progress';
-import { Calendar, AlertTriangle, Trash2, RefreshCw } from 'lucide-react';
-import { format, differenceInDays, isAfter } from 'date-fns';
-import { toast } from 'sonner';
-import { Subscription } from '@/src/lib/subscriptionUtils';
-import { updateSubscription, deleteSubscription } from '@/src/lib/subscriptionUtils';
+import { useState } from "react";
+import { motion } from "motion/react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Button } from "@/src/components/ui/button";
+import { Progress } from "@/src/components/ui/progress";
+import { Calendar, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
+import { format, differenceInDays, isAfter } from "date-fns";
+import { toast } from "sonner";
+import { Subscription } from "@/src/lib/subscriptionUtils";
+import {
+  updateSubscription,
+  deleteSubscription,
+} from "@/src/lib/subscriptionUtils";
 
 interface SubscriptionCardProps {
   subscription: Subscription;
   onUpdate: () => void;
 }
 
-export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardProps) {
+export function SubscriptionCard({
+  subscription,
+  onUpdate,
+}: SubscriptionCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const daysUntilRenewal = differenceInDays(subscription.nextRenewalDate, new Date());
+  const daysUntilRenewal = differenceInDays(
+    subscription.nextRenewalDate,
+    new Date(),
+  );
   const isUrgent = daysUntilRenewal <= 7 && daysUntilRenewal >= 0;
   const isOverdue = daysUntilRenewal < 0;
 
   const handleToggleActive = async () => {
     setIsUpdating(true);
     try {
-      await updateSubscription(subscription.id, { isActive: !subscription.isActive });
-      toast.success(subscription.isActive ? 'Subscription paused' : 'Subscription resumed');
+      await updateSubscription(subscription.id, {
+        isActive: !subscription.isActive,
+      });
+      toast.success(
+        subscription.isActive ? "Subscription paused" : "Subscription resumed",
+      );
       onUpdate();
     } catch (error) {
-      toast.error('Failed to update subscription');
+      toast.error("Failed to update subscription");
     } finally {
       setIsUpdating(false);
     }
@@ -40,10 +58,10 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
     setIsDeleting(true);
     try {
       await deleteSubscription(subscription.id);
-      toast.success('Subscription removed');
+      toast.success("Subscription removed");
       onUpdate();
     } catch (error) {
-      toast.error('Failed to remove subscription');
+      toast.error("Failed to remove subscription");
     } finally {
       setIsDeleting(false);
     }
@@ -51,26 +69,36 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
 
   const handleSetReminder = async () => {
     const reminderDate = subscription.nextRenewalDate;
-    if ('Notification' in window && Notification.permission === 'granted') {
-      setTimeout(() => {
-        new Notification('Subscription Renewal Reminder', {
-          body: `${subscription.name} ($${subscription.amount.toFixed(2)}) renews soon.`,
-          icon: '/vite.svg'
-        });
-      }, differenceInDays(reminderDate, new Date()) * 24 * 60 * 60 * 1000);
-      toast.success('Reminder set for renewal');
-    } else if ('Notification' in window && Notification.permission !== 'denied') {
+    if ("Notification" in window && Notification.permission === "granted") {
+      setTimeout(
+        () => {
+          new Notification("Subscription Renewal Reminder", {
+            body: `${subscription.name} ($${subscription.amount.toFixed(2)}) renews soon.`,
+            icon: "/vite.svg",
+          });
+        },
+        differenceInDays(reminderDate, new Date()) * 24 * 60 * 60 * 1000,
+      );
+      toast.success("Reminder set for renewal");
+    } else if (
+      "Notification" in window &&
+      Notification.permission !== "denied"
+    ) {
       const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
+      if (permission === "granted") {
         handleSetReminder();
       }
     } else {
-      toast.success('Browser notifications not supported');
+      toast.success("Browser notifications not supported");
     }
   };
 
-  const frequencyLabel = subscription.frequency === 'monthly' ? 'Monthly' :
-    subscription.frequency === 'yearly' ? 'Yearly' : 'Weekly';
+  const frequencyLabel =
+    subscription.frequency === "monthly"
+      ? "Monthly"
+      : subscription.frequency === "yearly"
+        ? "Yearly"
+        : "Weekly";
 
   return (
     <motion.div
@@ -89,7 +117,10 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
                 <CardTitle className="text-white text-base font-bold truncate">
                   {subscription.name}
                 </CardTitle>
-                <Badge variant="secondary" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] uppercase tracking-wider font-bold">
+                <Badge
+                  variant="secondary"
+                  className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] uppercase tracking-wider font-bold"
+                >
                   {subscription.category}
                 </Badge>
               </div>
@@ -101,20 +132,31 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
             </div>
             <div className="flex items-center gap-1.5">
               {isUrgent && (
-                <Badge variant="destructive" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px] uppercase tracking-wider font-bold animate-pulse">
+                <Badge
+                  variant="destructive"
+                  className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px] uppercase tracking-wider font-bold animate-pulse"
+                >
                   <AlertTriangle className="h-3 w-3 mr-1" />
-                  {daysUntilRenewal === 0 ? 'Today' : `${daysUntilRenewal}d`}
+                  {daysUntilRenewal === 0 ? "Today" : `${daysUntilRenewal}d`}
                 </Badge>
               )}
               {isOverdue && (
-                <Badge variant="destructive" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px] uppercase tracking-wider font-bold">
+                <Badge
+                  variant="destructive"
+                  className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px] uppercase tracking-wider font-bold"
+                >
                   <AlertTriangle className="h-3 w-3 mr-1" />
                   Overdue
                 </Badge>
               )}
               {!isUrgent && !isOverdue && (
-                <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] uppercase tracking-wider font-bold">
-                  {daysUntilRenewal === 0 ? 'Today' : `${daysUntilRenewal}d left`}
+                <Badge
+                  variant="outline"
+                  className="border-slate-700 text-slate-400 text-[10px] uppercase tracking-wider font-bold"
+                >
+                  {daysUntilRenewal === 0
+                    ? "Today"
+                    : `${daysUntilRenewal}d left`}
                 </Badge>
               )}
             </div>
@@ -128,7 +170,7 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
                 <span className="font-medium">Next Renewal</span>
               </div>
               <span className="text-slate-300 font-mono text-xs">
-                {format(subscription.nextRenewalDate, 'MMM d, yyyy')}
+                {format(subscription.nextRenewalDate, "MMM d, yyyy")}
               </span>
             </div>
 
@@ -138,14 +180,33 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
                   Annual Cost
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
-                  ${(subscription.amount * (subscription.frequency === 'monthly' ? 12 : subscription.frequency === 'yearly' ? 1 : 52)).toFixed(2)}
+                  $
+                  {(
+                    subscription.amount *
+                    (subscription.frequency === "monthly"
+                      ? 12
+                      : subscription.frequency === "yearly"
+                        ? 1
+                        : 52)
+                  ).toFixed(2)}
                 </span>
               </div>
               <Progress
-                value={subscription.frequency === 'monthly' ? 100 / 12 : subscription.frequency === 'yearly' ? 100 : 100 / 52}
+                value={
+                  subscription.frequency === "monthly"
+                    ? 100 / 12
+                    : subscription.frequency === "yearly"
+                      ? 100
+                      : 100 / 52
+                }
                 className="h-1.5 bg-slate-800"
               >
-                <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${subscription.frequency === 'monthly' ? 100 / 12 : subscription.frequency === 'yearly' ? 100 : 100 / 52}%` }} />
+                <div
+                  className="h-full bg-indigo-500 rounded-full transition-all"
+                  style={{
+                    width: `${subscription.frequency === "monthly" ? 100 / 12 : subscription.frequency === "yearly" ? 100 : 100 / 52}%`,
+                  }}
+                />
               </Progress>
             </div>
 
@@ -158,7 +219,7 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
                 disabled={isUpdating}
               >
                 <RefreshCw className="h-3 w-3 mr-1.5" />
-                {subscription.isActive ? 'Pause' : 'Resume'}
+                {subscription.isActive ? "Pause" : "Resume"}
               </Button>
               <Button
                 size="sm"

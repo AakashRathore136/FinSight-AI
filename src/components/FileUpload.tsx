@@ -1,30 +1,38 @@
-import { useState, useRef } from 'react';
-import { 
-  Upload, 
-  X, 
-  FileText, 
+import { useState, useRef } from "react";
+import {
+  Upload,
+  X,
+  FileText,
   AlertCircle,
   ShieldCheck,
-  Zap
-} from 'lucide-react';
-import { Button } from '@/src/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { toast } from 'sonner';
-import { apiFetch } from '@/src/lib/api';
+  Zap,
+} from "lucide-react";
+import { Button } from "@/src/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/src/components/ui/card";
+import { toast } from "sonner";
+import { apiFetch } from "@/src/lib/api";
 
 export function FileUpload({ user, onComplete, onCancel }: any) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [status, setStatus] = useState<
+    "idle" | "processing" | "done" | "error"
+  >("idle");
+  const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const dropped = e.dataTransfer.files?.[0];
     if (dropped) {
-      if (dropped.type !== 'application/pdf') {
-        toast.error('Only PDF files are supported');
+      if (dropped.type !== "application/pdf") {
+        toast.error("Only PDF files are supported");
         return;
       }
       if (dropped.size > 20 * 1024 * 1024) {
@@ -42,8 +50,8 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
-      if (selected.type !== 'application/pdf') {
-        toast.error('Only PDF files are supported');
+      if (selected.type !== "application/pdf") {
+        toast.error("Only PDF files are supported");
         return;
       }
       if (selected.size > 20 * 1024 * 1024) {
@@ -58,74 +66,83 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
     if (!file || !user) return;
 
     setUploading(true);
-    setStatus('processing');
+    setStatus("processing");
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      setErrorMessage('');
+      formData.append("file", file);
+      setErrorMessage("");
 
       // Include Firebase ID token so server can determine ownerId
       let headers: Record<string, string> = {};
       try {
         const idToken = await (user as any).getIdToken?.();
-        if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+        if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
       } catch (tErr) {
-        console.warn('Could not fetch ID token for upload', tErr);
+        console.warn("Could not fetch ID token for upload", tErr);
       }
 
-      console.log('UPLOAD START');
-      const analysisRes = await apiFetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-        headers,
-      },
-      {
-        timeout: 180000,
-      });
+      console.log("UPLOAD START");
+      const analysisRes = await apiFetch(
+        "/api/analyze",
+        {
+          method: "POST",
+          body: formData,
+          headers,
+        },
+        {
+          timeout: 180000,
+        },
+      );
 
       if (!analysisRes.ok) {
         const errorBody = await analysisRes.json().catch(() => null);
-        const errorText = errorBody?.error || (await analysisRes.text().catch(() => ''));
-        console.error('AI endpoint returned error', analysisRes.status, errorText);
-        if (errorText && typeof errorText === 'object') {
+        const errorText =
+          errorBody?.error || (await analysisRes.text().catch(() => ""));
+        console.error(
+          "AI endpoint returned error",
+          analysisRes.status,
+          errorText,
+        );
+        if (errorText && typeof errorText === "object") {
           throw new Error(JSON.stringify(errorText));
         }
-        throw new Error(errorText || 'AI Analysis Failed');
+        throw new Error(errorText || "AI Analysis Failed");
       }
 
       const result = await analysisRes.json();
-      console.log('UPLOAD COMPLETE — server response:', result);
+      console.log("UPLOAD COMPLETE — server response:", result);
       const documentId = result?.documentId;
-      if (!documentId) throw new Error('Server did not return documentId');
+      if (!documentId) throw new Error("Server did not return documentId");
 
-      setStatus('done');
+      setStatus("done");
       setUploading(false);
-      toast.success('Analysis complete!');
+      toast.success("Analysis complete!");
       setTimeout(() => onComplete(documentId), 500);
     } catch (err: any) {
-      console.error('Pipeline Error:', err);
-      setStatus('error');
+      console.error("Pipeline Error:", err);
+      setStatus("error");
       setUploading(false);
-      const msg = err?.message || 'Upload or analysis failed';
+      const msg = err?.message || "Upload or analysis failed";
       setErrorMessage(msg);
       toast.error(msg);
 
       try {
-        const { db } = await import('@/src/lib/firebase');
-        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-        await addDoc(collection(db, 'analyses'), {
-          fileName: file?.name || 'Unknown',
+        const { db } = await import("@/src/lib/firebase");
+        const { collection, addDoc, serverTimestamp } =
+          await import("firebase/firestore");
+        await addDoc(collection(db, "analyses"), {
+          fileName: file?.name || "Unknown",
           fileSize: file?.size || 0,
-          status: 'failed',
+          status: "failed",
           errorMessage: msg,
           uploadedAt: serverTimestamp(),
           failedAt: serverTimestamp(),
           ownerId: user?.uid || null,
         });
-        console.log('Failed record persisted to Firestore');
+        console.log("Failed record persisted to Firestore");
       } catch (firestoreErr) {
-        console.error('Could not persist failed record:', firestoreErr);
+        console.error("Could not persist failed record:", firestoreErr);
       }
     }
   };
@@ -140,12 +157,13 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           Secure Document Ingestion
         </CardTitle>
         <CardDescription className="text-slate-500 mt-2">
-          Upload your financial reports, statements, or agreements for high-fidelity AI assessment.
+          Upload your financial reports, statements, or agreements for
+          high-fidelity AI assessment.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-8 space-y-8">
         {!file ? (
-          <div 
+          <div
             onClick={() => fileInputRef.current?.click()}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -155,13 +173,17 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               <Upload className="text-white" size={32} />
             </div>
             <div className="mt-8 text-center space-y-2">
-              <p className="text-lg font-bold text-white tracking-tight">Select Intelligence Source</p>
-              <p className="text-sm text-slate-500">Drag a PDF here or click to browse (Max 20MB)</p>
+              <p className="text-lg font-bold text-white tracking-tight">
+                Select Intelligence Source
+              </p>
+              <p className="text-sm text-slate-500">
+                Drag a PDF here or click to browse (Max 20MB)
+              </p>
             </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
               onChange={handleFileChange}
               accept=".pdf,application/pdf"
             />
@@ -173,13 +195,21 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                 <FileText size={24} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-bold text-white tracking-tight">{file.name}</p>
+                <p className="truncate text-base font-bold text-white tracking-tight">
+                  {file.name}
+                </p>
                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB • Ready for Ingestion
+                  {(file.size / 1024 / 1024).toFixed(2)} MB • Ready for
+                  Ingestion
                 </p>
               </div>
               {!uploading && (
-                <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:text-white hover:bg-slate-800" onClick={() => setFile(null)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 text-slate-500 hover:text-white hover:bg-slate-800"
+                  onClick={() => setFile(null)}
+                >
                   <X size={20} />
                 </Button>
               )}
@@ -201,21 +231,31 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                   </span>
                 </div>
                 <div className="h-3 w-full bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700 shadow-inner">
-                  <div 
-                    className="h-full rounded-full bg-indigo-500 animate-pulse w-full"
-                  />
+                  <div className="h-full rounded-full bg-indigo-500 animate-pulse w-full" />
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
                   <Zap size={14} className="text-indigo-400" />
-                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Quantum-Resistant Encryption Active • ISO/IEC 27001 Compliant</span>
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">
+                    Quantum-Resistant Encryption Active • ISO/IEC 27001
+                    Compliant
+                  </span>
                 </div>
               </div>
             )}
 
             {!uploading && (
               <div className="grid grid-cols-2 gap-4 pt-4">
-                <Button variant="outline" className="h-12 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold" onClick={onCancel}>Cancel</Button>
-                <Button className="h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-900/40" onClick={startAnalysis}>
+                <Button
+                  variant="outline"
+                  className="h-12 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold"
+                  onClick={onCancel}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-900/40"
+                  onClick={startAnalysis}
+                >
                   Begin Execution Scan
                 </Button>
               </div>
@@ -223,13 +263,17 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           </div>
         )}
 
-        {status === 'error' && (
+        {status === "error" && (
           <div className="rounded-xl bg-red-500/10 p-6 text-sm text-red-500 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)] space-y-4">
             <div className="flex items-center gap-4">
               <AlertCircle size={22} className="shrink-0 animate-bounce" />
               <div className="flex flex-col">
-                <span className="font-black uppercase tracking-widest text-[10px] text-red-400">System Interrupt</span>
-                <span className="text-lg font-bold text-white mt-1">AI Analysis Failed</span>
+                <span className="font-black uppercase tracking-widest text-[10px] text-red-400">
+                  System Interrupt
+                </span>
+                <span className="text-lg font-bold text-white mt-1">
+                  AI Analysis Failed
+                </span>
               </div>
             </div>
             {(() => {
@@ -239,21 +283,29 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                   <div className="mt-4 pt-4 border-t border-red-500/10 space-y-3">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black uppercase bg-red-500/20 text-red-300 px-2.5 py-1 rounded-md border border-red-500/30">
-                        Stage: {diag.stage || 'UNKNOWN'}
+                        Stage: {diag.stage || "UNKNOWN"}
                       </span>
                     </div>
                     <p className="text-slate-300 font-medium">{diag.reason}</p>
                     {diag.recommendation && (
                       <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800 flex items-start gap-2.5 text-xs text-slate-400">
-                        <Zap size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                        <Zap
+                          size={14}
+                          className="text-amber-400 mt-0.5 shrink-0"
+                        />
                         <div>
-                          <strong className="text-slate-200">Recommendation:</strong> {diag.recommendation}
+                          <strong className="text-slate-200">
+                            Recommendation:
+                          </strong>{" "}
+                          {diag.recommendation}
                         </div>
                       </div>
                     )}
                     {diag.stack && diag.stack !== "No stack trace" && (
                       <details className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-400 transition-colors">
-                        <summary className="font-bold uppercase tracking-wider select-none py-1">View Stack Trace</summary>
+                        <summary className="font-bold uppercase tracking-wider select-none py-1">
+                          View Stack Trace
+                        </summary>
                         <pre className="mt-2 p-3 bg-slate-950/80 rounded-lg text-slate-400 overflow-x-auto whitespace-pre font-mono leading-relaxed border border-slate-900 max-h-40">
                           {diag.stack}
                         </pre>
@@ -264,7 +316,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               } catch {
                 return (
                   <p className="text-red-400/80 mt-2 font-medium">
-                    {errorMessage || 'Upload or analysis failed. Please retry.'}
+                    {errorMessage || "Upload or analysis failed. Please retry."}
                   </p>
                 );
               }

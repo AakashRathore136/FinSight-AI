@@ -178,7 +178,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
         deadline: formDeadline,
         category: formCategory,
         suggestedMonthlyContribution: monthlyContribution,
-        status: 'active',
+        status: "active",
         createdAt: new Date().toISOString(),
       };
 

@@ -24,7 +24,10 @@
         "fileSize": { "type": "number" },
         "fileUrl": { "type": "string" },
         "storagePath": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "processing", "completed", "failed"]
+        },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

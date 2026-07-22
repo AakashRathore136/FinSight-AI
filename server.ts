@@ -5,8 +5,8 @@ import { InferenceClient } from "@huggingface/inference";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
-import admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
@@ -14,7 +14,6 @@ import DOMPurify from "isomorphic-dompurify";
 dotenv.config({ quiet: true });
 
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
-
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
@@ -42,7 +41,9 @@ type AnalysisResponse = {
 };
 
 const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
-const firestoreDatabaseId = String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() || "(default)";
+const firestoreDatabaseId =
+  String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
+  "(default)";
 const firestoreBaseUrl = firebaseProjectId
   ? `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`
   : "";
@@ -55,7 +56,9 @@ const allowedOrigins = new Set(
     process.env.APP_URL,
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-  ].filter((origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL")
+  ].filter(
+    (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
+  ),
 );
 
 type VerifiedUser = {
@@ -97,7 +100,7 @@ function safeJsonParse(text: string): any {
       .replace(/,\s*([}\]])/g, "$1") // trailing commas
       // b. Handle unescaped newlines in JSON strings.
       .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
-        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
+        return '"' + p1.replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
       });
 
     try {
@@ -116,7 +119,7 @@ function safeJsonParse(text: string): any {
           escape = false;
           continue;
         }
-        if (char === '\\') {
+        if (char === "\\") {
           escape = true;
           continue;
         }
@@ -125,10 +128,10 @@ function safeJsonParse(text: string): any {
           continue;
         }
         if (!inString) {
-          if (char === '{') openBraces++;
-          else if (char === '}') openBraces--;
-          else if (char === '[') openBrackets++;
-          else if (char === ']') openBrackets--;
+          if (char === "{") openBraces++;
+          else if (char === "}") openBraces--;
+          else if (char === "[") openBrackets++;
+          else if (char === "]") openBrackets--;
         }
       }
 
@@ -137,18 +140,20 @@ function safeJsonParse(text: string): any {
       }
 
       while (openBrackets > 0) {
-        repairStr += ']';
+        repairStr += "]";
         openBrackets--;
       }
       while (openBraces > 0) {
-        repairStr += '}';
+        repairStr += "}";
         openBraces--;
       }
 
       try {
         return JSON.parse(repairStr);
       } catch (err3: any) {
-        throw new Error(`JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`);
+        throw new Error(
+          `JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`,
+        );
       }
     }
   }
@@ -174,27 +179,40 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   const fullReport = String(payload.full_report || "").trim();
   const wordCount = fullReport.split(/\s+/).filter(Boolean).length;
   if (wordCount < 120) {
-    throw new Error(`Model response full_report is too short (${wordCount} words)`);
+    throw new Error(
+      `Model response full_report is too short (${wordCount} words)`,
+    );
   }
   if (wordCount < 450) {
-    console.warn(`AI_SCHEMA_VALIDATION_WARNING: full_report is ${wordCount} words; accepting shorter valid analysis.`);
+    console.warn(
+      `AI_SCHEMA_VALIDATION_WARNING: full_report is ${wordCount} words; accepting shorter valid analysis.`,
+    );
   }
 
   return {
     summary: sanitizeString(String(payload.summary || "")),
-    key_metrics: typeof payload.key_metrics === "object" && payload.key_metrics ? payload.key_metrics : {},
-    risk_assessment: Array.isArray(payload.risk_assessment) ? payload.risk_assessment.map((item: any) => {
-      if (typeof item === "object" && item) {
-        return {
-          level: sanitizeString(String(item.level || "")),
-          description: sanitizeString(String(item.description || "")),
-        };
-      }
-      return sanitizeString(String(item || ""));
-    }) : [],
-    action_items: Array.isArray(payload.action_items) ? payload.action_items.map((v: unknown) => sanitizeString(String(v))) : [],
+    key_metrics:
+      typeof payload.key_metrics === "object" && payload.key_metrics
+        ? payload.key_metrics
+        : {},
+    risk_assessment: Array.isArray(payload.risk_assessment)
+      ? payload.risk_assessment.map((item: any) => {
+          if (typeof item === "object" && item) {
+            return {
+              level: sanitizeString(String(item.level || "")),
+              description: sanitizeString(String(item.description || "")),
+            };
+          }
+          return sanitizeString(String(item || ""));
+        })
+      : [],
+    action_items: Array.isArray(payload.action_items)
+      ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
+      : [],
     sentiment_score: Number(payload.sentiment_score || 0),
-    entities: Array.isArray(payload.entities) ? payload.entities.map((v: unknown) => sanitizeString(String(v))) : [],
+    entities: Array.isArray(payload.entities)
+      ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
+      : [],
     full_report: sanitizeString(fullReport),
   };
 }
@@ -206,15 +224,18 @@ function sanitizeString(text: string): string {
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
   const normalized = String(value || "").toLowerCase();
   if (normalized.includes("high")) return "high";
-  if (normalized.includes("medium") || normalized.includes("moderate")) return "medium";
+  if (normalized.includes("medium") || normalized.includes("moderate"))
+    return "medium";
   return "low";
 }
 
 function isDefaultCredentialsError(error: any): boolean {
   const message = String(error?.message || error || "");
-  return message.includes("Could not load the default credentials") ||
+  return (
+    message.includes("Could not load the default credentials") ||
     message.includes("Could not load the default credentials.") ||
-    message.includes("application default credentials");
+    message.includes("application default credentials")
+  );
 }
 
 async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
@@ -232,30 +253,35 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
  * authentication by accident. Attaches the verified uid to req.ownerId.
  */
 async function requireFirebaseAuth(req: any, res: any, next: any) {
-  const authHeader = String(req.headers.authorization || '');
-  if (!authHeader.startsWith('Bearer ')) {
+  const authHeader = String(req.headers.authorization || "");
+  if (!authHeader.startsWith("Bearer ")) {
     return res.status(401).json({
       error: {
         stage: "AUTH_VERIFICATION",
         reason: "Missing or invalid Authorization token",
-        recommendation: "You are not authorized. Please refresh your session or sign in again.",
+        recommendation:
+          "You are not authorized. Please refresh your session or sign in again.",
       },
     });
   }
 
-  const idToken = authHeader.split(' ')[1];
+  const idToken = authHeader.split(" ")[1];
   try {
     const decoded = await verifyFirebaseIdToken(idToken);
     req.ownerId = decoded.uid;
     req.idToken = idToken;
     next();
   } catch (err: any) {
-    console.error('AUTH_ERROR: ID token verification failed', err?.message || err);
+    console.error(
+      "AUTH_ERROR: ID token verification failed",
+      err?.message || err,
+    );
     return res.status(401).json({
       error: {
         stage: "AUTH_VERIFICATION",
         reason: `Invalid ID token: ${err?.message || String(err)}`,
-        recommendation: "Your session token has expired or is invalid. Please sign out and sign in again.",
+        recommendation:
+          "Your session token has expired or is invalid. Please sign out and sign in again.",
       },
     });
   }
@@ -264,22 +290,25 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
 async function enrichUserContext(req: any, res: any, next: any) {
   try {
     if (!req.ownerId) {
-      req.userRole = 'free';
+      req.userRole = "free";
       return next();
     }
 
     if (!admin.apps.length) {
-      req.userRole = 'free';
+      req.userRole = "free";
       return next();
     }
 
     const db = getFirestore();
-    const userDoc = await db.collection('users').doc(req.ownerId).get();
-    req.userRole = userDoc.data()?.role || 'free';
+    const userDoc = await db.collection("users").doc(req.ownerId).get();
+    req.userRole = userDoc.data()?.role || "free";
     next();
   } catch (err: any) {
-    console.warn('Failed to load user role for rate limiting:', err?.message || err);
-    req.userRole = 'free';
+    console.warn(
+      "Failed to load user role for rate limiting:",
+      err?.message || err,
+    );
+    req.userRole = "free";
     next();
   }
 }
@@ -294,30 +323,41 @@ function toFirestoreValue(value: any): any {
     return {
       mapValue: {
         fields: Object.fromEntries(
-          Object.entries(value).map(([key, nestedValue]) => [key, toFirestoreValue(nestedValue)])
+          Object.entries(value).map(([key, nestedValue]) => [
+            key,
+            toFirestoreValue(nestedValue),
+          ]),
         ),
       },
     };
   }
   if (typeof value === "number") {
-    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+    return Number.isInteger(value)
+      ? { integerValue: String(value) }
+      : { doubleValue: value };
   }
   if (typeof value === "boolean") return { booleanValue: value };
   return { stringValue: String(value) };
 }
 
 function toFirestoreFields(data: Record<string, any>): Record<string, any> {
-  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]));
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]),
+  );
 }
 
-async function createFirestoreDocumentViaRest(collectionPath: string, data: Record<string, any>, idToken: string): Promise<string> {
+async function createFirestoreDocumentViaRest(
+  collectionPath: string,
+  data: Record<string, any>,
+  idToken: string,
+): Promise<string> {
   if (!firestoreBaseUrl) {
     throw new Error("FIREBASE_PROJECT_ID is not configured");
   }
   const response = await fetch(`${firestoreBaseUrl}/${collectionPath}`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${idToken}`,
+      Authorization: `Bearer ${idToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ fields: toFirestoreFields(data) }),
@@ -325,7 +365,10 @@ async function createFirestoreDocumentViaRest(collectionPath: string, data: Reco
 
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body?.error?.message || `Firestore REST write failed with status ${response.status}`);
+    throw new Error(
+      body?.error?.message ||
+        `Firestore REST write failed with status ${response.status}`,
+    );
   }
 
   const name = String(body.name || "");
@@ -375,7 +418,9 @@ async function startServer() {
 
   // Initialize Firebase Admin if credentials are available
   if (!firebaseProjectId) {
-    console.warn('FIREBASE_PROJECT_ID is not configured — Firebase Admin initialization skipped.');
+    console.warn(
+      "FIREBASE_PROJECT_ID is not configured — Firebase Admin initialization skipped.",
+    );
   } else {
     try {
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -384,17 +429,25 @@ async function startServer() {
           credential: admin.credential.cert(svc),
           projectId: firebaseProjectId,
         });
-        console.log('Firebase admin initialized from FIREBASE_SERVICE_ACCOUNT');
+        console.log("Firebase admin initialized from FIREBASE_SERVICE_ACCOUNT");
       } else {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
         admin.initializeApp({ projectId: firebaseProjectId });
-        console.log('Firebase admin initialized with application default credentials');
+        console.log(
+          "Firebase admin initialized with application default credentials",
+        );
       }
     } catch (err: any) {
       if (isDefaultCredentialsError(err)) {
-        console.warn('Firebase admin initialization failed — FIREBASE_SERVICE_ACCOUNT or ADC credentials are required.', err?.message || err);
+        console.warn(
+          "Firebase admin initialization failed — FIREBASE_SERVICE_ACCOUNT or ADC credentials are required.",
+          err?.message || err,
+        );
       } else {
-        console.warn('Firebase admin initialization failed — server-side Firestore writes will be disabled.', err?.message || err);
+        console.warn(
+          "Firebase admin initialization failed — server-side Firestore writes will be disabled.",
+          err?.message || err,
+        );
       }
     }
   }
@@ -409,12 +462,14 @@ async function startServer() {
         if (!origin || allowedOrigins.has(origin)) {
           return callback(null, true);
         }
-        return callback(new Error(`Origin ${origin} is not allowed by CORS policy`));
+        return callback(
+          new Error(`Origin ${origin} is not allowed by CORS policy`),
+        );
       },
       credentials: true,
       methods: ["GET", "POST", "OPTIONS"],
       allowedHeaders: ["Authorization", "Content-Type"],
-    })
+    }),
   );
 
   app.use(express.json());
@@ -422,21 +477,30 @@ async function startServer() {
   // Security headers middleware to prevent clickjacking and MIME-sniffing attacks
   app.use((req, res, next) => {
     // X-Frame-Options: Prevent the application from being embedded in iframes
-    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader("X-Frame-Options", "DENY");
     // X-Content-Type-Options: Prevent browser MIME-type sniffing
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader("X-Content-Type-Options", "nosniff");
     // Strict-Transport-Security: Force HTTPS (if in production)
-    if (process.env.NODE_ENV === 'production') {
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains",
+      );
     }
     // Content-Security-Policy: Restrict resource loading to prevent XSS
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;",
+    );
     // X-XSS-Protection: Enable browser XSS protection (defense-in-depth)
-    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader("X-XSS-Protection", "1; mode=block");
     // Referrer-Policy: Control how much referrer information is shared
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     // Permissions-Policy: Disable potentially dangerous browser features
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=(), payment=()",
+    );
     next();
   });
 
@@ -448,13 +512,13 @@ async function startServer() {
 
   // JSON parse error handler (catches body-parser SyntaxError)
   app.use((err: any, req: any, res: any, next: any) => {
-    if (err && err.type === 'entity.parse.failed') {
-      console.warn('Invalid JSON payload received for', req.url);
-      return res.status(400).json({ error: 'Invalid JSON payload' });
+    if (err && err.type === "entity.parse.failed") {
+      console.warn("Invalid JSON payload received for", req.url);
+      return res.status(400).json({ error: "Invalid JSON payload" });
     }
-    if (err instanceof SyntaxError && 'body' in err) {
-      console.warn('SyntaxError parsing JSON for', req.url);
-      return res.status(400).json({ error: 'Malformed JSON' });
+    if (err instanceof SyntaxError && "body" in err) {
+      console.warn("SyntaxError parsing JSON for", req.url);
+      return res.status(400).json({ error: "Malformed JSON" });
     }
     next(err);
   });
@@ -480,14 +544,15 @@ async function startServer() {
     message: {
       error: {
         stage: "RATE_LIMIT",
-        reason: "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
+        reason:
+          "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
         recommendation: "Please try again tomorrow or upgrade your plan.",
       },
     },
     standardHeaders: false,
     skip: (req: any) => {
-      const userRole = req.userRole || 'free';
-      return userRole === 'premium' || userRole === 'admin';
+      const userRole = req.userRole || "free";
+      return userRole === "premium" || userRole === "admin";
     },
   });
 
@@ -495,8 +560,8 @@ async function startServer() {
   const inFlightAnalyzeByUser = new Map<string, number>();
 
   const concurrentAnalyzeLimiter = (req: any, res: any, next: any) => {
-    const userRole = req.userRole || 'free';
-    if (userRole === 'premium' || userRole === 'admin') return next();
+    const userRole = req.userRole || "free";
+    if (userRole === "premium" || userRole === "admin") return next();
 
     const key = String(req.ownerId || req.ip);
     const current = inFlightAnalyzeByUser.get(key) || 0;
@@ -505,7 +570,8 @@ async function startServer() {
         error: {
           stage: "CONCURRENT_LIMIT",
           reason: "Too many concurrent analysis requests (max 2 at a time)",
-          recommendation: "Please wait for an in-progress analysis to finish before submitting another.",
+          recommendation:
+            "Please wait for an in-progress analysis to finish before submitting another.",
         },
       });
     }
@@ -521,99 +587,118 @@ async function startServer() {
       else inFlightAnalyzeByUser.set(key, updated);
     };
 
-    res.once('finish', cleanup);
-    res.once('close', cleanup);
+    res.once("finish", cleanup);
+    res.once("close", cleanup);
     next();
   };
 
   // AI Analysis Endpoint
-  app.post("/api/analyze", analyzeRateLimiter, concurrentAnalyzeLimiter, upload.single("file"), async (req: any, res) => {
-    try {
-      console.log('=== PDF INGESTION START ===');
-      const file = req.file;
+  app.post(
+    "/api/analyze",
+    analyzeRateLimiter,
+    concurrentAnalyzeLimiter,
+    upload.single("file"),
+    async (req: any, res) => {
+      try {
+        console.log("=== PDF INGESTION START ===");
+        const file = req.file;
 
-      if (!file) {
-        throw new PipelineError(
-          "PDF_INGESTION",
-          "No file uploaded",
-          "Please select a valid PDF file to upload."
-        );
-      }
-
-      console.log(`PDF_FILE_RECEIVED: name=${file.originalname}, size=${file.size} bytes, mimetype=${file.mimetype}`);
-
-      if (file.mimetype !== "application/pdf") {
-        throw new PipelineError(
-          "PDF_INGESTION",
-          `Invalid MIME type: ${file.mimetype}`,
-          "Only PDF files are supported. Please convert your file to PDF format."
-        );
-      }
-
-      // requireFirebaseAuth middleware has already verified the token
-      // and attached the uid/token before this handler runs.
-      const ownerId = req.ownerId as string;
-      const idToken = req.idToken as string;
-
-      // Extract text from PDF buffer
-      console.log('PDF_EXTRACTION_START: using pdf-parse');
-      let extractedText = '';
-      {
-        const parser = new PDFParse({ data: file.buffer });
-        const parserDestroyTimeout = setTimeout(() => {
-          console.warn('PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing');
-        }, 5000);
-
-        try {
-          const parsed = await parser.getText();
-          extractedText = (parsed?.text || "").trim();
-        } catch (extractError: any) {
-          console.error('PDF_EXTRACTION_ERROR: Failed to parse PDF', extractError?.message || extractError);
+        if (!file) {
           throw new PipelineError(
-            "PDF_EXTRACTION",
-            `Failed to parse PDF: ${extractError?.message || 'Unknown error'}`,
-            "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF."
+            "PDF_INGESTION",
+            "No file uploaded",
+            "Please select a valid PDF file to upload.",
           );
-        } finally {
-          clearTimeout(parserDestroyTimeout);
+        }
+
+        console.log(
+          `PDF_FILE_RECEIVED: name=${file.originalname}, size=${file.size} bytes, mimetype=${file.mimetype}`,
+        );
+
+        if (file.mimetype !== "application/pdf") {
+          throw new PipelineError(
+            "PDF_INGESTION",
+            `Invalid MIME type: ${file.mimetype}`,
+            "Only PDF files are supported. Please convert your file to PDF format.",
+          );
+        }
+
+        // requireFirebaseAuth middleware has already verified the token
+        // and attached the uid/token before this handler runs.
+        const ownerId = req.ownerId as string;
+        const idToken = req.idToken as string;
+
+        // Extract text from PDF buffer
+        console.log("PDF_EXTRACTION_START: using pdf-parse");
+        let extractedText = "";
+        {
+          const parser = new PDFParse({ data: file.buffer });
+          const parserDestroyTimeout = setTimeout(() => {
+            console.warn(
+              "PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing",
+            );
+          }, 5000);
+
           try {
-            await Promise.race([
-              parser.destroy(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('destroy timeout')), 5000))
-            ]);
-          } catch (destroyError: any) {
-            console.warn('PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser', destroyError?.message || destroyError);
+            const parsed = await parser.getText();
+            extractedText = (parsed?.text || "").trim();
+          } catch (extractError: any) {
+            console.error(
+              "PDF_EXTRACTION_ERROR: Failed to parse PDF",
+              extractError?.message || extractError,
+            );
+            throw new PipelineError(
+              "PDF_EXTRACTION",
+              `Failed to parse PDF: ${extractError?.message || "Unknown error"}`,
+              "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF.",
+            );
+          } finally {
+            clearTimeout(parserDestroyTimeout);
+            try {
+              await Promise.race([
+                parser.destroy(),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error("destroy timeout")), 5000),
+                ),
+              ]);
+            } catch (destroyError: any) {
+              console.warn(
+                "PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser",
+                destroyError?.message || destroyError,
+              );
+            }
           }
         }
-      }
 
-      console.log(`PDF_EXTRACTION_COMPLETE: extracted ${extractedText.length} characters`);
-      console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
-
-      // Validate extraction
-      if (!extractedText || extractedText.length < 100) {
-        throw new PipelineError(
-          "PDF_VALIDATION",
-          `PDF extraction yielded insufficient text (${extractedText.length} characters).`,
-          "Make sure the PDF contains selectable, readable text (not scanned images without OCR processing)."
+        console.log(
+          `PDF_EXTRACTION_COMPLETE: extracted ${extractedText.length} characters`,
         );
-      }
+        console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
 
-      console.log('PDF_VALIDATION_PASSED: text meets minimum requirements');
+        // Validate extraction
+        if (!extractedText || extractedText.length < 100) {
+          throw new PipelineError(
+            "PDF_VALIDATION",
+            `PDF extraction yielded insufficient text (${extractedText.length} characters).`,
+            "Make sure the PDF contains selectable, readable text (not scanned images without OCR processing).",
+          );
+        }
 
-      dotenv.config({ quiet: true });
-      const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
-      if (!huggingFaceApiKey) {
-        throw new PipelineError(
-          "AI_CONFIG",
-          "HUGGINGFACE_API_KEY is not configured on the server",
-          "Set the HUGGINGFACE_API_KEY environment variable."
-        );
-      }
-      const hfClient = new InferenceClient(huggingFaceApiKey);
+        console.log("PDF_VALIDATION_PASSED: text meets minimum requirements");
 
-      // Build AI request with REAL extracted PDF text
-      const systemPrompt = `You are a senior financial intelligence analyst. Produce detailed financial analysis based ONLY on the provided document.
+        dotenv.config({ quiet: true });
+        const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
+        if (!huggingFaceApiKey) {
+          throw new PipelineError(
+            "AI_CONFIG",
+            "HUGGINGFACE_API_KEY is not configured on the server",
+            "Set the HUGGINGFACE_API_KEY environment variable.",
+          );
+        }
+        const hfClient = new InferenceClient(huggingFaceApiKey);
+
+        // Build AI request with REAL extracted PDF text
+        const systemPrompt = `You are a senior financial intelligence analyst. Produce detailed financial analysis based ONLY on the provided document.
 
 Return ONLY valid JSON. No markdown, no code blocks, no explanations outside JSON.
 
@@ -647,181 +732,206 @@ CRITICAL RULES:
 - Use formal, professional tone
 - Return ONLY the JSON object`;
 
-      console.log('AI_REQUEST_PREPARATION: payload ready with real extracted PDF text');
-      console.log(`AI_REQUEST_CONTENT_LENGTH: ${extractedText.length} characters from PDF`);
-      
-      let validPayload: AnalysisResponse | null = null;
-      let retries = 0;
-      const maxRetries = 1;
-
-      while (retries <= maxRetries && !validPayload) {
-        console.log(`AI_REQUEST_START (attempt ${retries + 1}): calling Llama-3.3-70B-Instruct via Hugging Face Inference (together)`);
-        
-        const messages: any[] = [
-          {
-            role: "system",
-            content: systemPrompt
-          }
-        ];
-
-        if (retries === 0) {
-          messages.push({
-            role: "user",
-            content: extractedText
-          });
-        } else {
-          messages.push({
-            role: "user",
-            content: `${extractedText}\n\nPrevious analysis was too brief. EXPAND the full_report to 1000+ words with detailed findings, risks, and recommendations. Return only valid JSON.`
-          });
-        }
-
-        try {
-          const completion = await hfClient.chatCompletion({
-            provider: "together",
-            model: "meta-llama/Llama-3.3-70B-Instruct",
-            messages,
-            max_tokens: 5000,
-            temperature: 0.2
-          });
-          console.log('AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct');
-
-          const rawText = completion.choices?.[0]?.message?.content || "{}";
-          console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
-
-          // Parse JSON response from AI
-          console.log('AI_JSON_PARSING_START');
-          let parsedResponse;
-          try {
-            parsedResponse = safeJsonParse(rawText);
-          } catch (parseError: any) {
-            console.error('AI_JSON_PARSE_ERROR:', parseError?.message || parseError);
-            console.error('AI_RAW_RESPONSE_SAMPLE:', rawText.slice(0, 500));
-            if (retries >= maxRetries) {
-              throw new PipelineError(
-                "JSON_PARSING",
-                `Failed to parse JSON response from AI: ${parseError?.message}`,
-                "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output."
-              );
-            }
-            retries++;
-            continue;
-          }
-          console.log('AI_JSON_PARSE_SUCCESS');
-
-          // Validate against schema
-          console.log('AI_SCHEMA_VALIDATION_START');
-          try {
-            validPayload = validateAnalysisPayload(parsedResponse);
-            console.log('AI_SCHEMA_VALIDATION_SUCCESS');
-            console.log(`AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`);
-            console.log(`AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`);
-          } catch (validateError: any) {
-            console.error('AI_SCHEMA_VALIDATION_ERROR:', validateError?.message || validateError);
-            if (retries >= maxRetries) {
-              throw new PipelineError(
-                "SCHEMA_VALIDATION",
-                `AI response failed validation: ${validateError?.message}`,
-                "The AI model failed to structure its response properly. Try submitting again to recreate."
-              );
-            }
-            retries++;
-            continue;
-          }
-        } catch (hfError: any) {
-          if (hfError instanceof PipelineError) {
-            throw hfError;
-          }
-          console.error('HUGGINGFACE_INFERENCE_ERROR:', hfError?.message || hfError);
-          if (retries >= maxRetries) {
-            throw new PipelineError(
-              "AI_INFERENCE",
-              `Hugging Face inference failed: ${hfError?.message || String(hfError)}`,
-              "Verify the HUGGINGFACE_API_KEY environment variable. Hugging Face could be experiencing temporary downtime."
-            );
-          }
-          retries++;
-          continue;
-        }
-      }
-
-      if (!validPayload) {
-        throw new PipelineError(
-          "AI_INFERENCE",
-          "Failed to generate valid analysis after retries",
-          "The AI model repeatedly failed validation rules. Try a different document or request a simpler scan."
+        console.log(
+          "AI_REQUEST_PREPARATION: payload ready with real extracted PDF text",
         );
-      }
+        console.log(
+          `AI_REQUEST_CONTENT_LENGTH: ${extractedText.length} characters from PDF`,
+        );
 
-      console.log(`FIRESTORE_WRITE_START: ownerId=${ownerId}, database=${firestoreDatabaseId}, document=${file.originalname}`);
+        let validPayload: AnalysisResponse | null = null;
+        let retries = 0;
+        const maxRetries = 1;
 
-      // Compose document record
-      const rawRiskLevel = (validPayload.risk_assessment && validPayload.risk_assessment[0] && typeof validPayload.risk_assessment[0] === 'object') ? validPayload.risk_assessment[0].level : 'low';
-      const riskLevel = normalizeRiskLevel(rawRiskLevel);
-      const now = new Date();
+        while (retries <= maxRetries && !validPayload) {
+          console.log(
+            `AI_REQUEST_START (attempt ${retries + 1}): calling Llama-3.3-70B-Instruct via Hugging Face Inference (together)`,
+          );
 
-      const docData: any = {
-        ownerId,
-        fileName: file.originalname,
-        fileType: file.mimetype,
-        fileSize: file.size,
-        fileUrl: '',
-        storagePath: '',
-        status: 'completed',
-        riskLevel,
-        createdAt: now,
-        updatedAt: now,
-      };
+          const messages: any[] = [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+          ];
 
-      const analysisDoc = {
-        ...validPayload,
-        documentId: '',
-        ownerId,
-        riskLevel,
-        processedAt: now,
-      };
+          if (retries === 0) {
+            messages.push({
+              role: "user",
+              content: extractedText,
+            });
+          } else {
+            messages.push({
+              role: "user",
+              content: `${extractedText}\n\nPrevious analysis was too brief. EXPAND the full_report to 1000+ words with detailed findings, risks, and recommendations. Return only valid JSON.`,
+            });
+          }
 
-      let documentId = '';
-      let analysisId = '';
-      try {
-        if (!admin.apps.length) {
-          throw new Error("Firebase Admin SDK not initialized");
+          try {
+            const completion = await hfClient.chatCompletion({
+              provider: "together",
+              model: "meta-llama/Llama-3.3-70B-Instruct",
+              messages,
+              max_tokens: 5000,
+              temperature: 0.2,
+            });
+            console.log(
+              "AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct",
+            );
+
+            const rawText = completion.choices?.[0]?.message?.content || "{}";
+            console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
+
+            // Parse JSON response from AI
+            console.log("AI_JSON_PARSING_START");
+            let parsedResponse;
+            try {
+              parsedResponse = safeJsonParse(rawText);
+            } catch (parseError: any) {
+              console.error(
+                "AI_JSON_PARSE_ERROR:",
+                parseError?.message || parseError,
+              );
+              console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+              if (retries >= maxRetries) {
+                throw new PipelineError(
+                  "JSON_PARSING",
+                  `Failed to parse JSON response from AI: ${parseError?.message}`,
+                  "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output.",
+                );
+              }
+              retries++;
+              continue;
+            }
+            console.log("AI_JSON_PARSE_SUCCESS");
+
+            // Validate against schema
+            console.log("AI_SCHEMA_VALIDATION_START");
+            try {
+              validPayload = validateAnalysisPayload(parsedResponse);
+              console.log("AI_SCHEMA_VALIDATION_SUCCESS");
+              console.log(
+                `AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`,
+              );
+              console.log(
+                `AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`,
+              );
+            } catch (validateError: any) {
+              console.error(
+                "AI_SCHEMA_VALIDATION_ERROR:",
+                validateError?.message || validateError,
+              );
+              if (retries >= maxRetries) {
+                throw new PipelineError(
+                  "SCHEMA_VALIDATION",
+                  `AI response failed validation: ${validateError?.message}`,
+                  "The AI model failed to structure its response properly. Try submitting again to recreate.",
+                );
+              }
+              retries++;
+              continue;
+            }
+          } catch (hfError: any) {
+            if (hfError instanceof PipelineError) {
+              throw hfError;
+            }
+            console.error(
+              "HUGGINGFACE_INFERENCE_ERROR:",
+              hfError?.message || hfError,
+            );
+            if (retries >= maxRetries) {
+              throw new PipelineError(
+                "AI_INFERENCE",
+                `Hugging Face inference failed: ${hfError?.message || String(hfError)}`,
+                "Verify the HUGGINGFACE_API_KEY environment variable. Hugging Face could be experiencing temporary downtime.",
+              );
+            }
+            retries++;
+            continue;
+          }
         }
-        const dbAdmin = getFirestore(firestoreDatabaseId);
-        const adminDocData = {
-          ...docData,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        const docRef = await dbAdmin.collection('documents').add(adminDocData);
-        documentId = docRef.id;
-        console.log(`FIRESTORE_DOCUMENT_CREATED: documentId=${documentId}`);
 
-        const adminAnalysisDoc = {
-          ...analysisDoc,
-          documentId,
-          processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        const analysisRef = await dbAdmin.collection(`documents`).doc(documentId).collection('analyses').add(adminAnalysisDoc);
-        analysisId = analysisRef.id;
-        console.log(`FIRESTORE_ANALYSIS_CREATED: analysisId=${analysisId}`);
+        if (!validPayload) {
+          throw new PipelineError(
+            "AI_INFERENCE",
+            "Failed to generate valid analysis after retries",
+            "The AI model repeatedly failed validation rules. Try a different document or request a simpler scan.",
+          );
+        }
 
-        // Update parent with latestAnalysis snapshot when Admin credentials are available.
-        await dbAdmin.collection('documents').doc(documentId).update({
-          latestAnalysis: adminAnalysisDoc,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        console.log(`FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`);
-      } catch (writeError: any) {
-        console.warn('Firebase Admin write failed/unavailable; falling back to Firestore REST writes with user token:', writeError?.message || writeError);
+        console.log(
+          `FIRESTORE_WRITE_START: ownerId=${ownerId}, database=${firestoreDatabaseId}, document=${file.originalname}`,
+        );
+
+        // Compose document record
+        const rawRiskLevel =
+          validPayload.risk_assessment &&
+          validPayload.risk_assessment[0] &&
+          typeof validPayload.risk_assessment[0] === "object"
+            ? validPayload.risk_assessment[0].level
+            : "low";
+        const riskLevel = normalizeRiskLevel(rawRiskLevel);
+        const now = new Date();
+
+        const docData: any = {
+          ownerId,
+          fileName: file.originalname,
+          fileType: file.mimetype,
+          fileSize: file.size,
+          fileUrl: "",
+          storagePath: "",
+          status: "completed",
+          riskLevel,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        const analysisDoc = {
+          ...validPayload,
+          documentId: "",
+          ownerId,
+          riskLevel,
+          processedAt: now,
+        };
+
+        let documentId = "";
+        let analysisId = "";
         try {
-          documentId = await createFirestoreDocumentViaRest('documents', docData, idToken);
-          console.log(`FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`);
+          if (!admin.apps.length) {
+            throw new Error("Firebase Admin SDK not initialized");
+          }
+          const dbAdmin = getFirestore(firestoreDatabaseId);
+          const adminDocData = {
+            ...docData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          const docRef = await dbAdmin
+            .collection("documents")
+            .add(adminDocData);
+          documentId = docRef.id;
+          console.log(`FIRESTORE_DOCUMENT_CREATED: documentId=${documentId}`);
 
-          analysisId = await createFirestoreDocumentViaRest(
-            `documents/${documentId}/analyses`,
-            { ...analysisDoc, documentId },
-            idToken
+          const adminAnalysisDoc = {
+            ...analysisDoc,
+            documentId,
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          const analysisRef = await dbAdmin
+            .collection(`documents`)
+            .doc(documentId)
+            .collection("analyses")
+            .add(adminAnalysisDoc);
+          analysisId = analysisRef.id;
+          console.log(`FIRESTORE_ANALYSIS_CREATED: analysisId=${analysisId}`);
+
+          // Update parent with latestAnalysis snapshot when Admin credentials are available.
+          await dbAdmin.collection("documents").doc(documentId).update({
+            latestAnalysis: adminAnalysisDoc,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log(
+            `FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`,
           );
           console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
 
@@ -841,32 +951,65 @@ CRITICAL RULES:
             `Firestore database write failed: ${restError?.message || String(restError)}`,
             "Check database security rules, database existence, and network connection."
           );
-        }
-      }
+          try {
+            documentId = await createFirestoreDocumentViaRest(
+              "documents",
+              docData,
+              idToken,
+            );
+            console.log(
+              `FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`,
+            );
 
-      console.log('=== PDF INGESTION PIPELINE COMPLETE SUCCESS ===');
-      console.log(`FINAL_RESULT: documentId=${documentId}, fileName=${file.originalname}, extractedTextLength=${extractedText.length}, analysisId=${analysisId}`);
-      return res.status(200).json({ documentId });
-    } catch (error: any) {
-      console.error("=== PDF INGESTION PIPELINE FAILED ===");
-      console.error("ERROR_MESSAGE:", error?.message || error);
-      console.error("ERROR_STACK:", error?.stack || 'No stack trace');
-      
-      const stage = error?.stage || "PIPELINE_ERROR";
-      const reason = error?.message || String(error);
-      const stack = error?.stack || "No stack trace";
-      const recommendation = error?.recommendation || "An unexpected system interrupt occurred. Please check server logs.";
-      
-      return res.status(500).json({
-        error: {
-          stage,
-          reason,
-          stack,
-          recommendation
+            analysisId = await createFirestoreDocumentViaRest(
+              `documents/${documentId}/analyses`,
+              { ...analysisDoc, documentId },
+              idToken,
+            );
+            console.log(
+              `FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`,
+            );
+          } catch (restError: any) {
+            console.error(
+              "FIRESTORE_REST_WRITE_FAILED:",
+              restError?.message || restError,
+            );
+            throw new PipelineError(
+              "FIRESTORE_WRITE",
+              `Firestore database write failed: ${restError?.message || String(restError)}`,
+              "Check database security rules, database existence, and network connection.",
+            );
+          }
         }
-      });
-    }
-  });
+
+        console.log("=== PDF INGESTION PIPELINE COMPLETE SUCCESS ===");
+        console.log(
+          `FINAL_RESULT: documentId=${documentId}, fileName=${file.originalname}, extractedTextLength=${extractedText.length}, analysisId=${analysisId}`,
+        );
+        return res.status(200).json({ documentId });
+      } catch (error: any) {
+        console.error("=== PDF INGESTION PIPELINE FAILED ===");
+        console.error("ERROR_MESSAGE:", error?.message || error);
+        console.error("ERROR_STACK:", error?.stack || "No stack trace");
+
+        const stage = error?.stage || "PIPELINE_ERROR";
+        const reason = error?.message || String(error);
+        const stack = error?.stack || "No stack trace";
+        const recommendation =
+          error?.recommendation ||
+          "An unexpected system interrupt occurred. Please check server logs.";
+
+        return res.status(500).json({
+          error: {
+            stage,
+            reason,
+            stack,
+            recommendation,
+          },
+        });
+      }
+    },
+  );
 
   // Catches errors from the upload.single("file") middleware above —
   // oversized files (LIMIT_FILE_SIZE) and non-PDF rejections from
@@ -879,9 +1022,10 @@ CRITICAL RULES:
         error: {
           stage: "PDF_INGESTION",
           reason: err.message,
-          recommendation: err.code === "LIMIT_FILE_SIZE"
-            ? `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB upload limit.`
-            : "Please check the uploaded file and try again.",
+          recommendation:
+            err.code === "LIMIT_FILE_SIZE"
+              ? `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB upload limit.`
+              : "Please check the uploaded file and try again.",
         },
       });
     }
@@ -890,7 +1034,8 @@ CRITICAL RULES:
         error: {
           stage: "PDF_INGESTION",
           reason: err.message,
-          recommendation: "Only PDF files are supported. Please convert your file to PDF format.",
+          recommendation:
+            "Only PDF files are supported. Please convert your file to PDF format.",
         },
       });
     }
@@ -905,10 +1050,10 @@ CRITICAL RULES:
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
@@ -917,19 +1062,19 @@ CRITICAL RULES:
   });
 }
 
-process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-  console.error('UNHANDLED_PROMISE_REJECTION:', {
+process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+  console.error("UNHANDLED_PROMISE_REJECTION:", {
     reason: reason?.message || String(reason),
-    stack: reason?.stack || 'No stack trace',
+    stack: reason?.stack || "No stack trace",
     timestamp: new Date().toISOString(),
   });
-  console.error('Promise state:', promise);
+  console.error("Promise state:", promise);
 });
 
-process.on('uncaughtException', (error: Error) => {
-  console.error('UNCAUGHT_EXCEPTION:', {
+process.on("uncaughtException", (error: Error) => {
+  console.error("UNCAUGHT_EXCEPTION:", {
     message: error?.message || String(error),
-    stack: error?.stack || 'No stack trace',
+    stack: error?.stack || "No stack trace",
     timestamp: new Date().toISOString(),
   });
   process.exit(1);

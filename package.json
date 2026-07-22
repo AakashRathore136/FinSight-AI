@@ -8,7 +8,11 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rimraf dist",
-    "lint": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -50,10 +54,19 @@
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.5",
     "rimraf": "^6.1.3",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
+    "typescript-eslint": "^8.64.0",
     "vite": "^6.2.3"
   }
 }
