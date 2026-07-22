@@ -40,14 +40,19 @@ import {
   Zap,
   Activity,
   Target,
-} from "lucide-react";
-import { Toaster, toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
-import {
-  getSharedDocId,
-  setSharedDocId,
-  clearSharedDocId,
-} from "@/src/lib/utils";
+  Bell,
+  Trophy,
+  Calculator,
+  RefreshCw,
+  HeartPulse,
+  MessageSquare,
+  LineChart,
+  Globe,
+  Shield
+} from 'lucide-react';
+import { Toaster, toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
+import { getSharedDocId, setSharedDocId, clearSharedDocId } from '@/src/lib/utils';
 
 // Components
 import { Button } from "@/src/components/ui/button";
@@ -166,13 +171,24 @@ export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
 }
 
 // Pages (defined in separate files eventually, for now as sub-components)
-import { Dashboard } from "./components/Dashboard";
-import { AnalysisList } from "./components/AnalysisList";
-import { FileUpload } from "./components/FileUpload";
-import { AnalysisDetail } from "./components/AnalysisDetail";
-import { AdminPanel } from "./components/AdminPanel";
-import { CommandPalette } from "./components/dashboard/CommandPalette";
-import { GoalPlanner } from "./components/goals/GoalPlanner";
+import { Dashboard } from './components/Dashboard';
+import { AnalysisList } from './components/AnalysisList';
+import { FileUpload } from './components/FileUpload';
+import { AnalysisDetail } from './components/AnalysisDetail';
+import { AdminPanel } from './components/AdminPanel';
+import { CommandPalette } from './components/dashboard/CommandPalette';
+import { CurrencyManager } from './components/currency/CurrencyManager';
+import { CategoryTrends } from './components/trends/CategoryTrends';
+import { GoalPlanner } from './components/goals/GoalPlanner';
+import { BillReminders } from './components/bills/BillReminders';
+import { RolloverManager } from './components/rollover/RolloverManager';
+import { ChallengesDashboard } from './components/challenges/ChallengesDashboard';
+import { TaxEstimation } from './components/tax/TaxEstimation';
+import { EmergencyFundPlanner } from './components/emergency/EmergencyFundPlanner';
+import { HealthScoreDashboard } from './components/health/HealthScoreDashboard';
+import { ChatAssistant } from './components/chat/ChatAssistant';
+import { ForecastComparison } from './components/forecast/ForecastComparison';
+import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -796,11 +812,77 @@ export default function App() {
             active={activeTab === "history"}
             onClick={() => setActiveTab("history")}
           />
+          <NavItem 
+            icon={<TrendingUp size={20} />} 
+            label="Trends" 
+            active={activeTab === 'trends'} 
+            onClick={() => setActiveTab('trends')} 
+          />
+          <NavItem 
+            icon={<Clock size={20} />} 
+            label="AI Intelligence" 
+            active={activeTab === 'history'} 
+            onClick={() => setActiveTab('history')} 
+          />
+          <NavItem 
+            icon={<Globe size={20} />} 
+            label="Currencies" 
+            active={activeTab === 'currencies'} 
+            onClick={() => setActiveTab('currencies')} 
+          />
           <NavItem
-            icon={<Target size={20} />}
-            label="Goals"
-            active={activeTab === "goals"}
-            onClick={() => setActiveTab("goals")}
+            icon={<Bell size={20} />}
+            label="Bills"
+            active={activeTab === 'bills'}
+            onClick={() => setActiveTab('bills')}
+          />
+          <NavItem
+            icon={<RefreshCw size={20} />}
+            label="Rollover"
+            active={activeTab === 'rollover'}
+            onClick={() => setActiveTab('rollover')}
+          />
+          <NavItem
+            icon={<Trophy size={20} />}
+            label="Challenges"
+            active={activeTab === 'challenges'}
+            onClick={() => setActiveTab('challenges')}
+          />
+          <NavItem 
+            icon={<Calculator size={20} />} 
+            label="Tax Estimator" 
+            active={activeTab === 'tax'} 
+            onClick={() => setActiveTab('tax')} 
+          />
+          <NavItem 
+            icon={<Shield size={20} />} 
+            label="Emergency Fund" 
+            active={activeTab === 'emergency'} 
+            onClick={() => setActiveTab('emergency')} 
+          />
+          <NavItem
+            icon={<HeartPulse size={20} />}
+            label="Health Score"
+            active={activeTab === 'health'}
+            onClick={() => setActiveTab('health')}
+          />
+          <NavItem
+            icon={<MessageSquare size={20} />}
+            label="AI Chat"
+            active={activeTab === 'chat'}
+            onClick={() => setActiveTab('chat')}
+          />
+          <NavItem
+            icon={<LineChart size={20} />}
+            label="Forecast"
+            active={activeTab === 'forecast'}
+            onClick={() => setActiveTab('forecast')}
+          />
+          <NavItem
+            icon={<Briefcase size={20} />}
+            label="Portfolio"
+            active={activeTab === 'portfolio'}
+            onClick={() => setActiveTab('portfolio')}
           />
           {userProfile?.role === "admin" && (
             <NavItem
@@ -985,8 +1067,116 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === "upload" && (
+            {activeTab === 'goals' && (
+              <motion.div 
+                key="goals"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <GoalPlanner user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'bills' && (
+              <motion.div 
+                key="bills"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BillReminders user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'rollover' && (
               <motion.div
+                key="rollover"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <RolloverManager user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'emergency' && (
+              <motion.div 
+                key="emergency"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <EmergencyFundPlanner user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'challenges' && (
+              <motion.div
+                key="challenges"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <ChallengesDashboard user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'health' && (
+              <motion.div
+                key="health"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <HealthScoreDashboard user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'chat' && (
+              <motion.div
+                key="chat"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="h-[calc(100vh-8rem)]"
+              >
+                <ChatAssistant user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'forecast' && (
+              <motion.div
+                key="forecast"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <ForecastComparison user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'portfolio' && (
+              <motion.div
+                key="portfolio"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <PortfolioTracker user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'upload' && (
+              <motion.div 
                 key="upload"
                 initial={false}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1020,14 +1210,36 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === "admin" && userProfile?.role === "admin" && (
-              <motion.div
+            {activeTab === 'trends' && (
+              <motion.div 
+                key="trends"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+              >
+                <CategoryTrends user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'admin' && userProfile?.role === 'admin' && (
+              <motion.div 
                 key="admin"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
               >
                 <AdminPanel />
+              </motion.div>
+            )}
+
+            {activeTab === 'tax' && (
+              <motion.div 
+                key="tax"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <TaxEstimation user={user} />
               </motion.div>
             )}
           </AnimatePresence>
