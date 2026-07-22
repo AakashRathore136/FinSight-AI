@@ -1,0 +1,428 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  where,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
+  orderBy,
+  deleteDoc,
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from './firebase';
+
+export type AssetClass = 'equities' | 'fixed_income' | 'real_estate' | 'commodities' | 'crypto' | 'cash';
+
+export type TransactionType = 'buy' | 'sell' | 'dividend' | 'deposit' | 'withdrawal';
+
+export interface Holding {
+  id: string;
+  userId: string;
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+  quantity: number;
+  avgCost: number;
+  currentPrice: number;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  holdingId: string;
+  symbol: string;
+  type: TransactionType;
+  quantity: number;
+  price: number;
+  fees: number;
+  notes?: string;
+  date: string;
+  createdAt: string;
+}
+
+export interface Portfolio {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  holdings: Holding[];
+  transactions: Transaction[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetAllocation {
+  assetClass: AssetClass;
+  value: number;
+  percentage: number;
+}
+
+export interface PerformanceMetrics {
+  totalValue: number;
+  totalCost: number;
+  totalProfitLoss: number;
+  totalProfitLossPercent: number;
+  dayChange: number;
+  dayChangePercent: number;
+  bestPerformer: { symbol: string; returnPercent: number } | null;
+  worstPerformer: { symbol: string; returnPercent: number } | null;
+}
+
+export interface PortfolioSummary extends PerformanceMetrics {
+  holdingsCount: number;
+  transactionsCount: number;
+  allocation: AssetAllocation[];
+  topHoldings: Array<{ symbol: string; name: string; value: number; weight: number }>;
+}
+
+export interface HoldingInput {
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+  quantity: number;
+  avgCost: number;
+  currentPrice: number;
+  currency?: string;
+}
+
+export interface TransactionInput {
+  holdingId: string;
+  symbol: string;
+  type: TransactionType;
+  quantity: number;
+  price: number;
+  fees: number;
+  notes?: string;
+  date: string;
+}
+
+export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
+  equities: 'Equities',
+  fixed_income: 'Fixed Income',
+  real_estate: 'Real Estate',
+  commodities: 'Commodities',
+  crypto: 'Crypto',
+  cash: 'Cash',
+};
+
+export function getAssetClassColor(assetClass: AssetClass): string {
+  const colors: Record<AssetClass, string> = {
+    equities: '#6366f1',
+    fixed_income: '#8b5cf6',
+    real_estate: '#14b8a6',
+    commodities: '#f59e0b',
+    crypto: '#ec4899',
+    cash: '#64748b',
+  };
+  return colors[assetClass];
+}
+
+export function calculateTotalValue(holdings: Holding[]): number {
+  return holdings.reduce((sum, h) => sum + h.quantity * h.currentPrice, 0);
+}
+
+export function calculateProfitLoss(holding: Holding): { value: number; percent: number } {
+  const value = (holding.currentPrice - holding.avgCost) * holding.quantity;
+  const percent = holding.avgCost > 0 ? ((holding.currentPrice - holding.avgCost) / holding.avgCost) * 100 : 0;
+  return { value, percent };
+}
+
+export function calculateAllocation(holdings: Holding[]): AssetAllocation[] {
+  const totalValue = calculateTotalValue(holdings);
+  if (totalValue === 0) return [];
+
+  const classMap = new Map<AssetClass, number>();
+  holdings.forEach((h) => {
+    const value = h.quantity * h.currentPrice;
+    classMap.set(h.assetClass, (classMap.get(h.assetClass) || 0) + value);
+  });
+
+  return Array.from(classMap.entries())
+    .map(([assetClass, value]) => ({
+      assetClass,
+      value,
+      percentage: (value / totalValue) * 100,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export function calculatePerformance(holdings: Holding[]): PerformanceMetrics {
+  const totalValue = calculateTotalValue(holdings);
+  const totalCost = holdings.reduce((sum, h) => sum + h.avgCost * h.quantity, 0);
+  const totalProfitLoss = totalValue - totalCost;
+  const totalProfitLossPercent = totalCost > 0 ? (totalProfitLoss / totalCost) * 100 : 0;
+
+  let bestPerformer: { symbol: string; returnPercent: number } | null = null;
+  let worstPerformer: { symbol: string; returnPercent: number } | null = null;
+
+  holdings.forEach((h) => {
+    const returnPercent = h.avgCost > 0 ? ((h.currentPrice - h.avgCost) / h.avgCost) * 100 : 0;
+    if (!bestPerformer || returnPercent > bestPerformer.returnPercent) {
+      bestPerformer = { symbol: h.symbol, returnPercent };
+    }
+    if (!worstPerformer || returnPercent < worstPerformer.returnPercent) {
+      worstPerformer = { symbol: h.symbol, returnPercent };
+    }
+  });
+
+  return {
+    totalValue,
+    totalCost,
+    totalProfitLoss,
+    totalProfitLossPercent,
+    dayChange: 0,
+    dayChangePercent: 0,
+    bestPerformer,
+    worstPerformer,
+  };
+}
+
+export function generatePortfolioSummary(holdings: Holding[], transactions: Transaction[]): PortfolioSummary {
+  const metrics = calculatePerformance(holdings);
+  const allocation = calculateAllocation(holdings);
+
+  const topHoldings = holdings
+    .map((h) => ({
+      symbol: h.symbol,
+      name: h.name,
+      value: h.quantity * h.currentPrice,
+      weight: metrics.totalValue > 0 ? (h.quantity * h.currentPrice) / metrics.totalValue : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  return {
+    ...metrics,
+    holdingsCount: holdings.length,
+    transactionsCount: transactions.length,
+    allocation,
+    topHoldings,
+  };
+}
+
+export async function addTransaction(userId: string, input: TransactionInput): Promise<Transaction | null> {
+  try {
+    const id = doc(collection(db, 'portfolios')).id;
+    const transaction: Omit<Transaction, 'id'> = {
+      userId,
+      holdingId: input.holdingId,
+      symbol: input.symbol.trim(),
+      type: input.type,
+      quantity: input.quantity,
+      price: input.price,
+      fees: input.fees,
+      notes: input.notes?.trim() || '',
+      date: input.date,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (input.type === 'buy') {
+      await addDoc(collection(db, 'portfolioTransactions'), {
+        ...transaction,
+        createdAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(doc(db, 'portfolioTransactions', id), {
+        ...transaction,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    if (input.type === 'buy') {
+      const holdingRef = doc(db, 'portfolioHoldings', input.holdingId);
+      const holdingSnap = await getDocs(query(collection(db, 'portfolioHoldings'), where('userId', '==', userId), where('symbol', '==', input.symbol)));
+      if (!holdingSnap.empty) {
+        const holdingDoc = holdingSnap.docs[0];
+        const data = holdingDoc.data();
+        const totalShares = (data.quantity || 0) + input.quantity;
+        const totalCost = (data.quantity || 0) * (data.avgCost || 0) + input.quantity * input.price;
+        const newAvg = totalShares > 0 ? totalCost / totalShares : input.price;
+        await updateDoc(holdingDoc.ref, {
+          quantity: totalShares,
+          avgCost: newAvg,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    return { ...transaction, id: id || '' };
+  } catch (error) {
+    console.error('Error adding transaction:', error);
+    handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
+    return null;
+  }
+}
+
+export async function removeHolding(userId: string, holdingId: string): Promise<boolean> {
+  try {
+    await updateDoc(doc(db, 'portfolioHoldings', holdingId), {
+      deleted: true,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error removing holding:', error);
+    handleFirestoreError(error, OperationType.UPDATE, 'portfolioHoldings');
+    return false;
+  }
+}
+
+export async function fetchUserHoldings(userId: string): Promise<Holding[]> {
+  try {
+    const holdingsRef = collection(db, 'portfolioHoldings');
+    const q = query(
+      holdingsRef,
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    const holdings: Holding[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data.deleted) return;
+      holdings.push({
+        id: docSnap.id,
+        userId: data.userId || '',
+        symbol: data.symbol || '',
+        name: data.name || '',
+        assetClass: data.assetClass || 'equities',
+        quantity: data.quantity || 0,
+        avgCost: data.avgCost || 0,
+        currentPrice: data.currentPrice || 0,
+        currency: data.currency || 'USD',
+        createdAt: data.createdAt || '',
+        updatedAt: data.updatedAt || '',
+      });
+    });
+    return holdings;
+  } catch (error) {
+    console.error('Error fetching holdings:', error);
+    handleFirestoreError(error, OperationType.LIST, 'portfolioHoldings');
+    return [];
+  }
+}
+
+export async function fetchUserTransactions(userId: string): Promise<Transaction[]> {
+  try {
+    const transactionsRef = collection(db, 'portfolioTransactions');
+    const q = query(
+      transactionsRef,
+      where('userId', '==', userId),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    const transactions: Transaction[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      transactions.push({
+        id: docSnap.id,
+        userId: data.userId || '',
+        holdingId: data.holdingId || '',
+        symbol: data.symbol || '',
+        type: data.type || 'buy',
+        quantity: data.quantity || 0,
+        price: data.price || 0,
+        fees: data.fees || 0,
+        notes: data.notes || '',
+        date: data.date || '',
+        createdAt: data.createdAt || '',
+      });
+    });
+    return transactions;
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    handleFirestoreError(error, OperationType.LIST, 'portfolioTransactions');
+    return [];
+  }
+}
+
+export async function createPortfolio(userId: string, name: string, description?: string): Promise<Portfolio | null> {
+  try {
+    const id = doc(collection(db, 'portfolios')).id;
+    const portfolio: Omit<Portfolio, 'id'> = {
+      userId,
+      name: name.trim(),
+      description: description?.trim() || '',
+      holdings: [],
+      transactions: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'portfolios', id), {
+      ...portfolio,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return { ...portfolio, id };
+  } catch (error) {
+    console.error('Error creating portfolio:', error);
+    handleFirestoreError(error, OperationType.CREATE, 'portfolios');
+    return null;
+  }
+}
+
+export async function fetchUserPortfolios(userId: string): Promise<Portfolio[]> {
+  try {
+    const portfoliosRef = collection(db, 'portfolios');
+    const q = query(
+      portfoliosRef,
+      where('userId', '==', userId),
+      orderBy('updatedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    const portfolios: Portfolio[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      portfolios.push({
+        id: docSnap.id,
+        userId: data.userId || '',
+        name: data.name || '',
+        description: data.description || '',
+        holdings: data.holdings || [],
+        transactions: data.transactions || [],
+        createdAt: data.createdAt || '',
+        updatedAt: data.updatedAt || '',
+      });
+    });
+    return portfolios;
+  } catch (error) {
+    console.error('Error fetching portfolios:', error);
+    handleFirestoreError(error, OperationType.LIST, 'portfolios');
+    return [];
+  }
+}
+
+export async function updatePortfolio(userId: string, portfolioId: string, updates: Partial<Portfolio>): Promise<boolean> {
+  try {
+    await updateDoc(doc(db, 'portfolios', portfolioId), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating portfolio:', error);
+    handleFirestoreError(error, OperationType.UPDATE, 'portfolios');
+    return false;
+  }
+}
+
+export async function deletePortfolio(userId: string, portfolioId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, 'portfolios', portfolioId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting portfolio:', error);
+    handleFirestoreError(error, OperationType.DELETE, 'portfolios');
+    return false;
+  }
+}

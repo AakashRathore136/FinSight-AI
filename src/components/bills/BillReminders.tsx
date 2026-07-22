@@ -1,12 +1,49 @@
-import { useState, useEffect } from 'react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import {
+  format,
+  startOfDay,
+  addDays,
+} from 'date-fns';
+import {
+  Bell,
+  Plus,
+  Calendar,
+  CreditCard,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  X,
+  BellRing,
+  Repeat,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src/components/ui/card';
-import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
-import { Bell, Loader2, Plus, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import BillCard from '@/src/components/bills/BillCard';
+import { cn, formatCurrency } from '@/src/lib/utils';
+import { BillCard } from './BillCard';
 import {
+  type Bill,
+  type BillFrequency,
+  type BillInput,
   fetchUserBills,
   createBill,
   deleteBill,
@@ -14,333 +51,528 @@ import {
   getUpcomingBills,
   getOverdueBills,
   calculateMonthlyObligations,
+  getDaysUntilDue,
   generateRecurringSchedule,
-  Bill,
-  formatCurrency,
+  isOverdue,
 } from '@/src/lib/billUtils';
-import { toast } from 'sonner';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 
-export default function BillReminders({ user }: { user: any }) {
+interface BillRemindersProps {
+  user: import('firebase/auth').User | null;
+}
+
+const FREQUENCIES: BillFrequency[] = ['weekly', 'monthly', 'yearly', 'custom'];
+const CATEGORIES = ['Utilities', 'Subscription', 'Housing', 'Insurance', 'Loan', 'Entertainment', 'General'];
+
+export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [newBill, setNewBill] = useState({
-    name: '',
-    amount: '',
-    dueDate: '',
-    frequency: 'monthly' as Bill['frequency'],
-    category: 'Bills',
-  });
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const [formName, setFormName] = useState('');
+  const [formAmount, setFormAmount] = useState('');
+  const [formDueDate, setFormDueDate] = useState('');
+  const [formFrequency, setFormFrequency] = useState<BillFrequency>('monthly');
+  const [formCategory, setFormCategory] = useState('Subscription');
+
+  const today = startOfDay(new Date());
 
   useEffect(() => {
-    loadBills();
+    if (!user) {
+      setBills([]);
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    fetchUserBills(user.uid).then((fetched) => {
+      if (active) {
+        setBills(fetched);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [user]);
 
-  async function loadBills() {
+  const overdueBills = useMemo(() => getOverdueBills(bills, today), [bills, today]);
+  const upcomingBills = useMemo(() => getUpcomingBills(bills, today), [bills, today]);
+  const activeBills = useMemo(() => bills.filter((b) => !b.isPaid), [bills]);
+  const monthlyObligations = useMemo(() => calculateMonthlyObligations(bills), [bills]);
+
+  const scheduleData = useMemo(() => {
+    const byDay: Record<string, number> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(today, i);
+      byDay[format(d, 'EEE')] = 0;
+    }
+    upcomingBills.forEach((b) => {
+      const due = new Date(b.nextDueDate || b.dueDate);
+      const idx = getDaysUntilDue(b, today);
+      if (idx >= 0 && idx < 7) {
+        const key = format(addDays(today, idx), 'EEE');
+        byDay[key] = (byDay[key] || 0) + b.amount;
+      }
+    });
+    return Object.entries(byDay).map(([day, amount]) => ({ day, amount }));
+  }, [upcomingBills, today]);
+
+  const handleAddBill = async () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const userBills = await fetchUserBills(user.uid);
-      setBills(userBills);
-    } catch (error) {
-      console.error('Failed to load bills:', error);
-    } finally {
-      setLoading(false);
+    if (!formName.trim()) {
+      toast.error('Please enter a bill name');
+      return;
     }
-  }
+    const amount = parseFloat(formAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (!formDueDate) {
+      toast.error('Please select a due date');
+      return;
+    }
 
-  async function handleCreateBill(e: React.FormEvent) {
-    e.preventDefault();
-    if (!user || !newBill.name || !newBill.amount || !newBill.dueDate) return;
-    try {
-      const amount = parseFloat(newBill.amount);
-      const nextDueDate = new BillFrequency()[newBill.frequency] ? newBill.dueDate : newBill.dueDate;
-      await createBill({
-        userId: user.uid,
-        name: newBill.name,
-        amount,
-        dueDate: newBill.dueDate,
-        frequency: newBill.frequency,
-        category: newBill.category,
-        isPaid: false,
-        createdAt: new Date().toISOString(),
-        nextDueDate,
+    const input: BillInput = {
+      name: formName.trim(),
+      amount,
+      dueDate: formDueDate,
+      frequency: formFrequency,
+      category: formCategory,
+    };
+
+    const created = await createBill(user.uid, input);
+    if (created) {
+      setBills((prev) => [...prev, created].sort((a, b) => {
+        const da = a.nextDueDate || a.dueDate;
+        const db = b.nextDueDate || b.dueDate;
+        return new Date(da).getTime() - new Date(db).getTime();
+      }));
+      toast.success(`Bill "${created.name}" added`);
+      setFormName('');
+      setFormAmount('');
+      setFormDueDate('');
+      setFormFrequency('monthly');
+      setFormCategory('Subscription');
+      setShowAddForm(false);
+    } else {
+      toast.error('Failed to add bill');
+    }
+  };
+
+  const handlePay = async (bill: Bill) => {
+    if (!user) return;
+    const ok = await markBillAsPaid(bill, user.uid);
+    if (ok) {
+      setBills((prev) =>
+        prev.map((b) =>
+          b.id === bill.id
+            ? {
+                ...b,
+                isPaid: true,
+                lastPaidDate: new Date().toISOString(),
+                nextDueDate: generateRecurringSchedule(
+                  { ...b, isPaid: true, lastPaidDate: new Date().toISOString() },
+                  new Date(),
+                  1
+                )[0] || b.nextDueDate,
+              }
+            : b
+        )
+      );
+      toast.success(`${bill.name} marked as paid`, {
+        description: `${formatCurrency(bill.amount)} recorded as expense`,
       });
-      toast.success('Bill reminder created!');
-      setNewBill({ name: '', amount: '', dueDate: '', frequency: 'monthly', category: 'Bills' });
-      setShowForm(false);
-      loadBills();
-    } catch (error) {
-      console.error('Failed to create bill:', error);
-      toast.error('Failed to create bill');
+    } else {
+      toast.error('Failed to mark bill as paid');
     }
-  }
+  };
 
-  async function handleMarkPaid(billId: string) {
-    try {
-      await markBillAsPaid(billId);
-      loadBills();
-    } catch (error) {
-      throw error;
+  const handleDelete = async (billId: string) => {
+    const ok = await deleteBill(billId);
+    if (ok) {
+      setBills((prev) => prev.filter((b) => b.id !== billId));
+      toast.success('Bill removed');
+    } else {
+      toast.error('Failed to remove bill');
     }
-  }
-
-  async function handleDeleteBill(billId: string) {
-    try {
-      await deleteBill(billId);
-      toast.success('Bill reminder deleted');
-      loadBills();
-    } catch (error) {
-      console.error('Failed to delete bill:', error);
-    }
-  }
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    await loadBills();
-    setRefreshing(false);
-  }
-
-  const upcomingBills = getUpcomingBills(bills, 7);
-  const overdueBills = getOverdueBills(bills);
-  const monthlyObligations = calculateMonthlyObligations(bills);
-  const schedule = generateRecurringSchedule(bills);
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white leading-none">Bill Reminders</h1>
-            <p className="text-slate-500 text-sm mt-2">Never miss a payment deadline</p>
-          </div>
-        </div>
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardContent className="p-8 flex flex-col items-center justify-center min-h-[400px]">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-            <p className="text-sm font-medium text-slate-500 mt-4">Loading reminders...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  };
 
   return (
-    <div className="space-y-6 pb-12">
-      <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-800 pb-4">
+    <div className="space-y-8 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white leading-none">Bill Reminders</h1>
-          <p className="text-slate-500 text-sm mt-2">Track bills, subscriptions, and never miss a payment</p>
+          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+            <Bell className="h-7 w-7 text-indigo-400" />
+            Bill & Subscription Reminders
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm">
+            Stay on top of recurring payments and never miss a due date
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            variant="ghost"
-            className="text-slate-400 hover:text-white hover:bg-slate-800 h-9 w-9 p-0"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest h-10 px-4 rounded-xl"
-          >
-            <Plus className="mr-2" size={16} />
-            Add Bill
-          </Button>
-        </div>
-      </section>
-
-      {showForm && (
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardHeader className="p-5 border-b border-slate-800">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">New Bill Reminder</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5">
-            <form onSubmit={handleCreateBill} className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Bill Name</label>
-                <Input
-                  value={newBill.name}
-                  onChange={(e) => setNewBill({ ...newBill, name: e.target.value })}
-                  placeholder="e.g., Electric Bill"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Amount ($)</label>
-                <Input
-                  type="number"
-                  value={newBill.amount}
-                  onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
-                  placeholder="150"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Due Date</label>
-                <Input
-                  type="date"
-                  value={newBill.dueDate}
-                  onChange={(e) => setNewBill({ ...newBill, dueDate: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Frequency</label>
-                <select
-                  value={newBill.frequency}
-                  onChange={(e) => setNewBill({ ...newBill, frequency: e.target.value as Bill['frequency'] })}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-300 h-10 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="yearly">Yearly</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-              <div className="md:col-span-2 flex gap-3">
-                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest">
-                  Create Reminder
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-amber-600/10 flex items-center justify-center text-amber-400 shadow-inner">
-                <Bell className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Upcoming Bills</p>
-                <p className="text-2xl font-black text-white tabular-nums mt-0.5">{upcomingBills.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-red-600/10 flex items-center justify-center text-red-400 shadow-inner">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Overdue Bills</p>
-                <p className="text-2xl font-black text-white tabular-nums mt-0.5">{overdueBills.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-400 shadow-inner">
-                <CheckCircle2 className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Monthly Obligations</p>
-                <p className="text-2xl font-black text-white tabular-nums mt-0.5">{formatCurrency(monthlyObligations)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Button
+          onClick={() => setShowAddForm(true)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-lg shadow-indigo-900/20 rounded-xl h-10 px-4"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Bill
+        </Button>
       </div>
 
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="bg-slate-800/50 p-1 rounded-lg">
-          <TabsTrigger value="all" className="text-xs font-medium">All Bills</TabsTrigger>
-          <TabsTrigger value="upcoming" className="text-xs font-medium">Upcoming</TabsTrigger>
-          <TabsTrigger value="overdue" className="text-xs font-medium">Overdue</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" className="mt-4">
-          {bills.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {bills.map((bill) => (
-                <BillCard key={bill.id} bill={bill} onMarkPaid={handleMarkPaid} onDelete={handleDeleteBill} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="upcoming" className="mt-4">
-          {upcomingBills.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-8">No upcoming bills in the next 7 days</p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {upcomingBills.map((bill) => (
-                <BillCard key={bill.id} bill={bill} onMarkPaid={handleMarkPaid} onDelete={handleDeleteBill} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="overdue" className="mt-4">
-          {overdueBills.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-8">No overdue bills</p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {overdueBills.map((bill) => (
-                <BillCard key={bill.id} bill={bill} onMarkPaid={handleMarkPaid} onDelete={handleDeleteBill} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SummaryCard
+          icon={<AlertTriangle className="h-5 w-5" />}
+          label="Overdue"
+          value={overdueBills.length.toString()}
+          sub={formatCurrency(overdueBills.reduce((s, b) => s + b.amount, 0))}
+          accent="red"
+        />
+        <SummaryCard
+          icon={<BellRing className="h-5 w-5" />}
+          label="Due This Week"
+          value={upcomingBills.length.toString()}
+          sub={formatCurrency(upcomingBills.reduce((s, b) => s + b.amount, 0))}
+          accent="amber"
+        />
+        <SummaryCard
+          icon={<Calendar className="h-5 w-5" />}
+          label="Monthly Obligations"
+          value={formatCurrency(monthlyObligations)}
+          sub={`${activeBills.length} active bills`}
+          accent="indigo"
+        />
+      </div>
 
-      {bills.length > 0 && (
-        <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-          <CardHeader className="p-5 border-b border-slate-800">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">Weekly Schedule</CardTitle>
-            <CardDescription className="text-slate-500 text-xs">When your bills are due</CardDescription>
-          </CardHeader>
-          <CardContent className="p-5">
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={schedule} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="day" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} width={30} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f1219', border: '1px solid #1e293b', borderRadius: '8px' }} itemStyle={{ color: '#f8fafc' }} labelStyle={{ color: '#94a3b8' }} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <AnimatePresence>
+            {showAddForm && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Card className="border-slate-800 bg-slate-900 shadow-xl rounded-2xl overflow-hidden">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-white text-lg">Add New Bill</CardTitle>
+                        <CardDescription className="text-slate-500 text-xs mt-1">
+                          Track a recurring payment or subscription
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowAddForm(false)}
+                        className="text-slate-500 hover:text-slate-300 h-8 w-8"
+                      >
+                        <X size={16} />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="Bill Name">
+                        <Input
+                          value={formName}
+                          onChange={(e) => setFormName(e.target.value)}
+                          placeholder="e.g., Netflix"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-10 rounded-lg"
+                        />
+                      </Field>
+                      <Field label="Amount">
+                        <Input
+                          type="number"
+                          value={formAmount}
+                          onChange={(e) => setFormAmount(e.target.value)}
+                          placeholder="0.00"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-10 rounded-lg"
+                          min="0"
+                          step="0.01"
+                        />
+                      </Field>
+                      <Field label="Due Date">
+                        <Input
+                          type="date"
+                          value={formDueDate}
+                          onChange={(e) => setFormDueDate(e.target.value)}
+                          className="bg-slate-800 border-slate-700 text-white h-10 rounded-lg"
+                        />
+                      </Field>
+                      <Field label="Frequency">
+                        <select
+                          value={formFrequency}
+                          onChange={(e) => setFormFrequency(e.target.value as BillFrequency)}
+                          className="w-full bg-slate-800 border border-slate-700 text-slate-300 h-10 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none text-sm"
+                        >
+                          {FREQUENCIES.map((f) => (
+                            <option key={f} value={f} className="capitalize">
+                              {f}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Category" className="md:col-span-2">
+                        <select
+                          value={formCategory}
+                          onChange={(e) => setFormCategory(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 text-slate-300 h-10 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none text-sm"
+                        >
+                          {CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setShowAddForm(false)}
+                        className="text-slate-400 hover:text-slate-300 rounded-lg h-9 px-4 text-sm"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddBill}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg h-9 px-6 text-sm"
+                      >
+                        Add Bill
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="bg-slate-900 border border-slate-800 rounded-xl p-1">
+              <TabsTrigger value="all" className="rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                All Bills
+              </TabsTrigger>
+              <TabsTrigger value="overdue" className="rounded-lg data-[state=active]:bg-red-500/20 data-[state=active]:text-red-300">
+                Overdue
+                {overdueBills.length > 0 && (
+                  <Badge variant="outline" className="ml-2 bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                    {overdueBills.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="upcoming" className="rounded-lg data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-300">
+                Upcoming
+                {upcomingBills.length > 0 && (
+                  <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                    {upcomingBills.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="all" className="mt-4">
+              <BillGrid bills={bills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No bills yet" />
+            </TabsContent>
+            <TabsContent value="overdue" className="mt-4">
+              <BillGrid bills={overdueBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No overdue bills" emptyIcon={<CheckCircle2 className="h-8 w-8 text-emerald-500" />} />
+            </TabsContent>
+            <TabsContent value="upcoming" className="mt-4">
+              <BillGrid bills={upcomingBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="Nothing due in the next 7 days" />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="border-slate-800 bg-slate-900 shadow-xl rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <BellRing className="h-4 w-4 text-amber-400" />
+                <CardTitle className="text-white text-sm">Notification Center</CardTitle>
+              </div>
+              <CardDescription className="text-slate-500 text-xs">
+                Bills due in the next 7 days
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 max-h-72 overflow-y-auto">
+              {upcomingBills.length === 0 && overdueBills.length === 0 && (
+                <p className="text-xs text-slate-500 text-center py-6">
+                  You're all caught up 🎉
+                </p>
+              )}
+              {overdueBills.map((b) => (
+                <NotificationRow key={`o-${b.id}`} bill={b} tone="red" />
+              ))}
+              {upcomingBills.map((b) => (
+                <NotificationRow key={`u-${b.id}`} bill={b} tone="amber" />
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-800 bg-slate-900 shadow-xl rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-indigo-400" />
+                <CardTitle className="text-white text-sm">Weekly Schedule</CardTitle>
+              </div>
+              <CardDescription className="text-slate-500 text-xs">
+                Upcoming obligations by day
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={scheduleData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="day" stroke="#475569" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                    <YAxis stroke="#475569" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #1e293b',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => [formatCurrency(value), 'Due']}
+                    />
+                    <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
 
-function EmptyState() {
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <Card className="bg-slate-900 border-slate-800 border-dashed rounded-2xl">
-      <CardContent className="p-12 text-center space-y-3">
-        <div className="h-12 w-12 rounded-xl bg-indigo-500/15 text-indigo-300 flex items-center justify-center mx-auto">
-          <Bell size={24} />
+    <div className={cn('space-y-2', className)}>
+      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+  accent: 'red' | 'amber' | 'indigo';
+}) {
+  const accentMap = {
+    red: 'bg-red-500/10 border-red-500/30 text-red-400',
+    amber: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    indigo: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
+  }[accent];
+
+  return (
+    <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className={cn('h-10 w-10 rounded-xl border flex items-center justify-center', accentMap)}>
+            {icon}
+          </div>
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
         </div>
-        <p className="text-slate-400 font-medium">No bill reminders yet</p>
-        <p className="text-xs text-slate-500 max-w-md mx-auto">
-          Add your first bill reminder to start tracking payments and avoid late fees.
-        </p>
+        <p className="text-2xl font-bold text-white mt-3 tabular-nums">{value}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function NotificationRow({ bill, tone }: { bill: Bill; tone: 'red' | 'amber' }) {
+  const days = getDaysUntilDue(bill);
+  const due = new Date(bill.nextDueDate || bill.dueDate);
+  const accent = tone === 'red'
+    ? 'border-red-500/30 bg-red-500/5'
+    : 'border-amber-500/30 bg-amber-500/5';
+  const textAccent = tone === 'red' ? 'text-red-400' : 'text-amber-400';
+
+  return (
+    <div className={cn('flex items-center gap-3 rounded-xl border p-3', accent)}>
+      <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0', textAccent, tone === 'red' ? 'bg-red-500/10' : 'bg-amber-500/10')}>
+        {tone === 'red' ? <AlertTriangle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
+        <p className={cn('text-[10px]', textAccent)}>
+          {tone === 'red' ? `${Math.abs(days)} days overdue` : days === 0 ? 'Due today' : `Due in ${days} day${days === 1 ? '' : 's'}`}
+          {' · '}{format(due, 'MMM d')}
+        </p>
+      </div>
+      <span className="text-sm font-semibold text-white tabular-nums">{formatCurrency(bill.amount)}</span>
+    </div>
+  );
+}
+
+function BillGrid({
+  bills,
+  onPay,
+  onDelete,
+  loading,
+  emptyLabel,
+  emptyIcon,
+}: {
+  bills: Bill[];
+  onPay: (bill: Bill) => void;
+  onDelete: (id: string) => void;
+  loading: boolean;
+  emptyLabel: string;
+  emptyIcon?: React.ReactNode;
+}) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-48 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (bills.length === 0) {
+    return (
+      <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl">
+        <CardContent className="py-16 text-center">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
+            {emptyIcon || <CreditCard className="h-8 w-8 text-slate-500" />}
+          </div>
+          <h3 className="text-white font-semibold text-lg mb-1">{emptyLabel}</h3>
+          <p className="text-slate-500 text-sm max-w-sm mx-auto">
+            Add a bill or subscription to start tracking your recurring payments.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <AnimatePresence>
+        {bills.map((bill) => (
+          <motion.div
+            key={bill.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <BillCard bill={bill} onPay={onPay} onDelete={onDelete} />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }
