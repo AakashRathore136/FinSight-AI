@@ -332,6 +332,43 @@ async function createFirestoreDocumentViaRest(collectionPath: string, data: Reco
   return name.split("/").pop() || "";
 }
 
+async function updateFirestoreDocumentViaRest(
+  documentPath: string,
+  data: Record<string, any>,
+  idToken: string
+): Promise<void> {
+  if (!firestoreBaseUrl) {
+    throw new Error("FIREBASE_PROJECT_ID is not configured");
+  }
+
+  const fieldMask = Object.keys(data)
+    .map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
+    .join("&");
+
+  const response = await fetch(
+    `${firestoreBaseUrl}/${documentPath}?${fieldMask}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fields: toFirestoreFields(data),
+      }),
+    }
+  );
+
+  const body: any = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      body?.error?.message ||
+        `Firestore REST update failed with status ${response.status}`
+    );
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3001;
@@ -787,6 +824,16 @@ CRITICAL RULES:
             idToken
           );
           console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
+
+          await updateFirestoreDocumentViaRest(
+            `documents/${documentId}`,
+            {
+              latestAnalysis: analysisDoc,
+              updatedAt: now,
+            },
+            idToken
+          );
+          console.log(`FIRESTORE_PARENT_UPDATED_REST: latestAnalysis snapshot stored`);
         } catch (restError: any) {
           console.error('FIRESTORE_REST_WRITE_FAILED:', restError?.message || restError);
           throw new PipelineError(
