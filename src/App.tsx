@@ -196,6 +196,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [authTimedOut, setAuthTimedOut] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(() =>
     getSharedDocId() ? "detail" : "dashboard",
   );
@@ -283,49 +285,72 @@ export default function App() {
   const activeDocId = selectedDocId || selectedDocIdRef.current;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Check email verification
-        if (!currentUser.emailVerified) {
-          setShowVerificationScreen(true);
-          setLoading(false);
-          return;
-        }
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-        // Sync user profile for verified users
-        const userRef = doc(db, "users", currentUser.uid);
-        try {
-          const userSnap = await getDoc(userRef);
-
-          if (!userSnap.exists()) {
-            const profile = {
-              uid: currentUser.uid,
-              username: currentUser.displayName || "",
-              email: currentUser.email,
-              emailVerified: currentUser.emailVerified,
-              role:
-                currentUser.email === "aakash.ra613@gmail.com"
-                  ? "admin"
-                  : "junior_analyst",
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(userRef, profile);
-            setUserProfile(profile);
-          } else {
-            setUserProfile(userSnap.data());
-          }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, "users");
-        }
-      } else {
-        setUserProfile(null);
-        setShowVerificationScreen(false);
-      }
+    // Safety timeout: if Firebase auth does not resolve within 10 seconds, show an error
+    timeoutId = setTimeout(() => {
+      setAuthTimedOut(true);
       setLoading(false);
-    });
+    }, 10000);
 
-    return () => unsubscribe();
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        setAuthTimedOut(false);
+        setAuthError(null);
+        setUser(currentUser);
+        if (currentUser) {
+          // Check email verification
+          if (!currentUser.emailVerified) {
+            setShowVerificationScreen(true);
+            setLoading(false);
+            return;
+          }
+
+          // Sync user profile for verified users
+          const userRef = doc(db, "users", currentUser.uid);
+          try {
+            const userSnap = await getDoc(userRef);
+
+            if (!userSnap.exists()) {
+              const profile = {
+                uid: currentUser.uid,
+                username: currentUser.displayName || "",
+                email: currentUser.email,
+                emailVerified: currentUser.emailVerified,
+                role:
+                  currentUser.email === "aakash.ra613@gmail.com"
+                    ? "admin"
+                    : "junior_analyst",
+                createdAt: new Date().toISOString(),
+              };
+              await setDoc(userRef, profile);
+              setUserProfile(profile);
+            } else {
+              setUserProfile(userSnap.data());
+            }
+          } catch (error) {
+            handleFirestoreError(error, OperationType.GET, "users");
+          }
+        } else {
+          setUserProfile(null);
+          setShowVerificationScreen(false);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        // Auth observer also fires error events
+        if (timeoutId) clearTimeout(timeoutId);
+        setAuthError(error.message || "Authentication failed");
+        setLoading(false);
+      },
+    );
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, []);
 
   const handleLogin = async () => {
@@ -512,12 +537,72 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#0a0c10]">
-        <div className="flex flex-col items-center gap-4">
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#0a0c10]">
+        {/* Loading skeleton that mimics the app shell */}
+        <div className="flex w-full max-w-2xl flex-col items-center gap-6 px-8">
+          {/* Logo skeleton */}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-10 w-10 animate-pulse rounded-lg bg-slate-800" />
+            <div className="h-6 w-32 animate-pulse rounded bg-slate-800" />
+          </div>
+          {/* Spinner */}
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
           <p className="text-sm font-medium text-slate-500">
             Initializing FinSight AI...
           </p>
+          {/* Nav skeleton */}
+          <div className="mt-4 grid w-full grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div
+                key={i}
+                className="h-12 animate-pulse rounded-xl bg-slate-800"
+              />
+            ))}
+          </div>
+          {/* Content skeleton */}
+          <div className="mt-2 grid w-full grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="h-32 animate-pulse rounded-2xl bg-slate-800"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Auth timeout or error state
+  if (authTimedOut || authError) {
+    const message = authTimedOut
+      ? "Authentication is taking longer than expected. This may be due to a slow network or Firebase service issues."
+      : `Sign-in issue: ${authError}`;
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#0a0c10]">
+        <div className="flex max-w-md flex-col items-center gap-6 text-center px-6">
+          <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center">
+            <AlertTriangle size={32} className="text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white">
+              {authTimedOut ? "Authentication Timeout" : "Sign-in Issue"}
+            </h2>
+            <p className="text-sm leading-6 text-slate-400">{message}</p>
+          </div>
+          <Button
+            className="h-11 gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+            onClick={() => {
+              setAuthTimedOut(false);
+              setAuthError(null);
+              setLoading(true);
+              // Re-trigger by forcing a re-render that re-mounts the effect
+              window.location.reload();
+            }}
+          >
+            <RefreshCw size={16} />
+            Retry
+          </Button>
         </div>
       </div>
     );
