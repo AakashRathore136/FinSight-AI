@@ -58,38 +58,84 @@ export interface CurrencySettings {
   conversionHistory: Record<string, Record<string, number>>;
 }
 
-export async function fetchExchangeRates(base: string = 'USD'): Promise<ExchangeRates> {
-  try {
-    const response = await fetch(`https://api.frankfurter.com/latest?from=${base}`);
-    if (!response.ok) {
-      throw new Error(`Frankfurter API error: ${response.status}`);
-    }
-    const data = await response.json();
-    return {
-      base: data.base || base,
-      date: data.date || new Date().toISOString().split('T')[0],
-      rates: data.rates || {},
-    };
-  } catch (error) {
-    console.warn('Failed to fetch live rates, using fallback:', error);
-    const fallbackRates: Record<string, number> = {};
+/**
+ * Fetches live exchange rates from the Frankfurter API with retry logic
+ * and a graceful fallback to static rates when all retries are exhausted.
+ */
+export async function fetchExchangeRates(
+  base: string = 'USD',
+): Promise<ExchangeRates> {
+  const maxRetries = 2;
+  const timeoutMs = 5000;
+  const retryDelayMs = 1000;
+
+  const buildFallbackRates = (): Record<string, number> => {
+    const result: Record<string, number> = {};
     for (const [code, rate] of Object.entries(FALLBACK_RATES)) {
       if (code === base) {
-        fallbackRates[code] = 1;
+        result[code] = 1;
       } else if (base === 'USD') {
-        fallbackRates[code] = rate;
+        result[code] = rate;
       } else {
         const usdRate = FALLBACK_RATES[code] || 1;
         const baseUsdRate = FALLBACK_RATES[base] || 1;
-        fallbackRates[code] = usdRate / baseUsdRate;
+        result[code] = usdRate / baseUsdRate;
       }
     }
-    return {
-      base,
-      date: new Date().toISOString().split('T')[0],
-      rates: fallbackRates,
-    };
+    return result;
+  };
+
+  const tryFetch = async (): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(
+        `https://api.frankfurter.com/latest?from=${encodeURIComponent(base)}`,
+        { signal: controller.signal },
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await tryFetch();
+
+      if (!response.ok) {
+        throw new Error(`Frankfurter API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        base: data.base || base,
+        date: data.date || new Date().toISOString().split('T')[0],
+        rates: data.rates || {},
+      };
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries;
+      if (isLastAttempt) {
+        console.warn(
+          `[currencyUtils] All ${maxRetries + 1} attempts to fetch live exchange rates failed. ` +
+          `Falling back to static rates. Last error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return {
+          base,
+          date: new Date().toISOString().split('T')[0],
+          rates: buildFallbackRates(),
+        };
+      }
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
+
+  // Safety fallback — should never reach here but satisfies TypeScript
+  return {
+    base,
+    date: new Date().toISOString().split('T')[0],
+    rates: buildFallbackRates(),
+  };
 }
 
 export function convertAmount(
