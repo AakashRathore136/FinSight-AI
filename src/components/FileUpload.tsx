@@ -316,7 +316,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               } catch {
                 return (
                   <p className="text-red-400/80 mt-2 font-medium">
-                    {errorMessage || "Upload or analysis failed. Please retry."}
+                    {errorMessage}
                   </p>
                 );
               }
