@@ -37,7 +37,7 @@ export enum OperationType {
   BUDGET = "budget",
 }
 
-interface FirestoreErrorInfo {
+export interface FirestoreErrorInfo {
   error: string;
   code?: string;
   operationType: OperationType;
@@ -53,6 +53,71 @@ interface FirestoreErrorInfo {
       email?: string | null;
     }[];
   };
+}
+
+export interface UserFriendlyError {
+  title: string;
+  description: string;
+}
+
+const ERROR_MESSAGES: Record<string, UserFriendlyError> = {
+  "permission-denied": {
+    title: "Access denied",
+    description:
+      "You do not have permission to view this data. Please sign in or contact support.",
+  },
+  "not-found": {
+    title: "Data not found",
+    description: "The requested record could not be found.",
+  },
+  "already-exists": {
+    title: "Duplicate entry",
+    description: "A record with this identifier already exists.",
+  },
+  "resource-exhausted": {
+    title: "Quota exceeded",
+    description:
+      "Firestore read quota has been reached. Please try again later.",
+  },
+  "unauthenticated": {
+    title: "Not signed in",
+    description: "Please sign in to continue.",
+  },
+  "cancelled": {
+    title: "Operation cancelled",
+    description: "The requested operation was cancelled. Please try again.",
+  },
+  "deadline-exceeded": {
+    title: "Request timed out",
+    description:
+      "The operation took too long. Please check your connection and try again.",
+  },
+  "internal": {
+    title: "Internal error",
+    description:
+      "An internal error occurred. Please try again in a few minutes.",
+  },
+  "unknown": {
+    title: "Unknown error",
+    description: "An unexpected error occurred. Please try again.",
+  },
+};
+
+const GENERIC_ERROR: UserFriendlyError = {
+  title: "Something went wrong",
+  description: "An error occurred while accessing data. Please try again.",
+};
+
+/**
+ * Translates a Firebase error code into a user-friendly title and description.
+ * Components can use this to display consistent, readable error messages
+ * instead of raw Firebase error messages.
+ */
+export function getUserFriendlyError(error: unknown): UserFriendlyError {
+  if (!(error instanceof FirebaseError)) {
+    return GENERIC_ERROR;
+  }
+  return ERROR_MESSAGES[error.code] ?? GENERIC_ERROR;
 }
 
 export function handleFirestoreError(
