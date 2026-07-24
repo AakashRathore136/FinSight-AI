@@ -62,6 +62,12 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
     }
   };
 
+  const handleRetry = () => {
+    setStatus("idle");
+    setErrorMessage("");
+    setTimeout(() => startAnalysis(), 0);
+  };
+
   const startAnalysis = async () => {
     if (!file || !user) return;
 
@@ -96,24 +102,57 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       );
 
       if (!analysisRes.ok) {
-        const errorBody = await analysisRes.json().catch(() => null);
-        const errorText =
-          errorBody?.error || (await analysisRes.text().catch(() => ""));
+        let errorText = "";
+        try {
+          const errorBody = await analysisRes.json();
+          errorText = String(errorBody?.error || "");
+        } catch {
+          errorText = await analysisRes.text().catch(() => "");
+        }
         console.error(
           "AI endpoint returned error",
           analysisRes.status,
           errorText,
         );
-        if (errorText && typeof errorText === "object") {
-          throw new Error(JSON.stringify(errorText));
+
+        const statusCode = analysisRes.status;
+        if (statusCode === 401 || statusCode === 403) {
+          throw Object.assign(
+            new Error("Authentication failed — please sign in again"),
+            { kind: "auth" },
+          );
         }
-        throw new Error(errorText || "AI Analysis Failed");
+        if (statusCode === 429) {
+          throw Object.assign(
+            new Error(
+              "Analysis quota exceeded — please wait a moment and try again",
+            ),
+            { kind: "quota" },
+          );
+        }
+        if (
+          statusCode === 500 ||
+          statusCode === 502 ||
+          statusCode === 503
+        ) {
+          throw Object.assign(
+            new Error("Server error — please try again in a few minutes"),
+            { kind: "server" },
+          );
+        }
+        throw Object.assign(
+          new Error(
+            errorText || `Analysis failed with status ${statusCode}`,
+          ),
+          { kind: "http" },
+        );
       }
 
       const result = await analysisRes.json();
       console.log("UPLOAD COMPLETE — server response:", result);
       const documentId = result?.documentId;
-      if (!documentId) throw new Error("Server did not return documentId");
+      if (!documentId)
+        throw new Error("Server did not return documentId");
 
       setStatus("done");
       setUploading(false);
@@ -121,11 +160,30 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       setTimeout(() => onComplete(documentId), 500);
     } catch (err: any) {
       console.error("Pipeline Error:", err);
+
+      const kind: string = err?.kind || "";
+      const rawMsg: string = err?.message || "";
+      const isNetworkError =
+        rawMsg.includes("timed out") ||
+        rawMsg.includes("timeout") ||
+        rawMsg.includes("Failed to fetch") ||
+        rawMsg.includes("NetworkError") ||
+        rawMsg.includes("network");
+
+      const userMsg = isNetworkError
+        ? "Network error — check your connection and try again"
+        : kind === "auth"
+          ? "Authentication failed — please sign in again"
+          : kind === "quota"
+            ? "Analysis quota exceeded — please wait a moment and try again"
+            : kind === "server"
+              ? "Server error — please try again in a few minutes"
+              : rawMsg || "Analysis failed — please try again";
+
       setStatus("error");
       setUploading(false);
-      const msg = err?.message || "Upload or analysis failed";
-      setErrorMessage(msg);
-      toast.error(msg);
+      setErrorMessage(userMsg);
+      toast.error(userMsg);
 
       try {
         const { db } = await import("@/src/lib/firebase");
@@ -135,7 +193,8 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           fileName: file?.name || "Unknown",
           fileSize: file?.size || 0,
           status: "failed",
-          errorMessage: msg,
+          errorMessage: userMsg,
+          errorKind: kind,
           uploadedAt: serverTimestamp(),
           failedAt: serverTimestamp(),
           ownerId: user?.uid || null,
@@ -243,7 +302,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               </div>
             )}
 
-            {!uploading && (
+            {!uploading && status !== "error" && (
               <div className="grid grid-cols-2 gap-4 pt-4">
                 <Button
                   variant="outline"
@@ -257,6 +316,24 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                   onClick={startAnalysis}
                 >
                   Begin Execution Scan
+                </Button>
+              </div>
+            )}
+
+            {status === "error" && (
+              <div className="grid grid-cols-2 gap-4 pt-4">
+                <Button
+                  variant="outline"
+                  className="h-12 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold"
+                  onClick={onCancel}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-900/40"
+                  onClick={handleRetry}
+                >
+                  Retry Analysis
                 </Button>
               </div>
             )}
