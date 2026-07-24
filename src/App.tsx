@@ -189,6 +189,8 @@ import { HealthScoreDashboard } from './components/health/HealthScoreDashboard';
 import { ChatAssistant } from './components/chat/ChatAssistant';
 import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
+import { ThemeProvider } from '@/src/lib/themeContext';
+import { ThemeToggle } from '@/src/components/ThemeToggle';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -769,6 +771,7 @@ export default function App() {
   }
 
   return (
+    <ThemeProvider>
     <div className="flex h-screen w-full bg-[#0a0c10] text-slate-300 font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 border-r border-slate-800 flex flex-col md:flex">
@@ -923,6 +926,7 @@ export default function App() {
             >
               <LogOut size={18} />
             </Button>
+            <ThemeToggle />
           </div>
         </div>
       </aside>
@@ -1253,6 +1257,7 @@ export default function App() {
       )}
       <Toaster position="bottom-right" richColors />
     </div>
+    </ThemeProvider>
   );
 }
 
