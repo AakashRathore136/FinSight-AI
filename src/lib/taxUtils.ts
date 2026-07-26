@@ -336,7 +336,7 @@ function applyBrackets(income: number, brackets: TaxBracket[] | undefined): numb
   let tax = 0;
   let previousThreshold = 0;
   for (const bracket of brackets) {
-    if (income <= previousThreshold) break;
+    if (income < previousThreshold) break;
     const taxableInBracket = Math.min(income, bracket.threshold) - previousThreshold;
     if (taxableInBracket > 0) {
       tax += taxableInBracket * bracket.rate;
