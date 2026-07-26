@@ -186,6 +186,7 @@ import { ChallengesDashboard } from './components/challenges/ChallengesDashboard
 import { TaxEstimation } from './components/tax/TaxEstimation';
 import { EmergencyFundPlanner } from './components/emergency/EmergencyFundPlanner';
 import { HealthScoreDashboard } from './components/health/HealthScoreDashboard';
+import { CashFlowDashboard } from './components/cashflow/CashFlowDashboard';
 import { ChatAssistant } from './components/chat/ChatAssistant';
 import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
