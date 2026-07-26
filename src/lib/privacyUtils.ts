@@ -67,8 +67,8 @@ export async function updatePrivacySettings(
       { ...settings, lastUpdated: new Date().toISOString() },
       { merge: true },
     );
-  } catch {
-    handleFirestoreError(settings, OperationType.UPDATE, "privacy_settings");
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, "privacy_settings");
   }
 }
 
