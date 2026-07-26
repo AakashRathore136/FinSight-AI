@@ -162,7 +162,7 @@ export function aggregateMultiCurrencyTotals(
 
   for (const tx of transactions) {
     const converted = convertAmount(tx.amount, tx.currency, baseCurrency, rates);
-    byCurrency[tx.currency] = (byCurrency[tx.currency] || 0) + tx.amount;
+    byCurrency[tx.currency] = (byCurrency[tx.currency] || 0) + converted;
     totalBase += converted;
   }
 
