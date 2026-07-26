@@ -117,6 +117,7 @@ export async function fetchTransactions(
       const q = query(
         collection(db, "transactions"),
         where("userId", "==", userId),
+        where("date", ">=", startDate),
       );
       const snap = await getDocs(q);
       return snap.docs

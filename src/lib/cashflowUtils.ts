@@ -95,6 +95,39 @@ export async function fetchUserTransactions(
       };
     });
   } catch (error) {
+    if ((error as any)?.code === "failed-precondition") {
+      const q = query(
+        collection(db, "transactions"),
+        where("userId", "==", userId),
+        where("date", ">=", Timestamp.fromDate(startDate)),
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((doc) => {
+        const data = doc.data();
+        let date: Date;
+        if (data.date instanceof Timestamp) {
+          date = data.date.toDate();
+        } else if (data.date instanceof Date) {
+          date = data.date;
+        } else if (
+          typeof data.date === "string" ||
+          typeof data.date === "number"
+        ) {
+          date = new Date(data.date);
+        } else {
+          date = new Date();
+        }
+        return {
+          id: doc.id,
+          userId: data.userId || "",
+          amount: Number(data.amount) || 0,
+          category: data.category || "Other",
+          type: data.type === "income" ? "income" : "expense",
+          date,
+          description: data.description,
+        };
+      });
+    }
     handleFirestoreError(error, OperationType.LIST, "transactions");
     return [];
   }
