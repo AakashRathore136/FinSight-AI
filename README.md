@@ -18,7 +18,7 @@ The platform combines modern web technologies with generative AI to transform co
 
 ### 🤖 AI-Powered Financial Analysis
 
-- Automated document understanding using Google Gemini API
+- Automated document understanding using Hugging Face Inference (Llama-3.3-70B-Instruct)
 - Financial metric extraction from unstructured documents
 - AI-generated executive summaries
 - Intelligent insight generation
@@ -55,7 +55,7 @@ Frontend (React + TypeScript + TailwindCSS)
  |
 Backend API (Node.js + Express)
  |
-AI Processing Layer (Google Gemini API)
+AI Processing Layer (Hugging Face Inference)
  |
 Firebase Services
  ├── Authentication
@@ -81,7 +81,7 @@ Firebase Services
 
 ## AI Integration
 
-- Google Gemini API
+- Hugging Face Inference API (Llama-3.3-70B-Instruct)
 
 ## Database & Cloud Infrastructure
 
@@ -104,7 +104,7 @@ Before running the project, make sure you have:
 
 - Node.js 18+
 - Firebase Project
-- Google Gemini API Key
+- Hugging Face Inference API Key
 - Docker (optional)
 
 ---
@@ -130,7 +130,7 @@ npm install
 Create a `.env` file in the project root and add:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
+HUGGINGFACE_API_KEY=your_huggingface_inference_api_key
 
 FIREBASE_API_KEY=your_firebase_api_key
 FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
