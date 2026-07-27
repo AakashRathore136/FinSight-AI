@@ -6,12 +6,25 @@ import {
   isUpdateReady,
   applyUpdate,
   getNetworkStatus,
+  isNotificationSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
 } from './registerSW';
 
 export function InstallPrompt() {
   const [showInstall, setShowInstall] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [networkStatus, setNetworkStatus] = useState<'online' | 'offline'>(getNetworkStatus());
+  const [notificationOptIn, setNotificationOptIn] = useState(false);
+  const [notificationSupported, setNotificationSupported] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<'granted' | 'denied' | 'default'>('default');
+
+  useEffect(() => {
+    if (isNotificationSupported()) {
+      setNotificationSupported(true);
+      setNotificationPermission(getNotificationPermission());
+    }
+  }, []);
 
   useEffect(() => {
     const handleInstallAvailable = () => setShowInstall(true);
@@ -35,11 +48,14 @@ export function InstallPrompt() {
   }, []);
 
   const handleInstall = useCallback(async () => {
+    if (notificationOptIn && notificationSupported) {
+      await requestNotificationPermission();
+    }
     const installed = await promptInstall();
     if (installed) {
       setShowInstall(false);
     }
-  }, []);
+  }, [notificationOptIn, notificationSupported]);
 
   const handleDismiss = useCallback(() => {
     dismissInstall();
@@ -69,6 +85,17 @@ export function InstallPrompt() {
               <p className="text-slate-400 text-xs mt-1">
                 Install our app for a better experience with offline support
               </p>
+              {notificationSupported && notificationPermission === 'default' && (
+                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationOptIn}
+                    onChange={(e) => setNotificationOptIn(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-sky-500 focus:ring-sky-500"
+                  />
+                  <span className="text-slate-300 text-xs">Enable push notifications</span>
+                </label>
+              )}
             </div>
             <button
               onClick={handleDismiss}
@@ -85,7 +112,7 @@ export function InstallPrompt() {
               onClick={handleInstall}
               className="flex-1 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              Install
+              {notificationOptIn && notificationSupported ? 'Install and Enable Notifications' : 'Install'}
             </button>
             <button
               onClick={handleDismiss}
