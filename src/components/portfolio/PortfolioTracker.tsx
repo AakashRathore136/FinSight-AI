@@ -48,6 +48,7 @@ import {
   type Holding,
   type Transaction,
   type AssetAllocation,
+  type PortfolioSnapshot,
   calculateTotalValue,
   calculateProfitLoss,
   calculateAllocation,
@@ -58,6 +59,8 @@ import {
   removeHolding,
   updatePortfolio,
   getAssetClassColor,
+  savePortfolioSnapshot,
+  fetchPortfolioHistory,
 } from '@/src/lib/portfolioUtils';
 
 interface PortfolioTrackerProps {
@@ -72,6 +75,8 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
   const [activeTab, setActiveTab] = useState('holdings');
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
+  const [performanceHistory, setPerformanceHistory] = useState<PortfolioSnapshot[]>([]);
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
 
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
@@ -131,6 +136,17 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !portfolioId || activeTab !== 'performance') return;
+    let active = true;
+    const loadHistory = async () => {
+      const history = await fetchPortfolioHistory(user.uid, portfolioId);
+      if (active) setPerformanceHistory(history);
+    };
+    loadHistory();
+    return () => { active = false; };
+  }, [user, portfolioId, activeTab]);
 
   const totalValue = useMemo(() => calculateTotalValue(holdings), [holdings]);
   const totalCost = useMemo(() => holdings.reduce((s, h) => s + h.quantity * h.avgCost, 0), [holdings]);
@@ -422,6 +438,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
           <TabsTrigger value="holdings" className="rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white">Holdings</TabsTrigger>
           <TabsTrigger value="allocation" className="rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white">Allocation</TabsTrigger>
           <TabsTrigger value="transactions" className="rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white">Transactions</TabsTrigger>
+          <TabsTrigger value="performance" className="rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white">Performance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="holdings" className="mt-6 space-y-4">
@@ -575,6 +592,113 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="performance" className="mt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Portfolio Performance</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-700 text-slate-300 hover:text-white hover:border-slate-500"
+              onClick={async () => {
+                if (!user || !portfolioId) return;
+                setIsSavingSnapshot(true);
+                await savePortfolioSnapshot(user.uid, portfolioId, holdings);
+                const history = await fetchPortfolioHistory(user.uid, portfolioId);
+                setPerformanceHistory(history);
+                setIsSavingSnapshot(false);
+                toast.success('Portfolio snapshot saved');
+              }}
+              disabled={isSavingSnapshot}
+            >
+              {isSavingSnapshot ? 'Saving...' : 'Save Snapshot'}
+            </Button>
+          </div>
+
+          <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl overflow-hidden">
+            <CardContent className="p-5">
+              <h4 className="text-sm font-medium text-slate-400 mb-4">Portfolio Value Over Time</h4>
+              {performanceHistory.length > 0 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart
+                    data={[...performanceHistory].reverse()}
+                    margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis
+                      dataKey="snapshotDate"
+                      tickFormatter={(v: string) => {
+                        try { return format(new Date(v), 'MMM d'); } catch { return v; }
+                      }}
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      stroke="#1e293b"
+                    />
+                    <YAxis
+                      tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      stroke="#1e293b"
+                    />
+                    <Tooltip
+                      contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }}
+                      formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 'Total Value']}
+                      labelFormatter={(label: string) => {
+                        try { return format(new Date(label), 'MMM d, yyyy'); } catch { return label; }
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="totalValue"
+                      stroke="#0ea5e9"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#0ea5e9' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-60 flex items-center justify-center text-slate-500 text-sm">
+                  No performance history yet. Save a snapshot to start tracking.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {performanceHistory.length > 0 && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl overflow-hidden">
+                  <CardContent className="p-5">
+                    <p className="text-xs text-slate-500 mb-1">All-Time Return</p>
+                    <p className={cn(
+                      'text-2xl font-bold tabular-nums',
+                      (performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    )}>
+                      {formatCurrency((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
+                    </p>
+                    <p className={cn(
+                      'text-xs mt-1',
+                      (performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    )}>
+                      {((performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0) >= 0 ? '+' : '')}
+                      {(performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0).toFixed(2)}%
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl overflow-hidden">
+                  <CardContent className="p-5">
+                    <p className="text-xs text-slate-500 mb-1">Latest Total Value</p>
+                    <p className="text-2xl font-bold text-white tabular-nums">
+                      {formatCurrency(performanceHistory[0]?.totalValue ?? 0, 'USD')}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {performanceHistory.length} snapshots
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -426,3 +426,81 @@ export async function deletePortfolio(userId: string, portfolioId: string): Prom
     return false;
   }
 }
+
+export interface PortfolioSnapshot {
+  id?: string;
+  userId: string;
+  portfolioId: string;
+  totalValue: number;
+  totalCost: number;
+  profitLoss: number;
+  profitLossPercent: number;
+  snapshotDate: string;
+  createdAt: string;
+}
+
+export async function savePortfolioSnapshot(
+  userId: string,
+  portfolioId: string,
+  holdings: Holding[],
+): Promise<boolean> {
+  try {
+    const totalValue = calculateTotalValue(holdings);
+    const totalCost = holdings.reduce((sum, h) => sum + h.avgCost * h.quantity, 0);
+    const profitLoss = totalValue - totalCost;
+    const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
+
+    await addDoc(collection(db, 'portfolioSnapshots'), {
+      userId,
+      portfolioId,
+      totalValue,
+      totalCost,
+      profitLoss,
+      profitLossPercent,
+      snapshotDate: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error saving portfolio snapshot:', error);
+    handleFirestoreError(error, OperationType.CREATE, 'portfolioSnapshots');
+    return false;
+  }
+}
+
+export async function fetchPortfolioHistory(
+  userId: string,
+  portfolioId: string,
+  limitCount = 30,
+): Promise<PortfolioSnapshot[]> {
+  try {
+    const snapshotsRef = collection(db, 'portfolioSnapshots');
+    const q = query(
+      snapshotsRef,
+      where('userId', '==', userId),
+      where('portfolioId', '==', portfolioId),
+      orderBy('snapshotDate', 'desc'),
+    );
+    const snapshot = await getDocs(q);
+    const snapshots: PortfolioSnapshot[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      snapshots.push({
+        id: docSnap.id,
+        userId: data.userId || '',
+        portfolioId: data.portfolioId || '',
+        totalValue: data.totalValue || 0,
+        totalCost: data.totalCost || 0,
+        profitLoss: data.profitLoss || 0,
+        profitLossPercent: data.profitLossPercent || 0,
+        snapshotDate: data.snapshotDate || '',
+        createdAt: data.createdAt || '',
+      });
+    });
+    return snapshots.slice(0, limitCount);
+  } catch (error) {
+    console.error('Error fetching portfolio history:', error);
+    handleFirestoreError(error, OperationType.LIST, 'portfolioSnapshots');
+    return [];
+  }
+}
