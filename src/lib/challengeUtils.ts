@@ -260,10 +260,16 @@ export async function createChallenge(userId: string, data: Omit<Challenge, 'id'
 }
 
 export async function updateChallengeProgress(challengeId: string, currentProgress: number): Promise<void> {
-  const completed = isChallengeComplete(currentProgress, 0) ? false : false;
+  const challengeSnap = await getDoc(doc(db, 'challenges', challengeId));
+  if (!challengeSnap.exists()) return;
+
+  const challenge = challengeSnap.data();
+  const targetAmount = challenge.targetAmount as number;
+  const completed = isChallengeComplete(currentProgress, targetAmount);
+
   await updateDoc(doc(db, 'challenges', challengeId), {
     currentProgress,
-    ...(completed ? {} : {}),
+    ...(completed ? { isCompleted: true, completedAt: serverTimestamp() } : {}),
   });
 }
 
