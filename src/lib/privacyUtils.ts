@@ -67,8 +67,8 @@ export async function updatePrivacySettings(
       { ...settings, lastUpdated: new Date().toISOString() },
       { merge: true },
     );
-  } catch {
-    handleFirestoreError(settings, OperationType.UPDATE, "privacy_settings");
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, "privacy_settings");
   }
 }
 
@@ -88,13 +88,16 @@ export async function exportUserData(
         query(collection(db, colName), where("userId", "==", userId)),
       );
       data[colName] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    } catch {
+    } catch (error) {
+      console.error('exportUserData: failed to fetch', colName, error);
       data[colName] = [];
     }
   }
   try {
     data.profile = (await getDoc(doc(db, "users", userId))).data();
-  } catch {}
+  } catch (error) {
+    console.error('exportUserData: failed to fetch user profile', error);
+  }
   return data;
 }
 
@@ -114,7 +117,9 @@ export async function deleteUserData(userId: string): Promise<void> {
           query(collection(db, colName), where("userId", "==", userId)),
         )
       ).docs.forEach((d) => batch.delete(d.ref));
-    } catch {}
+    } catch (error) {
+      console.error('deleteUserData: failed to delete', colName, error);
+    }
   }
   try {
     batch.delete(doc(db, "users", userId));
