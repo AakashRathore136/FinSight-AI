@@ -263,12 +263,10 @@ export default function App() {
     selectedDocIdRef.current = docId;
     setSelectedDocId(docId);
     setSharedDocId(docId);
-    console.log("App selectedDocId set to ...", docId);
-    console.log("App switching to analysis view for ...", docId);
     setActiveTab("detail");
 
     if (source === "upload") {
-      console.log("App received uploaded docId ...", docId);
+      // uploaded docId handled via setSelectedDocId above
     }
   };
 
