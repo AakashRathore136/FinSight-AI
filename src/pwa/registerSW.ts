@@ -17,8 +17,6 @@ export function registerServiceWorker(): void {
 
   navigator.serviceWorker.register(swUrl)
     .then(registration => {
-      console.log('Service Worker registered:', registration.scope);
-
       registration.addEventListener('updatefound', () => {
         const installingWorker = registration.installing;
         if (!installingWorker) return;
