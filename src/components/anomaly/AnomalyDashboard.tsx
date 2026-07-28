@@ -22,7 +22,6 @@ import {
   checkHistoricalSimilarAnomalies,
   Anomaly,
   Transaction,
-  CategoryBaseline,
 } from "@/src/lib/anomalyUtils";
 import {
   Card,
@@ -370,7 +369,7 @@ async function runDetection(userId: string) {
       category: tx.category,
       amount: tx.amount,
       description: `Transaction of $${tx.amount.toLocaleString()} in ${tx.category} exceeds the category average by more than 2 standard deviations.`,
-      confidenceScore: confidence,
+      confidence,
       transactionId: tx.id,
       dismissed: false,
       createdAt: tx.date,
@@ -398,7 +397,7 @@ async function runDetection(userId: string) {
       category: spike.category,
       amount: spike.amount,
       description: `${spike.category} spending is ${pctOver}% above the 3-month average.`,
-      confidenceScore: confidence,
+      confidence,
       transactionId:
         spike.transactions[spike.transactions.length - 1]?.id || "",
       dismissed: false,
