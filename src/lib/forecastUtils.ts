@@ -10,7 +10,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval } from 'date-fns';
+import { format, subMonths, addMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval } from 'date-fns';
 import { toDate } from './utils';
 
 export interface ForecastData {
@@ -53,7 +53,7 @@ export function generateMonthlyForecast(
 ): MonthlyForecast[] {
   if (!historicalData.length) {
     return Array.from({ length: monthsAhead }, (_, i) => {
-      const month = format(subMonths(new Date(), -i - 1), 'yyyy-MM');
+      const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
       return { month, income: 0, expenses: 0, net: 0, confidence: 0 };
     });
   }
@@ -69,7 +69,7 @@ export function generateMonthlyForecast(
 
   const forecasts: MonthlyForecast[] = [];
   for (let i = 0; i < monthsAhead; i++) {
-    const month = format(subMonths(new Date(), -i - 1), 'yyyy-MM');
+    const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
     const income = avgIncome + (Math.random() - 0.5) * incomeVariance;
     const expenses = avgExpenses + (Math.random() - 0.5) * expenseVariance;
     const confidence = Math.max(0, Math.min(100, 100 - (i * 8) - (incomeVariance + expenseVariance) / 100));
