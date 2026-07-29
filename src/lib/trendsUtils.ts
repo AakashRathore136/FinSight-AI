@@ -23,6 +23,7 @@ import {
   startOfMonth,
   endOfMonth,
   subMonths,
+  subWeeks,
   eachWeekOfInterval,
   eachMonthOfInterval,
 } from 'date-fns';
@@ -223,9 +224,7 @@ export function generateWeeklyComparison(
   weeks: number = 4,
   end: Date = new Date(),
 ): { data: CategoryPeriodDatum[]; periods: { key: string; label: string }[] } {
-  const start = startOfWeek(subMonths(end, 0));
-  const startRange = new Date(start);
-  startRange.setDate(startRange.getDate() - (weeks - 1) * 7);
+  const startRange = subWeeks(end, weeks - 1);
   const periods = eachWeekOfInterval({ start: startRange, end: end }).map((d) => ({
     key: formatWeekKey(d),
     label: format(d, "'W'II MMM"),
