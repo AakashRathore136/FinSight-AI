@@ -7,6 +7,7 @@ import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
@@ -74,6 +75,36 @@ class PipelineError extends Error {
     this.name = "PipelineError";
     this.stage = stage;
     this.recommendation = recommendation;
+  }
+}
+
+async function generateShortLivedSignedUrl(
+  storagePath: string,
+  expirationMs: number = 15 * 60 * 1000, // 15 minutes default
+): Promise<string> {
+  if (!admin.apps.length || !admin.app()) {
+    throw new Error("Firebase Admin SDK is not initialized");
+  }
+
+  try {
+    const bucket = getStorage().bucket();
+    const file = bucket.file(storagePath);
+
+    const [signedUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + expirationMs,
+    });
+
+    return signedUrl;
+  } catch (error: any) {
+    console.error(
+      "SIGNED_URL_GENERATION_ERROR:",
+      error?.message || error,
+    );
+    throw new Error(
+      `Failed to generate signed URL for ${storagePath}: ${error?.message || String(error)}`,
+    );
   }
 }
 
@@ -883,10 +914,6 @@ CRITICAL RULES:
           );
         }
 
-        console.log(
-          `FIRESTORE_WRITE_START: ownerId=${ownerId}, database=${firestoreDatabaseId}, document=${file.originalname}`,
-        );
-
         // Compose document record
         const rawRiskLevel =
           validPayload.risk_assessment &&
@@ -897,13 +924,50 @@ CRITICAL RULES:
         const riskLevel = normalizeRiskLevel(rawRiskLevel);
         const now = new Date();
 
+        // SECURITY: For security, store only the storage path, not a permanent download URL
+        // Signed URLs will be generated on-demand with short expiration (15 minutes)
+        const storagePath = `analyses/${ownerId}/${now.getTime()}_${file.originalname}`;
+
+        // Upload file to Firebase Storage before writing document metadata
+        if (admin.apps.length) {
+          try {
+            const bucket = getStorage().bucket();
+            const storageFile = bucket.file(storagePath);
+            await storageFile.save(file.buffer, {
+              metadata: {
+                contentType: file.mimetype,
+                metadata: {
+                  uploadedBy: ownerId,
+                  uploadedAt: now.toISOString(),
+                },
+              },
+            });
+            console.log(
+              `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
+            );
+          } catch (storageError: any) {
+            console.error(
+              "FIREBASE_STORAGE_UPLOAD_ERROR:",
+              storageError?.message || storageError,
+            );
+            throw new PipelineError(
+              "STORAGE_UPLOAD",
+              `Failed to upload file to Firebase Storage: ${storageError?.message || String(storageError)}`,
+              "Check Firebase Storage bucket configuration and credentials.",
+            );
+          }
+        }
+
+        console.log(
+          `FIRESTORE_WRITE_START: ownerId=${ownerId}, database=${firestoreDatabaseId}, document=${file.originalname}`,
+        );
+
         const docData: any = {
           ownerId,
           fileName: file.originalname,
           fileType: file.mimetype,
           fileSize: file.size,
-          fileUrl: "",
-          storagePath: "",
+          storagePath,
           status: "completed",
           riskLevel,
           createdAt: now,
@@ -1034,6 +1098,85 @@ CRITICAL RULES:
       }
     },
   );
+
+  // Generate short-lived signed URL for secure document download
+  // Prevents permanent URL access to sensitive financial documents
+  app.post("/api/document-download-url", async (req: any, res) => {
+    try {
+      const { storagePath } = req.body;
+
+      if (!storagePath || typeof storagePath !== "string") {
+        return res.status(400).json({
+          error: {
+            stage: "URL_GENERATION",
+            reason: "storagePath is required",
+            recommendation: "Provide a valid storagePath.",
+          },
+        });
+      }
+
+      // Verify user owns the document by checking Firestore
+      if (!admin.apps.length) {
+        return res.status(503).json({
+          error: {
+            stage: "URL_GENERATION",
+            reason: "Firebase not initialized",
+            recommendation: "Server configuration error. Please try again.",
+          },
+        });
+      }
+
+      try {
+        const dbAdmin = getFirestore(firestoreDatabaseId);
+        const docSnap = await dbAdmin
+          .collectionGroup("documents")
+          .where("ownerId", "==", req.ownerId)
+          .where("storagePath", "==", storagePath)
+          .limit(1)
+          .get();
+
+        if (docSnap.empty) {
+          console.warn(
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${storagePath}`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
+        const signedUrl = await generateShortLivedSignedUrl(storagePath, 15 * 60 * 1000);
+        return res.status(200).json({
+          signedUrl,
+          expiresIn: 15 * 60, // seconds
+        });
+      } catch (error: any) {
+        console.error(
+          "DOWNLOAD_URL_GENERATION_ERROR:",
+          error?.message || error,
+        );
+        return res.status(500).json({
+          error: {
+            stage: "URL_GENERATION",
+            reason: "Failed to generate download URL",
+            recommendation: "Please try again or contact support.",
+          },
+        });
+      }
+    } catch (error: any) {
+      console.error("DOWNLOAD_URL_REQUEST_ERROR:", error?.message || error);
+      return res.status(500).json({
+        error: {
+          stage: "REQUEST_PROCESSING",
+          reason: "Internal server error",
+          recommendation: "Please try again.",
+        },
+      });
+    }
+  });
 
   // Catches errors from the upload.single("file") middleware above —
   // oversized files (LIMIT_FILE_SIZE) and non-PDF rejections from
