@@ -478,11 +478,8 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         analysesQuery,
         (snapshot) => {
           if (!snapshot.empty) {
-            console.log("Loading latest analysis from subcollection...");
             const analysisDoc = snapshot.docs[0];
-            console.log("Loaded analysis doc ID:", analysisDoc.id);
             const data = analysisDoc.data();
-            console.log("Loaded sentiment_score:", data?.sentiment_score);
             setAnalysis(data);
           }
           // Keep the view renderable with any latestAnalysis already stored on the parent doc.
