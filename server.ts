@@ -1100,14 +1100,22 @@ CRITICAL RULES:
           error?.recommendation ||
           "An unexpected system interrupt occurred. Please check server logs.";
 
-        return res.status(500).json({
+        // SECURITY: Never expose stack traces to clients in production
+        const isDev = process.env.NODE_ENV !== "production";
+        const errorResponse: any = {
           error: {
             stage,
-            reason,
-            stack,
+            reason: isDev ? reason : "An error occurred during processing",
             recommendation,
           },
-        });
+        };
+
+        // Only include stack trace in development
+        if (isDev) {
+          errorResponse.error.stack = stack;
+        }
+
+        return res.status(500).json(errorResponse);
       }
     },
   );
@@ -1220,6 +1228,41 @@ CRITICAL RULES:
       });
     }
     next(err);
+  });
+
+  // Global error handler - MUST be the last middleware registered
+  // Catches all unhandled errors and prevents stack trace leakage in production
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("UNHANDLED_ERROR:", {
+      message: err?.message || String(err),
+      stack: err?.stack || "No stack trace",
+      timestamp: new Date().toISOString(),
+      path: req.path,
+      method: req.method,
+    });
+
+    // SECURITY: Never expose stack traces or detailed errors to clients in production
+    const isDev = process.env.NODE_ENV !== "production";
+    const statusCode = err?.status || err?.statusCode || 500;
+
+    const errorResponse: any = {
+      error: {
+        stage: err?.stage || "INTERNAL_ERROR",
+        reason: isDev
+          ? err?.message || String(err)
+          : "An internal error occurred",
+        recommendation: isDev
+          ? err?.recommendation || "Check server logs for details"
+          : "Please try again or contact support.",
+      },
+    };
+
+    // Only include stack trace in development
+    if (isDev && err?.stack) {
+      errorResponse.error.stack = err.stack;
+    }
+
+    res.status(statusCode).json(errorResponse);
   });
 
   // Vite middleware for development
