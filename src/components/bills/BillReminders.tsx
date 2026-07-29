@@ -397,7 +397,7 @@ export function BillReminders({ user }: BillRemindersProps) {
             <CardContent className="space-y-3 max-h-72 overflow-y-auto">
               {upcomingBills.length === 0 && overdueBills.length === 0 && (
                 <p className="text-xs text-slate-500 text-center py-6">
-                  You're all caught up 🎉
+                  You're all caught up
                 </p>
               )}
               {overdueBills.map((b) => (
