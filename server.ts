@@ -768,68 +768,90 @@ CRITICAL RULES:
           }
 
           try {
-            const completion = await hfClient.chatCompletion({
-              provider: "together",
-              model: "meta-llama/Llama-3.3-70B-Instruct",
-              messages,
-              max_tokens: 5000,
-              temperature: 0.2,
-            });
-            console.log(
-              "AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct",
-            );
+            const controller = new AbortController();
+            const timeoutMs = 30_000;
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-            const rawText = completion.choices?.[0]?.message?.content || "{}";
-            console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
-
-            // Parse JSON response from AI
-            console.log("AI_JSON_PARSING_START");
-            let parsedResponse;
             try {
-              parsedResponse = safeJsonParse(rawText);
-            } catch (parseError: any) {
-              console.error(
-                "AI_JSON_PARSE_ERROR:",
-                parseError?.message || parseError,
+              const completion = await hfClient.chatCompletion({
+                provider: "together",
+                model: "meta-llama/Llama-3.3-70B-Instruct",
+                messages,
+                max_tokens: 5000,
+                temperature: 0.2,
+              });
+              console.log(
+                "AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct",
               );
-              console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
-              if (retries >= maxRetries) {
-                throw new PipelineError(
-                  "JSON_PARSING",
-                  `Failed to parse JSON response from AI: ${parseError?.message}`,
-                  "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output.",
-                );
-              }
-              retries++;
-              continue;
-            }
-            console.log("AI_JSON_PARSE_SUCCESS");
 
-            // Validate against schema
-            console.log("AI_SCHEMA_VALIDATION_START");
-            try {
-              validPayload = validateAnalysisPayload(parsedResponse);
-              console.log("AI_SCHEMA_VALIDATION_SUCCESS");
-              console.log(
-                `AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`,
-              );
-              console.log(
-                `AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`,
-              );
-            } catch (validateError: any) {
-              console.error(
-                "AI_SCHEMA_VALIDATION_ERROR:",
-                validateError?.message || validateError,
-              );
-              if (retries >= maxRetries) {
-                throw new PipelineError(
-                  "SCHEMA_VALIDATION",
-                  `AI response failed validation: ${validateError?.message}`,
-                  "The AI model failed to structure its response properly. Try submitting again to recreate.",
+              const rawText = completion.choices?.[0]?.message?.content || "{}";
+              console.log(`AI_RESPONSE_LENGTH: ${rawText.length} characters`);
+
+              // Parse JSON response from AI
+              console.log("AI_JSON_PARSING_START");
+              let parsedResponse;
+              try {
+                parsedResponse = safeJsonParse(rawText);
+              } catch (parseError: any) {
+                console.error(
+                  "AI_JSON_PARSE_ERROR:",
+                  parseError?.message || parseError,
                 );
+                console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+                if (retries >= maxRetries) {
+                  throw new PipelineError(
+                    "JSON_PARSING",
+                    `Failed to parse JSON response from AI: ${parseError?.message}`,
+                    "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output.",
+                  );
+                }
+                retries++;
+                continue;
               }
-              retries++;
-              continue;
+              console.log("AI_JSON_PARSE_SUCCESS");
+
+              // Validate against schema
+              console.log("AI_SCHEMA_VALIDATION_START");
+              try {
+                validPayload = validateAnalysisPayload(parsedResponse);
+                console.log("AI_SCHEMA_VALIDATION_SUCCESS");
+                console.log(
+                  `AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`,
+                );
+                console.log(
+                  `AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`,
+                );
+              } catch (validateError: any) {
+                console.error(
+                  "AI_SCHEMA_VALIDATION_ERROR:",
+                  validateError?.message || validateError,
+                );
+                if (retries >= maxRetries) {
+                  throw new PipelineError(
+                    "SCHEMA_VALIDATION",
+                    `AI response failed validation: ${validateError?.message}`,
+                    "The AI model failed to structure its response properly. Try submitting again to recreate.",
+                  );
+                }
+                retries++;
+                continue;
+              }
+            } catch (abortError: any) {
+              if (abortError.name === 'AbortError' || controller.signal.aborted) {
+                console.error(
+                  "AI_REQUEST_TIMEOUT: Hugging Face inference exceeded 30 second timeout",
+                );
+                if (retries >= maxRetries) {
+                  throw new PipelineError(
+                    "AI_TIMEOUT",
+                    "AI analysis request timed out (30 seconds). The Hugging Face API is unresponsive.",
+                    "The API server may be experiencing high load. Please try again in a few moments.",
+                  );
+                }
+                retries++;
+                continue;
+              }
+              throw abortError;
             }
           } catch (hfError: any) {
             if (hfError instanceof PipelineError) {
@@ -848,6 +870,8 @@ CRITICAL RULES:
             }
             retries++;
             continue;
+          } finally {
+            clearTimeout(timer);
           }
         }
 
