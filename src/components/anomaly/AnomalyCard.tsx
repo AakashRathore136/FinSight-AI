@@ -80,7 +80,7 @@ export function AnomalyCard({
   historicalCount = 0,
   historicalLabel,
 }: AnomalyCardProps) {
-  const severity = getSeverity(anomaly.confidenceScore);
+  const severity = getSeverity(anomaly.confidence);
   const colors = getSeverityColor(severity);
   const icon = getTypeIcon(anomaly.type);
 
@@ -139,13 +139,13 @@ export function AnomalyCard({
               Confidence
             </span>
             <span className={`font-mono font-bold ${colors.text}`}>
-              {anomaly.confidenceScore}%
+              {anomaly.confidence}%
             </span>
           </div>
-          <Progress value={anomaly.confidenceScore} className="h-1.5">
+          <Progress value={anomaly.confidence} className="h-1.5">
             <div
               className={`h-full rounded-full transition-all ${colors.progress}`}
-              style={{ width: `${anomaly.confidenceScore}%` }}
+              style={{ width: `${anomaly.confidence}%` }}
             />
           </Progress>
         </div>
