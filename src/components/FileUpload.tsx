@@ -88,7 +88,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         console.warn("Could not fetch ID token for upload", tErr);
       }
 
-      console.log("UPLOAD START");
       const analysisRes = await apiFetch(
         "/api/analyze",
         {
@@ -149,7 +148,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       }
 
       const result = await analysisRes.json();
-      console.log("UPLOAD COMPLETE — server response:", result);
       const documentId = result?.documentId;
       if (!documentId)
         throw new Error("Server did not return documentId");
@@ -199,7 +197,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           failedAt: serverTimestamp(),
           ownerId: user?.uid || null,
         });
-        console.log("Failed record persisted to Firestore");
       } catch (firestoreErr) {
         console.error("Could not persist failed record:", firestoreErr);
       }
