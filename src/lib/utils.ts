@@ -52,7 +52,8 @@ export function formatRelativeTime(value: any, fallback = "Recently") {
 
   try {
     return formatDistanceToNow(date, { addSuffix: true });
-  } catch {
+  } catch (err) {
+    console.error("formatRelativeTime: failed to compute relative time", err);
     return fallback;
   }
 }
