@@ -57,6 +57,17 @@ service cloud.firestore {
     }
 
     match /documents/{docId}/analyses/{analysisId} {
+      // SECURITY: Only allow reading own analyses or if admin
+      // Prevents cross-user data leakage of financial AI analysis results
+      allow read: if isOwner(existing().ownerId) || isAdmin();
+      allow create: if isSignedIn() && isValidAnalysis(incoming());
+      allow update: if isAdmin();
+      allow delete: if isOwner(existing().ownerId) || isAdmin();
+    }
+
+    match /analyses/{analysisId} {
+      // SECURITY: Per-user RLS for any top-level analyses collection
+      // Prevents unauthorized access to sensitive financial analysis data
       allow read: if isOwner(existing().ownerId) || isAdmin();
       allow create: if isSignedIn() && isValidAnalysis(incoming());
       allow update: if isAdmin();
