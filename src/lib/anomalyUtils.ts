@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
+import { formatCurrency } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
 
 export interface Transaction {
@@ -293,10 +294,4 @@ export async function runAnomalyDetection(
   return saved;
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+
