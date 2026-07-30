@@ -406,12 +406,12 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
   const renderMessageContent = (message: ChatMessage) => {
     const metadata = message.metadata as any;
-    const hasChart = metadata?.chartData && chartData;
+    const hasChart = !!metadata?.chartData;
 
     return (
       <div className="space-y-3">
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-        {hasChart && renderChart(chartData)}
+        {hasChart && renderChart(metadata.chartData)}
       </div>
     );
   };
