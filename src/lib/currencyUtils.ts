@@ -179,7 +179,8 @@ export function formatCurrencyDisplay(amount: number, currencyCode: string): str
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  } catch {
+  } catch (err) {
+    console.error("formatCurrency: failed to format currency", err);
     return `${symbol}${amount.toFixed(2)}`;
   }
 }
