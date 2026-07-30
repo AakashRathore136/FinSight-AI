@@ -328,7 +328,7 @@ export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse
     response += `Spending increased by ${formatCurrency(maxIncrease.amount)} in ${maxIncrease.month}. `;
   }
 
-  const avg = totalSpending / Math.max(months.length, 1);
+  const avg = totalSpending / Math.max(spendingByMonth.length, 1);
   response += `Your average monthly spending is ${formatCurrency(Math.round(avg))}.`;
 
   return {
