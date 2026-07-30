@@ -197,7 +197,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                 <div className="mt-3">
                   <Progress
                     value={Math.min(
-                      (summary.totalYearly / (summary.totalYearly * 1.5)) * 100,
+                      (summary.totalYearly / 60000) * 100,
                       100,
                     )}
                     className="h-1.5 bg-slate-800"
@@ -205,7 +205,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                     <div
                       className="h-full bg-emerald-500 rounded-full"
                       style={{
-                        width: `${Math.min((summary.totalYearly / (summary.totalYearly * 1.5)) * 100, 100)}%`,
+                        width: `${Math.min((summary.totalYearly / 60000) * 100, 100)}%`,
                       }}
                     />
                   </Progress>
