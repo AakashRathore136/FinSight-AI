@@ -38,7 +38,8 @@ export function CurrencyConverter({
       try {
         const data = await fetchExchangeRates('USD');
         setRates(data);
-      } catch {
+      } catch (err) {
+        console.error("CurrencyConverter: failed to load exchange rates", err);
         setRates({
           base: 'USD',
           date: new Date().toISOString().split('T')[0],
