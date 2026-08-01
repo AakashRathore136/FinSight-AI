@@ -410,7 +410,8 @@ export function formatCurrency(amount: number, currencyCode: string): string {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  } catch {
+  } catch (err) {
+    console.error("formatCurrency: failed to format currency in taxUtils", err);
     return `${currencyCode} ${amount.toFixed(2)}`;
   }
 }
