@@ -52,7 +52,8 @@ export async function getPrivacySettings(
     if (snap.exists()) return snap.data() as PrivacySettings;
     await setDoc(docRef, DEFAULT_PRIVACY_SETTINGS);
     return DEFAULT_PRIVACY_SETTINGS;
-  } catch {
+  } catch (err) {
+    console.error("getPrivacySettings: failed to retrieve privacy settings", err);
     return DEFAULT_PRIVACY_SETTINGS;
   }
 }
