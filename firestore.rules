@@ -4,8 +4,10 @@ service cloud.firestore {
     // ----------------------------------------------------
     // GLOBAL HELPERS
     // ----------------------------------------------------
-    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isAuthenticated() { return request.auth != null; }
+    function isSignedIn() { return isAuthenticated() && request.auth.token.email_verified == true; }
     function isOwner(ownerId) { return isSignedIn() && request.auth.uid == ownerId; }
+    function isAuthenticatedOwner(ownerId) { return isAuthenticated() && request.auth.uid == ownerId; }
     function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
     function isValidId(id) { return id is string && id.size() <= 128; }
     function incoming() { return request.resource.data; }
@@ -17,7 +19,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['email', 'role']) &&
              data.email is string &&
-             data.role in ['user', 'admin'];
+             data.role in ['junior_analyst', 'senior_pm', 'cro', 'compliance', 'admin'];
     }
 
     function isValidDocument(data) {
@@ -44,7 +46,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
+      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
     }
 
