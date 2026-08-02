@@ -71,8 +71,10 @@ export function AnomalyDashboard({ user }: AnomalyDashboardProps) {
       (snapshot) => {
         const docs = snapshot.docs.map((d) => ({
           id: d.id,
+          historicalCount: d.data().historicalCount || 0,
+          historicalLabel: d.data().historicalLabel,
           ...d.data(),
-        })) as Anomaly[];
+        })) as AnomalyWithHistory[];
         setAnomalies(docs);
         setLargeTxCount(
           docs.filter((a) => a.type === "large_transaction").length,
@@ -426,6 +428,8 @@ async function runDetection(userId: string) {
         );
         await addDoc(collection(db, "anomalies"), {
           ...anomaly,
+          historicalCount: historical.count,
+          historicalLabel: historical.label,
           createdAt: anomaly.createdAt || serverTimestamp(),
         });
       }
@@ -459,7 +463,7 @@ function groupByWeek(anomalies: Anomaly[]): Array<{
       count: items.length,
       totalAmount: items.reduce((sum, a) => sum + a.amount, 0),
       avgConfidence:
-        items.reduce((sum, a) => sum + a.confidenceScore, 0) / items.length,
+        items.reduce((sum, a) => sum + (a.confidence || 0), 0) / items.length,
       types: Array.from(new Set(items.map((a) => a.type))),
     }))
     .sort((a, b) => b.label.localeCompare(a.label));

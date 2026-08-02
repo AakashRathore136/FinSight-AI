@@ -177,7 +177,9 @@ import { AnalysisList } from './components/AnalysisList';
 import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
+import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
+import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
 import { CurrencyManager } from './components/currency/CurrencyManager';
 import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
@@ -225,6 +227,18 @@ export default function App() {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const passwordRegex =
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  const getDefaultProfile = (currentUser: User) => ({
+    uid: currentUser.uid,
+    username: currentUser.displayName || "",
+    email: currentUser.email,
+    emailVerified: currentUser.emailVerified,
+    role:
+      currentUser.email === "aakash.ra613@gmail.com"
+        ? "admin"
+        : "junior_analyst",
+    createdAt: new Date().toISOString(),
+  });
 
   const validateUsername = (username: string): string | null => {
     if (!username) return "Username is required";
@@ -314,17 +328,7 @@ export default function App() {
             const userSnap = await getDoc(userRef);
 
             if (!userSnap.exists()) {
-              const profile = {
-                uid: currentUser.uid,
-                username: currentUser.displayName || "",
-                email: currentUser.email,
-                emailVerified: currentUser.emailVerified,
-                role:
-                  currentUser.email === "aakash.ra613@gmail.com"
-                    ? "admin"
-                    : "junior_analyst",
-                createdAt: new Date().toISOString(),
-              };
+              const profile = getDefaultProfile(currentUser);
               await setDoc(userRef, profile);
               setUserProfile(profile);
             } else {
@@ -332,6 +336,10 @@ export default function App() {
             }
           } catch (error) {
             handleFirestoreError(error, OperationType.GET, "users");
+            setUserProfile(getDefaultProfile(currentUser));
+            toast.error(
+              "Unable to sync your cloud profile. Using a local session profile for now.",
+            );
           }
         } else {
           setUserProfile(null);
@@ -411,15 +419,23 @@ export default function App() {
       );
       const newUser = userCredential.user;
 
-      // Create Firestore user profile
-      await setDoc(doc(db, "users", newUser.uid), {
-        uid: newUser.uid,
-        username: username,
-        email: email,
-        emailVerified: false,
-        role: signupRole,
-        createdAt: new Date().toISOString(),
-      });
+      // Create Firestore user profile. If rules are not deployed yet, auth can
+      // still complete and the verified session will retry profile creation.
+      try {
+        await setDoc(doc(db, "users", newUser.uid), {
+          uid: newUser.uid,
+          username: username,
+          email: email,
+          emailVerified: false,
+          role: signupRole,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (profileError) {
+        handleFirestoreError(profileError, OperationType.CREATE, "users");
+        toast.warning(
+          "Account created, but your profile could not be saved yet. It will retry after verification.",
+        );
+      }
 
       // Send verification email
       await sendEmailVerification(newUser);
