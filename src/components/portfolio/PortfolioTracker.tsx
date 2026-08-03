@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/ta
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
 import { Select } from '@/src/components/ui/select';
 import { cn, formatCurrency } from '@/src/lib/utils';
+import { formatCurrencyDisplay } from '@/src/lib/currencyUtils';
 import { auth, db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   type Holding,
@@ -674,7 +675,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                       'text-2xl font-bold tabular-nums',
                       (performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     )}>
-                      {formatCurrency((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
+                      {formatCurrencyDisplay((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
                     </p>
                     <p className={cn(
                       'text-xs mt-1',
@@ -689,7 +690,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                   <CardContent className="p-5">
                     <p className="text-xs text-slate-500 mb-1">Latest Total Value</p>
                     <p className="text-2xl font-bold text-white tabular-nums">
-                      {formatCurrency(performanceHistory[0]?.totalValue ?? 0, 'USD')}
+                      {formatCurrencyDisplay(performanceHistory[0]?.totalValue ?? 0, 'USD')}
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
                       {performanceHistory.length} snapshots
