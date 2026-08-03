@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   setDoc,
+  updateDoc,
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -77,6 +78,21 @@ export async function saveConversation(conversation: Omit<Conversation, 'id'>): 
     console.error('Error saving conversation:', error);
     handleFirestoreError(error, OperationType.CREATE, CHAT_COLLECTION);
     return null;
+  }
+}
+
+
+export async function updateConversation(conversationId: string, patch: Partial<Conversation>): Promise<boolean> {
+  try {
+    await updateDoc(doc(db, CHAT_COLLECTION, conversationId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating conversation:', error);
+    handleFirestoreError(error, OperationType.UPDATE, `${CHAT_COLLECTION}/${conversationId}`);
+    return false;
   }
 }
 
