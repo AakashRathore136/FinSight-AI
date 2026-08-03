@@ -154,7 +154,7 @@ export function generateExpenseSummary(
   return Array.from(map.entries())
     .map(([category, values]) => ({
       category,
-      total: Math.round(values.total * 100) / 100,
+      total: Math.round(values.total * 100 + Number.EPSILON) / 100,
       count: values.count,
     }))
     .sort((a, b) => b.total - a.total);
