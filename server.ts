@@ -64,6 +64,7 @@ const allowedOrigins = new Set(
 
 type VerifiedUser = {
   uid: string;
+  emailVerified: boolean;
 };
 
 class PipelineError extends Error {
@@ -275,7 +276,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
   }
 
   const decoded = await admin.auth().verifyIdToken(idToken);
-  return { uid: decoded.uid };
+  return { uid: decoded.uid, emailVerified: decoded.email_verified === true };
 }
 
 /**
@@ -299,6 +300,19 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
   const idToken = authHeader.split(" ")[1];
   try {
     const decoded = await verifyFirebaseIdToken(idToken);
+    // Firestore security rules already require email_verified == true for
+    // reads/writes; enforce the same policy server-side so the backend does
+    // not act as a privileged bypass for unverified accounts.
+    if (!decoded.emailVerified) {
+      return res.status(403).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Email address is not verified",
+          recommendation:
+            "Verify your email address to access this feature, then sign in again.",
+        },
+      });
+    }
     req.ownerId = decoded.uid;
     req.idToken = idToken;
     next();
