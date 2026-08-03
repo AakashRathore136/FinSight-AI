@@ -43,7 +43,7 @@ export function AuditTimeline({ recentDocs = [] }: { recentDocs: any[] }) {
           timestamp: processedTimestamp || Date.now() - 10000,
           type: "analysis",
           title: "NLP Extraction Pipeline Completed",
-          description: `AI extraction concluded for "${doc.fileName}" with confidence ${doc.latestAnalysis?.sentiment_score ? Math.round(doc.latestAnalysis.sentiment_score * 100) : 92}%.`,
+          description: `AI extraction concluded for "${doc.fileName}" with confidence ${doc.latestAnalysis?.sentiment_score ? Math.round(doc.latestAnalysis.sentiment_score * 100 + Number.EPSILON) : 92}%.`,
           user: "AI-Lens V2",
           icon: CheckCircle,
           color: "text-emerald-400 bg-emerald-500/10",
