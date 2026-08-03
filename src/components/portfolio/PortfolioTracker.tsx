@@ -61,6 +61,7 @@ import {
   getAssetClassColor,
   savePortfolioSnapshot,
   fetchPortfolioHistory,
+  addHolding,
 } from '@/src/lib/portfolioUtils';
 
 interface PortfolioTrackerProps {
@@ -156,7 +157,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
   const allocation = useMemo(() => calculateAllocation(holdings), [holdings]);
 
   const handleAddHolding = async () => {
-    if (!user || !portfolioId) return;
+    if (!user) return;
     const q = parseFloat(quantity);
     const cost = parseFloat(avgCost);
     const price = parseFloat(currentPrice);
@@ -165,27 +166,17 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       return;
     }
     try {
-      const ok = await updatePortfolio(user.uid, portfolioId, {
-        holdings: [
-          ...holdings,
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            userId: user.uid,
-            symbol,
-            name: name || symbol,
-            assetClass,
-            quantity: q,
-            avgCost: cost,
-            currentPrice: price,
-            currency: currency || 'USD',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+      const holding = await addHolding(user.uid, {
+        symbol,
+        name: name || symbol,
+        assetClass,
+        quantity: q,
+        avgCost: cost,
+        currentPrice: price,
+        currency: currency || 'USD',
       });
-      if (ok) {
-        const h = await fetchUserHoldings(user.uid);
-        setHoldings(h);
+      if (holding) {
+        setHoldings((prev) => [holding, ...prev]);
         setSymbol('');
         setName('');
         setQuantity('');
@@ -195,7 +186,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
         toast.success('Holding added');
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `portfolios/${portfolioId}`);
+      console.error('Error adding holding:', error);
       toast.error('Failed to add holding');
     }
   };
