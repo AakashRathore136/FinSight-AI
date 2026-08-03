@@ -26,6 +26,9 @@ service cloud.firestore {
       return data.keys().hasAll(['ownerId', 'fileName', 'fileUrl', 'status']) &&
              data.ownerId == request.auth.uid &&
              data.fileName is string && data.fileName.size() <= 255 &&
+             // Only allow https fileUrl so a stored link can never render as
+             // a javascript:/data: URL or a link-injection vector.
+             data.fileUrl is string && data.fileUrl.size() <= 2048 && data.fileUrl.startsWith('https://') &&
              data.status in ['pending', 'processing', 'completed', 'failed'];
     }
 
@@ -84,8 +87,14 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
+      // SECURITY: Audit entries are server-generated. The Firebase Admin SDK
+      // (service account) bypasses rules entirely, so allow create only for
+      // trusted admin-signed tokens and block every signed-in client from
+      // forging entries. The log is append-only: no updates or deletes.
       allow read: if isAdmin();
-      allow create: if isSignedIn(); // Allow app to log actions
+      allow create: if request.auth != null && request.auth.token.admin_sdk == true;
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /goals/{goalId} {

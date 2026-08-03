@@ -356,7 +356,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 <Input
                                   type="number"
                                   value={category.rolloverPercentage}
-                                  onChange={(e) => handlePercentageChange(category, parseInt(e.target.value) || 0)}
+                                  onChange={(e) => handlePercentageChange(category, parseInt(e.target.value, 10) || 0)}
                                   disabled={!category.rolloverEnabled}
                                   className="w-16 h-8 bg-slate-800 border-slate-700 text-white rounded-lg text-xs disabled:opacity-50"
                                   min={0}
@@ -526,3 +526,5 @@ function SummaryCard({
     </Card>
   );
 }
+
+.catch(err => console.error("Promise.all failed:", err));

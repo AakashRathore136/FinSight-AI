@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/ta
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
 import { Select } from '@/src/components/ui/select';
 import { cn, formatCurrency } from '@/src/lib/utils';
+import { formatCurrencyDisplay } from '@/src/lib/currencyUtils';
 import { auth, db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   type Holding,
@@ -61,6 +62,7 @@ import {
   getAssetClassColor,
   savePortfolioSnapshot,
   fetchPortfolioHistory,
+  addHolding,
 } from '@/src/lib/portfolioUtils';
 
 interface PortfolioTrackerProps {
@@ -156,36 +158,26 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
   const allocation = useMemo(() => calculateAllocation(holdings), [holdings]);
 
   const handleAddHolding = async () => {
-    if (!user || !portfolioId) return;
+    if (!user) return;
     const q = parseFloat(quantity);
     const cost = parseFloat(avgCost);
     const price = parseFloat(currentPrice);
-    if (!symbol || isNaN(q) || q <= 0 || isNaN(cost) || isNaN(price)) {
+    if (!symbol || Number.isNaN(q) || q <= 0 || isNaN(cost) || isNaN(price)) {
       toast.error('Please fill all fields correctly');
       return;
     }
     try {
-      const ok = await updatePortfolio(user.uid, portfolioId, {
-        holdings: [
-          ...holdings,
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            userId: user.uid,
-            symbol,
-            name: name || symbol,
-            assetClass,
-            quantity: q,
-            avgCost: cost,
-            currentPrice: price,
-            currency: currency || 'USD',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+      const holding = await addHolding(user.uid, {
+        symbol,
+        name: name || symbol,
+        assetClass,
+        quantity: q,
+        avgCost: cost,
+        currentPrice: price,
+        currency: currency || 'USD',
       });
-      if (ok) {
-        const h = await fetchUserHoldings(user.uid);
-        setHoldings(h);
+      if (holding) {
+        setHoldings((prev) => [holding, ...prev]);
         setSymbol('');
         setName('');
         setQuantity('');
@@ -195,7 +187,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
         toast.success('Holding added');
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `portfolios/${portfolioId}`);
+      console.error('Error adding holding:', error);
       toast.error('Failed to add holding');
     }
   };
@@ -674,7 +666,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                       'text-2xl font-bold tabular-nums',
                       (performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     )}>
-                      {formatCurrency((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
+                      {formatCurrencyDisplay((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
                     </p>
                     <p className={cn(
                       'text-xs mt-1',
@@ -689,7 +681,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                   <CardContent className="p-5">
                     <p className="text-xs text-slate-500 mb-1">Latest Total Value</p>
                     <p className="text-2xl font-bold text-white tabular-nums">
-                      {formatCurrency(performanceHistory[0]?.totalValue ?? 0, 'USD')}
+                      {formatCurrencyDisplay(performanceHistory[0]?.totalValue ?? 0, 'USD')}
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
                       {performanceHistory.length} snapshots

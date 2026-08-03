@@ -195,6 +195,7 @@ import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
+import { purgeApiCaches } from './pwa/registerSW';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -510,6 +511,9 @@ export default function App() {
 
   const handleLogout = () => {
     signOut(auth);
+    // Drop every cached API response (may include session-bound data or
+    // signed URLs) before the next user signs in on this device.
+    void purgeApiCaches();
     setActiveTab("dashboard");
     setShowVerificationScreen(false);
     setUsername("");
@@ -1156,18 +1160,6 @@ export default function App() {
 
             {activeTab === "goals" && (
               <motion.div
-                key="goals"
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-6"
-              >
-                <GoalPlanner user={user} />
-              </motion.div>
-            )}
-
-            {activeTab === 'goals' && (
-              <motion.div 
                 key="goals"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}

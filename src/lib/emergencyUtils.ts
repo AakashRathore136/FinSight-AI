@@ -120,7 +120,7 @@ export function trackContribution(
   amount: number,
   note?: string
 ): ContributionResult {
-  if (!fund || isNaN(amount) || amount <= 0) {
+  if (!fund || Number.isNaN(amount) || amount <= 0) {
     return { fund: null, contribution: null };
   }
 

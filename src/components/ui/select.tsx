@@ -46,9 +46,51 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 )
 Select.displayName = "Select"
 
-export { Select }
+interface SelectTriggerProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode
+}
+const SelectTrigger = React.forwardRef<HTMLDivElement, SelectTriggerProps>(
+  ({ children, className, ...props }, ref) => (
+    <div ref={ref} className={cn("flex items-center", className)} {...props}>
+      {children}
+    </div>
+  )
+)
+SelectTrigger.displayName = "SelectTrigger"
 
-export const SelectTrigger = ({ children }: any) => <>{children}</>;
-export const SelectValue = ({ placeholder }: any) => <>{placeholder}</>;
-export const SelectContent = ({ children }: any) => <>{children}</>;
-export const SelectItem = ({ value, children }: any) => <option value={value}>{children}</option>;
+interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
+  placeholder?: string
+}
+const SelectValue = React.forwardRef<HTMLSpanElement, SelectValueProps>(
+  ({ placeholder, ...props }, ref) => (
+    <span ref={ref} {...props}>{placeholder}</span>
+  )
+)
+SelectValue.displayName = "SelectValue"
+
+interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode
+}
+const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
+  ({ children, className, ...props }, ref) => (
+    <div ref={ref} className={cn("relative", className)} {...props}>
+      {children}
+    </div>
+  )
+)
+SelectContent.displayName = "SelectContent"
+
+interface SelectItemProps extends React.HTMLAttributes<HTMLDivElement> {
+  value: string
+  children?: React.ReactNode
+}
+const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
+  ({ value, children, className, ...props }, ref) => (
+    <div ref={ref} data-value={value} className={cn("cursor-pointer", className)} {...props}>
+      {children}
+    </div>
+  )
+)
+SelectItem.displayName = "SelectItem"
+
+export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
