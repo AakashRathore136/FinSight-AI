@@ -226,7 +226,7 @@ export async function markBillAsPaid(
     );
 
     await updateDoc(doc(db, 'bills', bill.id), {
-      isPaid: true,
+      isPaid: false,
       lastPaidDate: paidDate.toISOString(),
       nextDueDate,
     });
