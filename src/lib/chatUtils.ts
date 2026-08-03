@@ -88,13 +88,15 @@ export async function loadConversations(userId: string): Promise<Conversation[]>
     const conversations: Conversation[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      const toIso = (val: any) =>
+        val && typeof val.toDate === 'function' ? val.toDate().toISOString() : (val || new Date().toISOString());
       conversations.push({
         id: docSnap.id,
         userId: data.userId || '',
         title: data.title || 'New Conversation',
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        lastMessageAt: data.lastMessageAt || new Date().toISOString(),
+        createdAt: toIso(data.createdAt),
+        updatedAt: toIso(data.updatedAt),
+        lastMessageAt: toIso(data.lastMessageAt),
       });
     });
     return conversations;
@@ -153,7 +155,10 @@ export async function loadMessages(conversationId: string, userId: string): Prom
         userId: data.userId || '',
         role: data.role || 'user',
         content: data.content || '',
-        timestamp: data.timestamp || new Date().toISOString(),
+        timestamp: (() => {
+          const t = data.timestamp;
+          return t && typeof t.toDate === 'function' ? t.toDate().toISOString() : (t || new Date().toISOString());
+        })(),
         metadata: data.metadata,
       });
     });
