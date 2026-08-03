@@ -1048,7 +1048,40 @@ CRITICAL RULES:
         });
       }
 
-      // Verify user owns the document by checking Firestore
+      // Collapse redundant slashes and reject traversal / absolute paths so
+      // the ownership prefix check below cannot be bypassed with `..`.
+      const normalizedPath = storagePath.replace(/\/+/g, "/").replace(/^\/+/, "");
+      if (
+        normalizedPath !== storagePath ||
+        normalizedPath.split("/").includes("..")
+      ) {
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "Invalid storage path",
+            recommendation: "Use the storagePath returned by the API.",
+          },
+        });
+      }
+
+      // Signing a URL for an arbitrary path is an IDOR: previously ownership
+      // was proven only by a Firestore document, but any client can write such
+      // a document referencing another user's storage path. Ownership must be
+      // verified against the storage object itself (namespace + uploadedBy).
+      const expectedPrefix = `analyses/${req.ownerId}/`;
+      if (!normalizedPath.startsWith(expectedPrefix)) {
+        console.warn(
+          `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
+        );
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "You do not have access to this document",
+            recommendation: "Verify the document belongs to your account.",
+          },
+        });
+      }
+
       if (!admin.apps.length) {
         return res.status(503).json({
           error: {
@@ -1060,17 +1093,13 @@ CRITICAL RULES:
       }
 
       try {
-        const dbAdmin = getFirestore(firestoreDatabaseId);
-        const docSnap = await dbAdmin
-          .collectionGroup("documents")
-          .where("ownerId", "==", req.ownerId)
-          .where("storagePath", "==", storagePath)
-          .limit(1)
-          .get();
+        const bucket = getStorage().bucket();
+        const [metadata] = await bucket.file(normalizedPath).getMetadata();
+        const uploadedBy = metadata?.metadata?.uploadedBy;
 
-        if (docSnap.empty) {
+        if (!metadata || uploadedBy !== req.ownerId) {
           console.warn(
-            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${storagePath}`,
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
           );
           return res.status(403).json({
             error: {
@@ -1081,12 +1110,24 @@ CRITICAL RULES:
           });
         }
 
-        const signedUrl = await generateShortLivedSignedUrl(storagePath, 15 * 60 * 1000);
+        const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);
         return res.status(200).json({
           signedUrl,
           expiresIn: 15 * 60, // seconds
         });
       } catch (error: any) {
+        if (error?.code === 404) {
+          console.warn(
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
         console.error(
           "DOWNLOAD_URL_GENERATION_ERROR:",
           error?.message || error,
