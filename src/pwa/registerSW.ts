@@ -76,6 +76,28 @@ export async function unregisterServiceWorker(): Promise<boolean> {
   return false;
 }
 
+export async function purgeApiCaches(): Promise<void> {
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.filter(key => key.startsWith('api-')).map(key => caches.delete(key)),
+      );
+    } catch {
+      // Ignore cache purge failures; the service worker path below is the fallback.
+    }
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (registration?.active) {
+    registration.active.postMessage({ type: 'CLEAR_API_CACHE' });
+  }
+}
+
 export async function checkForUpdates(registration?: ServiceWorkerRegistration): Promise<boolean> {
   if (!registration) {
     registration = await navigator.serviceWorker.getRegistration();
