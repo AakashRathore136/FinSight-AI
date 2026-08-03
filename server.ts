@@ -16,6 +16,13 @@ dotenv.config({ quiet: true });
 
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
 
+// NEVER log extracted document text or raw AI responses by default: they
+// contain sensitive financial content. For local debugging only, set
+// LOG_DOC_CONTENT=true; content previews stay suppressed in production
+// regardless of the flag.
+const logDocumentContent =
+  process.env.LOG_DOC_CONTENT === "true" && process.env.NODE_ENV !== "production";
+
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 const upload = multer({
@@ -704,7 +711,9 @@ async function startServer() {
         console.log(
           `PDF_EXTRACTION_COMPLETE: extracted ${extractedText.length} characters`,
         );
-        console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
+        if (logDocumentContent) {
+          console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
+        }
 
         // Validate extraction
         if (!extractedText || extractedText.length < 100) {
@@ -842,7 +851,9 @@ CRITICAL RULES:
                   "AI_JSON_PARSE_ERROR:",
                   parseError?.message || parseError,
                 );
-                console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+                if (logDocumentContent) {
+                  console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+                }
                 if (retries >= maxRetries) {
                   throw new PipelineError(
                     "JSON_PARSING",
@@ -861,11 +872,13 @@ CRITICAL RULES:
                 validPayload = validateAnalysisPayload(parsedResponse);
                 console.log("AI_SCHEMA_VALIDATION_SUCCESS");
                 console.log(
-                  `AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`,
+                  `AI_ANALYSIS_GENERATED: summaryLength=${validPayload.summary.length}, fullReportLength=${validPayload.full_report.length}`,
                 );
-                console.log(
-                  `AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`,
-                );
+                if (logDocumentContent) {
+                  console.log(
+                    `AI_ANALYSIS_SUMMARY: ${validPayload.summary.substring(0, 200)}`,
+                  );
+                }
               } catch (validateError: any) {
                 console.error(
                   "AI_SCHEMA_VALIDATION_ERROR:",
