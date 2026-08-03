@@ -52,10 +52,7 @@ export function generateMonthlyForecast(
   monthsAhead = 6
 ): MonthlyForecast[] {
   if (!historicalData.length) {
-    return Array.from({ length: monthsAhead }, (_, i) => {
-      const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
-      return { month, income: 0, expenses: 0, net: 0, confidence: 0 };
-    });
+    return [];
   }
 
   const avgIncome = historicalData.reduce((s, d) => s + d.income, 0) / historicalData.length;
