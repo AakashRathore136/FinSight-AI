@@ -811,10 +811,11 @@ CRITICAL RULES:
             });
           }
 
+          let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
             const timeoutMs = 30_000;
-            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
               const completion = await hfClient.chatCompletion({
