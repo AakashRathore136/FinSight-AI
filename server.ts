@@ -45,9 +45,6 @@ const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
 const firestoreDatabaseId =
   String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
   "(default)";
-const firestoreBaseUrl = firebaseProjectId
-  ? `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`
-  : "";
 
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
@@ -371,78 +368,6 @@ function toFirestoreValue(value: any): any {
   return { stringValue: String(value) };
 }
 
-function toFirestoreFields(data: Record<string, any>): Record<string, any> {
-  return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]),
-  );
-}
-
-async function createFirestoreDocumentViaRest(
-  collectionPath: string,
-  data: Record<string, any>,
-  idToken: string,
-): Promise<string> {
-  if (!firestoreBaseUrl) {
-    throw new Error("FIREBASE_PROJECT_ID is not configured");
-  }
-  const response = await fetch(`${firestoreBaseUrl}/${collectionPath}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ fields: toFirestoreFields(data) }),
-  });
-
-  const body: any = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      body?.error?.message ||
-        `Firestore REST write failed with status ${response.status}`,
-    );
-  }
-
-  const name = String(body.name || "");
-  return name.split("/").pop() || "";
-}
-
-async function updateFirestoreDocumentViaRest(
-  documentPath: string,
-  data: Record<string, any>,
-  idToken: string
-): Promise<void> {
-  if (!firestoreBaseUrl) {
-    throw new Error("FIREBASE_PROJECT_ID is not configured");
-  }
-
-  const fieldMask = Object.keys(data)
-    .map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
-    .join("&");
-
-  const response = await fetch(
-    `${firestoreBaseUrl}/${documentPath}?${fieldMask}`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fields: toFirestoreFields(data),
-      }),
-    }
-  );
-
-  const body: any = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      body?.error?.message ||
-        `Firestore REST update failed with status ${response.status}`
-    );
-  }
-}
-
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3001;
@@ -657,7 +582,6 @@ async function startServer() {
         // requireFirebaseAuth middleware has already verified the token
         // and attached the uid/token before this handler runs.
         const ownerId = req.ownerId as string;
-        const idToken = req.idToken as string;
 
         // Extract text from PDF buffer
         console.log("PDF_EXTRACTION_START: using pdf-parse");
@@ -1034,53 +958,13 @@ CRITICAL RULES:
           console.log(
             `FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`,
           );
-          console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
-
-          await updateFirestoreDocumentViaRest(
-            `documents/${documentId}`,
-            {
-              latestAnalysis: analysisDoc,
-              updatedAt: now,
-            },
-            idToken
-          );
-          console.log(`FIRESTORE_PARENT_UPDATED_REST: latestAnalysis snapshot stored`);
-        } catch (restError: any) {
-          console.error('FIRESTORE_REST_WRITE_FAILED:', restError?.message || restError);
+        } catch (writeError: any) {
+          console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
           throw new PipelineError(
             "FIRESTORE_WRITE",
-            `Firestore database write failed: ${restError?.message || String(restError)}`,
+            `Firestore database write failed: ${writeError?.message || String(writeError)}`,
             "Check database security rules, database existence, and network connection."
           );
-          try {
-            documentId = await createFirestoreDocumentViaRest(
-              "documents",
-              docData,
-              idToken,
-            );
-            console.log(
-              `FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`,
-            );
-
-            analysisId = await createFirestoreDocumentViaRest(
-              `documents/${documentId}/analyses`,
-              { ...analysisDoc, documentId },
-              idToken,
-            );
-            console.log(
-              `FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`,
-            );
-          } catch (restError: any) {
-            console.error(
-              "FIRESTORE_REST_WRITE_FAILED:",
-              restError?.message || restError,
-            );
-            throw new PipelineError(
-              "FIRESTORE_WRITE",
-              `Firestore database write failed: ${restError?.message || String(restError)}`,
-              "Check database security rules, database existence, and network connection.",
-            );
-          }
         }
 
         console.log("=== PDF INGESTION PIPELINE COMPLETE SUCCESS ===");
