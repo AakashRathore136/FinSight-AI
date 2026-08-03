@@ -115,15 +115,22 @@ export async function createBill(userId: string, input: BillInput): Promise<Bill
   }
 }
 
-export async function deleteBill(billId: string): Promise<boolean> {
+export async function softDeleteBill(billId: string): Promise<boolean> {
   try {
     await updateDoc(doc(db, 'bills', billId), { deleted: true });
     return true;
   } catch (error) {
-    console.error('Error deleting bill:', error);
+    console.error('Error soft-deleting bill:', error);
     handleFirestoreError(error, OperationType.DELETE, `bills/${billId}`);
     return false;
   }
+}
+
+/**
+ * @deprecated Use softDeleteBill instead. This function performs a soft delete, not an actual deletion.
+ */
+export async function deleteBill(billId: string): Promise<boolean> {
+  return softDeleteBill(billId);
 }
 
 export function calculateNextDueDate(
