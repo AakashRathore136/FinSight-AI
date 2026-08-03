@@ -69,6 +69,7 @@ import {
   loadMessages,
   buildFinancialContext,
   generateChatResponse,
+  updateConversation,
 } from '@/src/lib/chatUtils';
 import {
   fetchTransactionsForPeriod,
@@ -310,19 +311,24 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     setSuggestions(response.suggestions || []);
 
     const conversation = conversations.find((c) => c.id === currentConversationId);
+    const derivedTitle = content.trim().slice(0, 50) + (content.trim().length > 50 ? '...' : '');
     if (conversation) {
       setConversations((prev) =>
         prev.map((c) =>
           c.id === currentConversationId
             ? {
                 ...c,
-                title: content.slice(0, 40) + (content.length > 40 ? '...' : ''),
+                title: derivedTitle,
                 updatedAt: new Date().toISOString(),
                 lastMessageAt: new Date().toISOString(),
               }
             : c
         )
       );
+      await updateConversation(currentConversationId, {
+        title: derivedTitle,
+        lastMessageAt: new Date().toISOString(),
+      });
     }
   };
 

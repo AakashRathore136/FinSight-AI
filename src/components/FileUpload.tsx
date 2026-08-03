@@ -353,6 +353,10 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
             {(() => {
               try {
                 const diag = JSON.parse(errorMessage);
+                // Validate that diag is an object with expected structure
+                if (typeof diag !== 'object' || diag === null) {
+                  throw new Error('Invalid error object');
+                }
                 return (
                   <div className="mt-4 pt-4 border-t border-red-500/10 space-y-3">
                     <div className="flex items-center gap-2">
@@ -360,7 +364,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                         Stage: {diag.stage || "UNKNOWN"}
                       </span>
                     </div>
-                    <p className="text-slate-300 font-medium">{diag.reason}</p>
+                    <p className="text-slate-300 font-medium">{diag.reason || errorMessage}</p>
                     {diag.recommendation && (
                       <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800 flex items-start gap-2.5 text-xs text-slate-400">
                         <Zap

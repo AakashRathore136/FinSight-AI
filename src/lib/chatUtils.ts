@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   setDoc,
+  updateDoc,
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -80,6 +81,21 @@ export async function saveConversation(conversation: Omit<Conversation, 'id'>): 
   }
 }
 
+
+export async function updateConversation(conversationId: string, patch: Partial<Conversation>): Promise<boolean> {
+  try {
+    await updateDoc(doc(db, CHAT_COLLECTION, conversationId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating conversation:', error);
+    handleFirestoreError(error, OperationType.UPDATE, `${CHAT_COLLECTION}/${conversationId}`);
+    return false;
+  }
+}
+
 export async function loadConversations(userId: string): Promise<Conversation[]> {
   try {
     const ref = collection(db, CHAT_COLLECTION);
@@ -88,13 +104,15 @@ export async function loadConversations(userId: string): Promise<Conversation[]>
     const conversations: Conversation[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      const toIso = (val: any) =>
+        val && typeof val.toDate === 'function' ? val.toDate().toISOString() : (val || new Date().toISOString());
       conversations.push({
         id: docSnap.id,
         userId: data.userId || '',
         title: data.title || 'New Conversation',
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        lastMessageAt: data.lastMessageAt || new Date().toISOString(),
+        createdAt: toIso(data.createdAt),
+        updatedAt: toIso(data.updatedAt),
+        lastMessageAt: toIso(data.lastMessageAt),
       });
     });
     return conversations;
@@ -153,7 +171,10 @@ export async function loadMessages(conversationId: string, userId: string): Prom
         userId: data.userId || '',
         role: data.role || 'user',
         content: data.content || '',
-        timestamp: data.timestamp || new Date().toISOString(),
+        timestamp: (() => {
+          const t = data.timestamp;
+          return t && typeof t.toDate === 'function' ? t.toDate().toISOString() : (t || new Date().toISOString());
+        })(),
         metadata: data.metadata,
       });
     });
@@ -307,7 +328,7 @@ export function generateBudgetAdvice(context: FinancialContext): ChatResponse {
 
 export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse {
   const { monthlySpending, spendingByMonth, totalSpending } = context;
-  const months = Object.keys(monthlySpending).sort();
+  const months = Object.keys(monthlySpending).sort((a, b) => a - b);
   let response = '';
 
   if (months.length < 2) {

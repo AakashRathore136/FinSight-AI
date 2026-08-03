@@ -84,8 +84,14 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
+      // SECURITY: Audit entries are server-generated. The Firebase Admin SDK
+      // (service account) bypasses rules entirely, so allow create only for
+      // trusted admin-signed tokens and block every signed-in client from
+      // forging entries. The log is append-only: no updates or deletes.
       allow read: if isAdmin();
-      allow create: if isSignedIn(); // Allow app to log actions
+      allow create: if request.auth != null && request.auth.token.admin_sdk == true;
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /goals/{goalId} {

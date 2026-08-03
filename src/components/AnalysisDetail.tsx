@@ -1,3 +1,69 @@
+import { useEffect, useMemo, useState } from "react";
+import { db } from "@/src/lib/firebase";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+} from "firebase/firestore";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import {
+  ArrowLeft,
+  Download,
+  Share2,
+  Copy,
+  Check,
+  Send,
+  Mail,
+  X,
+  FileText,
+  AlertTriangle,
+  ShieldAlert,
+  Target,
+  BarChart3,
+  TrendingUp,
+  Clock,
+  Sparkles,
+  BadgeCheck,
+  FileDigit,
+  Activity,
+  PieChart,
+  Layers3,
+} from "lucide-react";
+import { Button } from "@/src/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
+import { Separator } from "@/src/components/ui/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/src/components/ui/tabs";
+import { Skeleton } from "@/src/components/ui/skeleton";
+import ReactMarkdown from "react-markdown";
+
+const XBrandIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
+
+const FacebookIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.75z" />
+  </svg>
+);
 
 type AnalysisDetailProps = {
   docId: string;

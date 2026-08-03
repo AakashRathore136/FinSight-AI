@@ -74,7 +74,7 @@ export function GoalCard({
             </div>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-300">
                 <MoreVertical size={16} />
               </Button>

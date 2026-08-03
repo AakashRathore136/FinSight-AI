@@ -16,6 +16,13 @@ dotenv.config({ quiet: true });
 
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
 
+// NEVER log extracted document text or raw AI responses by default: they
+// contain sensitive financial content. For local debugging only, set
+// LOG_DOC_CONTENT=true; content previews stay suppressed in production
+// regardless of the flag.
+const logDocumentContent =
+  process.env.LOG_DOC_CONTENT === "true" && process.env.NODE_ENV !== "production";
+
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 const upload = multer({
@@ -45,9 +52,6 @@ const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
 const firestoreDatabaseId =
   String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
   "(default)";
-const firestoreBaseUrl = firebaseProjectId
-  ? `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${encodeURIComponent(firestoreDatabaseId)}/documents`
-  : "";
 
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
@@ -64,6 +68,7 @@ const allowedOrigins = new Set(
 
 type VerifiedUser = {
   uid: string;
+  emailVerified: boolean;
 };
 
 class PipelineError extends Error {
@@ -275,7 +280,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedUser> {
   }
 
   const decoded = await admin.auth().verifyIdToken(idToken);
-  return { uid: decoded.uid };
+  return { uid: decoded.uid, emailVerified: decoded.email_verified === true };
 }
 
 /**
@@ -299,6 +304,19 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
   const idToken = authHeader.split(" ")[1];
   try {
     const decoded = await verifyFirebaseIdToken(idToken);
+    // Firestore security rules already require email_verified == true for
+    // reads/writes; enforce the same policy server-side so the backend does
+    // not act as a privileged bypass for unverified accounts.
+    if (!decoded.emailVerified) {
+      return res.status(403).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Email address is not verified",
+          recommendation:
+            "Verify your email address to access this feature, then sign in again.",
+        },
+      });
+    }
     req.ownerId = decoded.uid;
     req.idToken = idToken;
     next();
@@ -369,78 +387,6 @@ function toFirestoreValue(value: any): any {
   }
   if (typeof value === "boolean") return { booleanValue: value };
   return { stringValue: String(value) };
-}
-
-function toFirestoreFields(data: Record<string, any>): Record<string, any> {
-  return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]),
-  );
-}
-
-async function createFirestoreDocumentViaRest(
-  collectionPath: string,
-  data: Record<string, any>,
-  idToken: string,
-): Promise<string> {
-  if (!firestoreBaseUrl) {
-    throw new Error("FIREBASE_PROJECT_ID is not configured");
-  }
-  const response = await fetch(`${firestoreBaseUrl}/${collectionPath}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ fields: toFirestoreFields(data) }),
-  });
-
-  const body: any = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      body?.error?.message ||
-        `Firestore REST write failed with status ${response.status}`,
-    );
-  }
-
-  const name = String(body.name || "");
-  return name.split("/").pop() || "";
-}
-
-async function updateFirestoreDocumentViaRest(
-  documentPath: string,
-  data: Record<string, any>,
-  idToken: string
-): Promise<void> {
-  if (!firestoreBaseUrl) {
-    throw new Error("FIREBASE_PROJECT_ID is not configured");
-  }
-
-  const fieldMask = Object.keys(data)
-    .map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
-    .join("&");
-
-  const response = await fetch(
-    `${firestoreBaseUrl}/${documentPath}?${fieldMask}`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fields: toFirestoreFields(data),
-      }),
-    }
-  );
-
-  const body: any = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      body?.error?.message ||
-        `Firestore REST update failed with status ${response.status}`
-    );
-  }
 }
 
 async function startServer() {
@@ -657,7 +603,6 @@ async function startServer() {
         // requireFirebaseAuth middleware has already verified the token
         // and attached the uid/token before this handler runs.
         const ownerId = req.ownerId as string;
-        const idToken = req.idToken as string;
 
         // Extract text from PDF buffer
         console.log("PDF_EXTRACTION_START: using pdf-parse");
@@ -704,7 +649,9 @@ async function startServer() {
         console.log(
           `PDF_EXTRACTION_COMPLETE: extracted ${extractedText.length} characters`,
         );
-        console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
+        if (logDocumentContent) {
+          console.log(`PDF_TEXT_PREVIEW: ${extractedText.slice(0, 500)}`);
+        }
 
         // Validate extraction
         if (!extractedText || extractedText.length < 100) {
@@ -811,10 +758,11 @@ CRITICAL RULES:
             });
           }
 
+          let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
             const timeoutMs = 30_000;
-            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
               const completion = await hfClient.chatCompletion({
@@ -841,7 +789,9 @@ CRITICAL RULES:
                   "AI_JSON_PARSE_ERROR:",
                   parseError?.message || parseError,
                 );
-                console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+                if (logDocumentContent) {
+                  console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
+                }
                 if (retries >= maxRetries) {
                   throw new PipelineError(
                     "JSON_PARSING",
@@ -860,11 +810,13 @@ CRITICAL RULES:
                 validPayload = validateAnalysisPayload(parsedResponse);
                 console.log("AI_SCHEMA_VALIDATION_SUCCESS");
                 console.log(
-                  `AI_ANALYSIS_GENERATED: summary=${validPayload.summary.substring(0, 100)}...`,
+                  `AI_ANALYSIS_GENERATED: summaryLength=${validPayload.summary.length}, fullReportLength=${validPayload.full_report.length}`,
                 );
-                console.log(
-                  `AI_FULL_REPORT_LENGTH: ${validPayload.full_report.length} characters`,
-                );
+                if (logDocumentContent) {
+                  console.log(
+                    `AI_ANALYSIS_SUMMARY: ${validPayload.summary.substring(0, 200)}`,
+                  );
+                }
               } catch (validateError: any) {
                 console.error(
                   "AI_SCHEMA_VALIDATION_ERROR:",
@@ -1034,53 +986,13 @@ CRITICAL RULES:
           console.log(
             `FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`,
           );
-          console.log(`FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`);
-
-          await updateFirestoreDocumentViaRest(
-            `documents/${documentId}`,
-            {
-              latestAnalysis: analysisDoc,
-              updatedAt: now,
-            },
-            idToken
-          );
-          console.log(`FIRESTORE_PARENT_UPDATED_REST: latestAnalysis snapshot stored`);
-        } catch (restError: any) {
-          console.error('FIRESTORE_REST_WRITE_FAILED:', restError?.message || restError);
+        } catch (writeError: any) {
+          console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
           throw new PipelineError(
             "FIRESTORE_WRITE",
-            `Firestore database write failed: ${restError?.message || String(restError)}`,
+            `Firestore database write failed: ${writeError?.message || String(writeError)}`,
             "Check database security rules, database existence, and network connection."
           );
-          try {
-            documentId = await createFirestoreDocumentViaRest(
-              "documents",
-              docData,
-              idToken,
-            );
-            console.log(
-              `FIRESTORE_DOCUMENT_CREATED_REST: documentId=${documentId}`,
-            );
-
-            analysisId = await createFirestoreDocumentViaRest(
-              `documents/${documentId}/analyses`,
-              { ...analysisDoc, documentId },
-              idToken,
-            );
-            console.log(
-              `FIRESTORE_ANALYSIS_CREATED_REST: analysisId=${analysisId}`,
-            );
-          } catch (restError: any) {
-            console.error(
-              "FIRESTORE_REST_WRITE_FAILED:",
-              restError?.message || restError,
-            );
-            throw new PipelineError(
-              "FIRESTORE_WRITE",
-              `Firestore database write failed: ${restError?.message || String(restError)}`,
-              "Check database security rules, database existence, and network connection.",
-            );
-          }
         }
 
         console.log("=== PDF INGESTION PIPELINE COMPLETE SUCCESS ===");
@@ -1136,7 +1048,40 @@ CRITICAL RULES:
         });
       }
 
-      // Verify user owns the document by checking Firestore
+      // Collapse redundant slashes and reject traversal / absolute paths so
+      // the ownership prefix check below cannot be bypassed with `..`.
+      const normalizedPath = storagePath.replace(/\/+/g, "/").replace(/^\/+/, "");
+      if (
+        normalizedPath !== storagePath ||
+        normalizedPath.split("/").includes("..")
+      ) {
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "Invalid storage path",
+            recommendation: "Use the storagePath returned by the API.",
+          },
+        });
+      }
+
+      // Signing a URL for an arbitrary path is an IDOR: previously ownership
+      // was proven only by a Firestore document, but any client can write such
+      // a document referencing another user's storage path. Ownership must be
+      // verified against the storage object itself (namespace + uploadedBy).
+      const expectedPrefix = `analyses/${req.ownerId}/`;
+      if (!normalizedPath.startsWith(expectedPrefix)) {
+        console.warn(
+          `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
+        );
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "You do not have access to this document",
+            recommendation: "Verify the document belongs to your account.",
+          },
+        });
+      }
+
       if (!admin.apps.length) {
         return res.status(503).json({
           error: {
@@ -1148,17 +1093,13 @@ CRITICAL RULES:
       }
 
       try {
-        const dbAdmin = getFirestore(firestoreDatabaseId);
-        const docSnap = await dbAdmin
-          .collectionGroup("documents")
-          .where("ownerId", "==", req.ownerId)
-          .where("storagePath", "==", storagePath)
-          .limit(1)
-          .get();
+        const bucket = getStorage().bucket();
+        const [metadata] = await bucket.file(normalizedPath).getMetadata();
+        const uploadedBy = metadata?.metadata?.uploadedBy;
 
-        if (docSnap.empty) {
+        if (!metadata || uploadedBy !== req.ownerId) {
           console.warn(
-            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${storagePath}`,
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
           );
           return res.status(403).json({
             error: {
@@ -1169,12 +1110,24 @@ CRITICAL RULES:
           });
         }
 
-        const signedUrl = await generateShortLivedSignedUrl(storagePath, 15 * 60 * 1000);
+        const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);
         return res.status(200).json({
           signedUrl,
           expiresIn: 15 * 60, // seconds
         });
       } catch (error: any) {
+        if (error?.code === 404) {
+          console.warn(
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
         console.error(
           "DOWNLOAD_URL_GENERATION_ERROR:",
           error?.message || error,
