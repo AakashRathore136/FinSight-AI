@@ -160,7 +160,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     const q = parseFloat(quantity);
     const cost = parseFloat(avgCost);
     const price = parseFloat(currentPrice);
-    if (!symbol || isNaN(q) || q <= 0 || isNaN(cost) || isNaN(price)) {
+    if (!symbol || Number.isNaN(q) || q <= 0 || isNaN(cost) || isNaN(price)) {
       toast.error('Please fill all fields correctly');
       return;
     }
