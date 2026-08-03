@@ -20,7 +20,11 @@ export default defineConfig(({ mode }) => {
       watch: process.env.DISABLE_HMR === "true" ? null : {},
     },
     build: {
-      sourcemap: true,
+      // Source maps are dev-only; shipping them in production exposes the
+      // client bundle source (and the Vite index.html in dist/). Server-side
+      // source maps are also disabled in the `build` script (esbuild emits no
+      // --sourcemap), so no *.map files ever reach the static file server.
+      sourcemap: mode === "production" ? false : true,
       rollupOptions: {
         output: {
           manualChunks: undefined,
