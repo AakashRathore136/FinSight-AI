@@ -74,7 +74,7 @@ export function calculateDifficulty(spending: SpendingPattern): Difficulty {
 
 function scaleTarget(base: number, difficulty: Difficulty): number {
   if (difficulty === 'easy') return Math.round(base * 0.6);
-  if (difficulty === 'medium') return Math.round(base * 1);
+  if (difficulty === 'medium') return Math.round(base * 1 + Number.EPSILON);
   return Math.round(base * 1.6);
 }
 
