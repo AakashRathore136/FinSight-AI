@@ -42,7 +42,7 @@ import {
 } from "@/src/components/ui/dropdown-menu";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { toast } from "sonner";
-import { formatDateSafe } from "@/src/lib/utils";
+import { formatDateSafe, isSafeExternalUrl } from "@/src/lib/utils";
 
 export function AnalysisList({ type, user, onSelect }: any) {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -263,14 +263,20 @@ export function AnalysisList({ type, user, onSelect }: any) {
                           <Eye size={16} /> View Intelligence Report
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg p-0">
-                          <a
-                            href={doc.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 w-full h-full px-2 py-1"
-                          >
-                            <ExternalLink size={16} /> Open Source File
-                          </a>
+                          {isSafeExternalUrl(doc.fileUrl) ? (
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 w-full h-full px-2 py-1"
+                            >
+                              <ExternalLink size={16} /> Open Source File
+                            </a>
+                          ) : (
+                            <span className="flex items-center gap-3 w-full h-full px-2 py-1 text-slate-500 cursor-not-allowed">
+                              <ExternalLink size={16} /> Source file unavailable
+                            </span>
+                          )}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-800" />
                         <DropdownMenuItem
