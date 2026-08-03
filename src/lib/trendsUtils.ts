@@ -266,7 +266,7 @@ export function calculateCategoryDistribution(
   });
 
   return Array.from(totals.entries())
-    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+    .map(([name, value]) => ({ name, value: Math.round(value * 100 + Number.EPSILON) / 100 }))
     .sort((a, b) => b.value - a.value)
     .map((d) => ({ ...d, color: getCategoryColor(d.name) }));
 }
