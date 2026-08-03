@@ -297,14 +297,6 @@
 //                      <p className="truncate text-sm font-bold text-white">{document.fileName}</p>
 //                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">{document.fileType.split('/')[1] || 'DOCX'} - {(document.fileSize/1024/1024).toFixed(2)} MB</p>
 //                   </div>
-//                   <a
-//                     href={document.fileUrl}
-//                     target="_blank"
-//                     rel="noopener noreferrer"
-//                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 text-slate-500 hover:text-white hover:bg-slate-700"
-//                   >
-//                     <Download size={20} />
-//                   </a>
 //                </div>
 
 //                <div className="space-y-4 px-2">

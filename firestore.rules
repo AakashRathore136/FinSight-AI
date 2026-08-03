@@ -26,6 +26,9 @@ service cloud.firestore {
       return data.keys().hasAll(['ownerId', 'fileName', 'fileUrl', 'status']) &&
              data.ownerId == request.auth.uid &&
              data.fileName is string && data.fileName.size() <= 255 &&
+             // Only allow https fileUrl so a stored link can never render as
+             // a javascript:/data: URL or a link-injection vector.
+             data.fileUrl is string && data.fileUrl.size() <= 2048 && data.fileUrl.startsWith('https://') &&
              data.status in ['pending', 'processing', 'completed', 'failed'];
     }
 
