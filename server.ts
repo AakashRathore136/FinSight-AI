@@ -1274,7 +1274,22 @@ CRITICAL RULES:
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+
+    // The server bundle (build/server.cjs) and any stray source maps must
+    // never be served over HTTP. dist/ only contains hashed frontend assets,
+    // but deny these extensions explicitly as defense in depth.
+    app.use(distPath, (req, res, next) => {
+      if (/\.(map|cjs|mjs)$/i.test(req.path)) {
+        return res.status(404).end();
+      }
+      next();
+    });
+
+    app.use(
+      express.static(distPath, {
+        index: "index.html",
+      })
+    );
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
