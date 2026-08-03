@@ -1170,18 +1170,6 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'goals' && (
-              <motion.div 
-                key="goals"
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-6"
-              >
-                <GoalPlanner user={user} />
-              </motion.div>
-            )}
-
             {activeTab === 'bills' && (
               <motion.div 
                 key="bills"
