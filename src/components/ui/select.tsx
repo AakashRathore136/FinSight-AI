@@ -47,3 +47,8 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 Select.displayName = "Select"
 
 export { Select }
+
+export const SelectTrigger = ({ children }: any) => <>{children}</>;
+export const SelectValue = ({ placeholder }: any) => <>{placeholder}</>;
+export const SelectContent = ({ children }: any) => <>{children}</>;
+export const SelectItem = ({ value, children }: any) => <option value={value}>{children}</option>;
