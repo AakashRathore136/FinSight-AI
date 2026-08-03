@@ -63,6 +63,7 @@ Firebase Services
  └── Firebase Storage
 ```
 
+![CI](https://github.com/AakashRathore136/FinSight-AI/actions/workflows/ci.yml/badge.svg)
 ---
 
 # 🛠️ Tech Stack
@@ -180,6 +181,20 @@ http://localhost:3001
 - Automated compliance reporting
 - AI chatbot for financial queries
 - Advanced analytics visualization
+
+## CI/CD
+
+All pull requests run three automated checks via GitHub Actions:
+
+| Check | Command | Purpose |
+|-------|---------|---------|
+| TypeScript | `npx tsc --noEmit` | Catches type errors before merge |
+| Lint | `npm run lint` | Enforces code style rules |
+| Build | `npm run build` | Verifies Vite build succeeds |
+
+### Adding secrets for the build step
+
+Maintainers: add these secrets under **Settings → Secrets and variables → Actions**:
 
 ---
 

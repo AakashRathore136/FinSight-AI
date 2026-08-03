@@ -290,3 +290,58 @@ export function initializeDefaultCategories(userId: string): BudgetCategory[] {
     updatedAt: now,
   }));
 }
+
+export { formatCurrency } from './utils';
+
+export interface CategoryBudgetSuggestion {
+  category: string;
+  suggestedLimit: number;
+  confidenceScore: number;
+  reasoning: string;
+}
+
+export interface BudgetComparison {
+  category: string;
+  previousMonthSpend: number;
+  currentBudget: number;
+  percentChange: number;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  amount: number;
+  category: string;
+  date: string;
+  description: string;
+}
+
+export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
+  return [];
+}
+
+export async function fetchPreviousMonthTransactions(userId: string): Promise<Transaction[]> {
+  return [];
+}
+
+export async function generateBudgetSuggestions(transactions: Transaction[]): Promise<CategoryBudgetSuggestion[]> {
+  return [];
+}
+
+export function calculateTotalBudget(categories: BudgetCategory[]): number {
+  return categories.reduce((sum, cat) => sum + cat.monthlyLimit, 0);
+}
+
+export function calculateConfidenceScore(data: any): number {
+  return 80;
+}
+
+export async function fetchBudgetFromFirestore(userId: string): Promise<any> {
+  return null;
+}
+
+export async function saveBudgetToFirestore(userId: string, data: any): Promise<void> {}
+
+export async function generateBudgetComparison(userId: string): Promise<BudgetComparison[]> {
+  return [];
+}

@@ -435,7 +435,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
                               {metric.score}%
                             </Badge>
                           </div>
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Weight: {Math.round(metric.weight * 100)}%</span>
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Weight: {Math.round(metric.weight * 100 + Number.EPSILON)}%</span>
                         </div>
                         <Progress value={metric.score}>
                           <ProgressTrack>

@@ -257,6 +257,36 @@ export async function addTransaction(userId: string, input: TransactionInput): P
 
     return { ...transaction, id: id || '' };
   } catch (error) {
+
+export async function addHolding(userId: string, input: HoldingInput): Promise<Holding | null> {
+  try {
+    const id = doc(collection(db, 'portfolioHoldings')).id;
+    const now = new Date().toISOString();
+    const holding: Omit<Holding, 'id'> = {
+      userId,
+      symbol: input.symbol.trim().toUpperCase(),
+      name: input.name.trim() || input.symbol.trim().toUpperCase(),
+      assetClass: input.assetClass,
+      quantity: input.quantity,
+      avgCost: input.avgCost,
+      currentPrice: input.currentPrice,
+      currency: input.currency || 'USD',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await setDoc(doc(db, 'portfolioHoldings', id), {
+      ...holding,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return { ...holding, id };
+  } catch (error) {
+    console.error('Error adding holding:', error);
+    handleFirestoreError(error, OperationType.CREATE, 'portfolioHoldings');
+    return null;
+  }
+}
+
     console.error('Error adding transaction:', error);
     handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
     return null;

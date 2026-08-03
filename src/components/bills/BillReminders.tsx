@@ -46,7 +46,7 @@ import {
   type BillInput,
   fetchUserBills,
   createBill,
-  deleteBill,
+  softDeleteBill,
   markBillAsPaid,
   getUpcomingBills,
   getOverdueBills,
@@ -188,7 +188,7 @@ export function BillReminders({ user }: BillRemindersProps) {
   };
 
   const handleDelete = async (billId: string) => {
-    const ok = await deleteBill(billId);
+    const ok = await softDeleteBill(billId);
     if (ok) {
       setBills((prev) => prev.filter((b) => b.id !== billId));
       toast.success('Bill removed');
