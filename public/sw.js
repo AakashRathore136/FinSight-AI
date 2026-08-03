@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `offline-${CACHE_VERSION}`;
@@ -13,6 +13,11 @@ const STATIC_ASSETS = [
 const API_PATTERNS = [
   /\/api\//,
 ];
+
+// Only public, unauthenticated endpoints may ever be cached. Everything else
+// under /api/ returns user-specific data or short-lived signed URLs and must
+// stay out of the cache.
+const PUBLIC_API_PATTERN = /^\/api\/health/;
 
 const OFFLINE_PATHS = ['/'];
 
@@ -71,12 +76,32 @@ async function handleStaticRequest(request) {
 async function handleApiRequest(request) {
   try {
     const response = await fetch(request.clone());
-    const cache = await caches.open(API_CACHE);
-    cache.put(request, response.clone());
+    // Only cache public GET responses without credentials. Authenticated
+    // responses (per-user data, signed document URLs) must never be stored:
+    // they are session-bound and could leak to another user.
+    if (
+      response.ok &&
+      request.method === 'GET' &&
+      request.headers.get('Authorization') == null &&
+      PUBLIC_API_PATTERN.test(new URL(request.url).pathname)
+    ) {
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, response.clone());
+    }
     return response;
   } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
+    // Never serve a stale cached copy for authenticated or sensitive
+    // requests — the cached entry may belong to another account.
+    const url = new URL(request.url);
+    const isSafeToServeFromCache =
+      request.method === 'GET' &&
+      request.headers.get('Authorization') == null &&
+      PUBLIC_API_PATTERN.test(url.pathname);
+
+    if (isSafeToServeFromCache) {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+    }
 
     return new Response(
       JSON.stringify({ error: 'Offline', message: 'No cached data available' }),
@@ -124,6 +149,11 @@ self.addEventListener('message', (event) => {
     case 'STORE_PENDING_REQUEST':
       pendingSync.set(payload.id, payload);
       self.registration.sync.register('sync-pending-requests');
+      break;
+    case 'CLEAR_API_CACHE':
+      // Purge every cached API response on sign-out so session-bound data
+      // cannot survive into the next user's session.
+      caches.delete(API_CACHE);
       break;
     default:
       break;
