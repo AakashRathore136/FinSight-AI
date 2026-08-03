@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,6 +23,9 @@ export interface PrivacySettings {
   retentionPeriod: "6months" | "1year" | "2years" | "indefinite";
   exportFormat: "json" | "csv";
   lastUpdated: string;
+  dataRetentionEnabled: boolean;
+  analyticsEnabled: boolean;
+  sharingEnabled: boolean;
 }
 
 export interface ActivityLogEntry {
@@ -41,6 +44,9 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   retentionPeriod: "1year",
   exportFormat: "json",
   lastUpdated: new Date().toISOString(),
+  dataRetentionEnabled: false,
+  analyticsEnabled: false,
+  sharingEnabled: false,
 };
 
 export async function getPrivacySettings(
