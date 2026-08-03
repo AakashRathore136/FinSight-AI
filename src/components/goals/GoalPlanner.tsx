@@ -45,6 +45,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Progress, ProgressTrack, ProgressIndicator } from '@/src/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
 import { cn, formatCurrency } from '@/src/lib/utils';
+import { GoalCard } from './GoalCard';
 import {
   type Goal,
   calculateMonthlyContribution,
