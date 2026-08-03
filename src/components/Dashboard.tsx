@@ -26,7 +26,7 @@ type DashboardDocument = {
 
 function normalizeConfidence(value: any) {
   const n = Number(value || 0);
-  if (n <= 1) return Math.round(n * 100);
+  if (n <= 1) return Math.round(n * 100 + Number.EPSILON);
   return Math.round(Math.min(100, n));
 }
 
