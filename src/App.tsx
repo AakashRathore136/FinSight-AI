@@ -234,10 +234,7 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role:
-      currentUser.email === "aakash.ra613@gmail.com"
-        ? "admin"
-        : "junior_analyst",
+    role: "junior_analyst",
     createdAt: new Date().toISOString(),
   });
 
