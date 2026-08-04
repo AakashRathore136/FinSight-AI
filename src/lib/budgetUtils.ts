@@ -16,6 +16,7 @@ import {
   orderBy,
   deleteDoc,
   writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { toDate } from './utils';
@@ -317,15 +318,94 @@ export interface Transaction {
 }
 
 export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
-  return [];
+  try {
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    
+    const q = query(
+      collection(db, "transactions"),
+      where("ownerId", "==", userId),
+      where("date", ">=", Timestamp.fromDate(threeMonthsAgo))
+    );
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: data.ownerId || userId,
+        amount: data.amount || 0,
+        category: data.category || "Other",
+        date: data.date?.toDate?.()?.toISOString() || new Date().toISOString(),
+        description: data.description || "",
+      } as Transaction;
+    });
+  } catch (error) {
+    console.error("Error fetching last 3 months transactions:", error);
+    return [];
+  }
 }
 
 export async function fetchPreviousMonthTransactions(userId: string): Promise<Transaction[]> {
-  return [];
+  try {
+    const now = new Date();
+    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const q = query(
+      collection(db, "transactions"),
+      where("ownerId", "==", userId),
+      where("date", ">=", Timestamp.fromDate(startOfPreviousMonth)),
+      where("date", "<=", Timestamp.fromDate(endOfPreviousMonth))
+    );
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: data.ownerId || userId,
+        amount: data.amount || 0,
+        category: data.category || "Other",
+        date: data.date?.toDate?.()?.toISOString() || new Date().toISOString(),
+        description: data.description || "",
+      } as Transaction;
+    });
+  } catch (error) {
+    console.error("Error fetching previous month transactions:", error);
+    return [];
+  }
 }
 
 export async function generateBudgetSuggestions(transactions: Transaction[]): Promise<CategoryBudgetSuggestion[]> {
-  return [];
+  if (!transactions.length) return [];
+  
+  const categoryTotals: Record<string, { total: number; count: number }> = {};
+  
+  for (const tx of transactions) {
+    if (!categoryTotals[tx.category]) {
+      categoryTotals[tx.category] = { total: 0, count: 0 };
+    }
+    categoryTotals[tx.category].total += tx.amount;
+    categoryTotals[tx.category].count += 1;
+  }
+  
+  const suggestions: CategoryBudgetSuggestion[] = [];
+  
+  for (const [category, data] of Object.entries(categoryTotals)) {
+    const avgMonthly = data.total / 3; // Average over 3 months
+    const suggestedLimit = Math.ceil(avgMonthly * 1.2); // Add 20% buffer
+    const confidenceScore = Math.min(95, 60 + (data.count * 2)); // Higher count = higher confidence
+    
+    suggestions.push({
+      category,
+      suggestedLimit,
+      confidenceScore,
+      reasoning: `Based on ${data.count} transactions totaling ${data.total.toFixed(2)} over 3 months`,
+    });
+  }
+  
+  return suggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
 }
 
 export function calculateTotalBudget(categories: BudgetCategory[]): number {
@@ -333,15 +413,71 @@ export function calculateTotalBudget(categories: BudgetCategory[]): number {
 }
 
 export function calculateConfidenceScore(data: any): number {
-  return 80;
+  if (!data || !data.transactions) return 50;
+  const count = data.transactions.length;
+  if (count < 10) return 50 + count * 2;
+  if (count < 30) return 70 + (count - 10);
+  return Math.min(95, 90 + (count - 30) * 0.5);
 }
 
 export async function fetchBudgetFromFirestore(userId: string): Promise<any> {
-  return null;
+  try {
+    const budgetRef = doc(db, "budgets", userId);
+    const snapshot = await getDoc(budgetRef);
+    if (snapshot.exists()) {
+      return snapshot.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching budget from Firestore:", error);
+    return null;
+  }
 }
 
-export async function saveBudgetToFirestore(userId: string, data: any): Promise<void> {}
+export async function saveBudgetToFirestore(userId: string, data: any): Promise<void> {
+  try {
+    const budgetRef = doc(db, "budgets", userId);
+    await setDoc(budgetRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving budget to Firestore:", error);
+    throw error;
+  }
+}
 
 export async function generateBudgetComparison(userId: string): Promise<BudgetComparison[]> {
-  return [];
+  try {
+    const [previousMonthTxns, categories] = await Promise.all([
+      fetchPreviousMonthTransactions(userId),
+      fetchBudgetCategories(userId),
+    ]);
+    
+    const categorySpend: Record<string, number> = {};
+    for (const tx of previousMonthTxns) {
+      categorySpend[tx.category] = (categorySpend[tx.category] || 0) + tx.amount;
+    }
+    
+    const comparisons: BudgetComparison[] = [];
+    
+    for (const cat of categories) {
+      const previousSpend = categorySpend[cat.name] || 0;
+      const percentChange = cat.monthlyLimit > 0 
+        ? ((previousSpend - cat.monthlyLimit) / cat.monthlyLimit) * 100 
+        : 0;
+      
+      comparisons.push({
+        category: cat.name,
+        previousMonthSpend: previousSpend,
+        currentBudget: cat.monthlyLimit,
+        percentChange: Math.round(percentChange * 100) / 100,
+      });
+    }
+    
+    return comparisons;
+  } catch (error) {
+    console.error("Error generating budget comparison:", error);
+    return [];
+  }
 }
