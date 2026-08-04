@@ -51,6 +51,29 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /privacy_settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /currencies/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow get: if isOwner(existing().userId) || isAdmin();
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
     match /documents/{docId} {
@@ -64,7 +87,8 @@ service cloud.firestore {
     match /documents/{docId}/analyses/{analysisId} {
       // SECURITY: Only allow reading own analyses or if admin
       // Prevents cross-user data leakage of financial AI analysis results
-      allow read: if isOwner(existing().ownerId) || isAdmin();
+      allow get: if isOwner(existing().ownerId) || isAdmin();
+      allow list: if request.auth != null && (request.query.ownerId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isValidAnalysis(incoming());
       allow update: if isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
@@ -79,8 +103,28 @@ service cloud.firestore {
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
 
+    match /anomalies/{anomalyId} {
+      // SECURITY: Per-user RLS for the anomalies collection
+      // Prevents cross-user access to anomaly detection data
+      allow get: if isOwner(existing().userId);
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
     match /subscriptions/{subId} {
       allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /transactions/{txnId} {
+      // SECURITY: Per-user RLS for the transactions collection
+      // Prevents cross-user access to financial transaction data
+      allow get: if isOwner(existing().userId);
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if isOwner(existing().userId) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();

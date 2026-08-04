@@ -771,7 +771,7 @@ CRITICAL RULES:
                 messages,
                 max_tokens: 5000,
                 temperature: 0.2,
-              });
+              }, { signal: controller.signal });
               console.log(
                 "AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct",
               );

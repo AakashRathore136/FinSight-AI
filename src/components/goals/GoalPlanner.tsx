@@ -71,6 +71,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const notifiedGoalIds = useRef(new Set<string>());
+  const updatingGoalIds = useRef(new Set<string>());
 
   const [formName, setFormName] = useState('');
   const [formTarget, setFormTarget] = useState('');
@@ -133,14 +134,18 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     goals.forEach((goal) => {
       if (goal.status === 'completed') return;
       if (notifiedGoalIds.current.has(goal.id)) return;
+      if (updatingGoalIds.current.has(goal.id)) return;
       const isComplete = goal.currentAmount >= goal.targetAmount;
       if (isComplete) {
         notifiedGoalIds.current.add(goal.id);
+        updatingGoalIds.current.add(goal.id);
         toast.success(`Goal reached: ${goal.name}!`, {
           description: `You've reached ${formatCurrency(goal.targetAmount)}.`,
           duration: 5000,
         });
-        updateGoalStatus(goal.id, 'completed', goal.currentAmount);
+        updateGoalStatus(goal.id, 'completed', goal.currentAmount).finally(() => {
+          updatingGoalIds.current.delete(goal.id);
+        });
       }
     });
   }, [goals, user]);

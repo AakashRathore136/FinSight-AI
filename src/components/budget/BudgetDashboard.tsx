@@ -23,6 +23,7 @@ import {
 import {
   Wallet,
   Loader2,
+  Download,
   TrendingUp,
   TrendingDown,
   Calendar,
@@ -97,7 +98,7 @@ export function BudgetDashboard({ user }: { user: any }) {
         return acc;
       }, {});
 
-      const generatedSuggestions = generateBudgetSuggestions(
+      const generatedSuggestions = await generateBudgetSuggestions(
         transactions,
         previousSpending,
       );
@@ -172,7 +173,7 @@ export function BudgetDashboard({ user }: { user: any }) {
     };
 
     try {
-      await saveBudgetToFirestore(budgetData);
+      await saveBudgetToFirestore(user.uid, budgetData);
       setTotalBudget(budgetData.totalBudget);
       setSaved(true);
     } catch (error) {
@@ -245,6 +246,14 @@ export function BudgetDashboard({ user }: { user: any }) {
               Saved for {currentMonth}
             </Badge>
           )}
+          <Button
+            variant="outline"
+            className="text-slate-400 hover:text-white hover:bg-slate-800 h-9 px-3 gap-2 border-slate-700 hidden md:flex"
+            onClick={() => window.print()}
+          >
+            <Download className="h-4 w-4" />
+            <span className="text-xs font-bold uppercase tracking-wider">Export PDF</span>
+          </Button>
           <Button
             variant="ghost"
             className="text-slate-400 hover:text-white hover:bg-slate-800 h-9 w-9 p-0"

@@ -26,20 +26,12 @@ import {
   LayoutDashboard,
   FileText,
   ShieldCheck,
-  Settings,
   LogOut,
   Upload,
   Search,
   Clock,
   Briefcase,
   AlertTriangle,
-  History,
-  FileSearch,
-  Filter,
-  Lock,
-  Zap,
-  Activity,
-  Target,
   Bell,
   Trophy,
   Wallet,
@@ -66,7 +58,6 @@ import {
 } from "@/src/components/ui/card";
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/src/components/ui/tabs";
@@ -178,6 +169,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
+import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
 import { CurrencyManager } from './components/currency/CurrencyManager';
@@ -195,6 +187,7 @@ import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
+import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
 
 export default function App() {
@@ -210,6 +203,7 @@ export default function App() {
     getSharedDocId(),
   );
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
 
@@ -234,7 +228,7 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role: "junior_analyst", // Default role, will be updated from Firestore
+    role: "junior_analyst",
     createdAt: new Date().toISOString(),
   });
 
@@ -1079,7 +1073,10 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
+        <div
+          ref={contentScrollRef}
+          className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]"
+        >
           <AnimatePresence mode="wait">
             {activeTab === "dashboard" && (
               <motion.div
@@ -1125,6 +1122,18 @@ export default function App() {
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
                 />
+              </motion.div>
+            )}
+
+            {activeTab === "budgets" && (
+              <motion.div
+                key="budgets"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BudgetDashboard user={user} />
               </motion.div>
             )}
 
@@ -1352,6 +1361,7 @@ export default function App() {
           onDocSelect={(id) => openAnalysisView(id, "dashboard")}
         />
       )}
+      <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
     </ThemeProvider>

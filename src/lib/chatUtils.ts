@@ -327,7 +327,7 @@ export function generateBudgetAdvice(context: FinancialContext): ChatResponse {
 }
 
 export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse {
-  const { monthlySpending, spendingByMonth, totalSpending } = context;
+  const { monthlySpending, spendingByMonth } = context;
   const months = Object.keys(monthlySpending).sort((a, b) => a - b);
   let response = '';
 
@@ -349,7 +349,7 @@ export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse
     response += `Spending increased by ${formatCurrency(maxIncrease.amount)} in ${maxIncrease.month}. `;
   }
 
-  const avg = totalSpending / Math.max(spendingByMonth.length, 1);
+  const avg = spendingByMonth.reduce((sum, m) => sum + m.amount, 0) / spendingByMonth.length;
   response += `Your average monthly spending is ${formatCurrency(Math.round(avg))}.`;
 
   return {
