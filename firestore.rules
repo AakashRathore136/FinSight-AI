@@ -79,6 +79,16 @@ service cloud.firestore {
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
 
+    match /anomalies/{anomalyId} {
+      // SECURITY: Per-user RLS for the anomalies collection
+      // Prevents cross-user access to anomaly detection data
+      allow get: if isOwner(existing().userId);
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
     match /subscriptions/{subId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
