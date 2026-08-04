@@ -195,6 +195,7 @@ import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
+import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
 
 export default function App() {
@@ -210,6 +211,7 @@ export default function App() {
     getSharedDocId(),
   );
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
 
@@ -1069,7 +1071,10 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
+        <div
+          ref={contentScrollRef}
+          className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]"
+        >
           <AnimatePresence mode="wait">
             {activeTab === "dashboard" && (
               <motion.div
@@ -1342,6 +1347,7 @@ export default function App() {
           onDocSelect={(id) => openAnalysisView(id, "dashboard")}
         />
       )}
+      <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
     </ThemeProvider>
