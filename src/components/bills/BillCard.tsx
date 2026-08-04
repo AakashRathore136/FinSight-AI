@@ -8,7 +8,7 @@ import { Calendar, CreditCard, Tag, AlertTriangle, Clock, CheckCircle2 } from 'l
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
-import { cn, formatCurrency, formatDateSafe, toDate } from '@/src/lib/utils';
+import { cn, formatCurrency, toDate } from '@/src/lib/utils';
 import { type Bill, getDaysUntilDue, isOverdue } from '@/src/lib/billUtils';
 
 interface BillCardProps {
