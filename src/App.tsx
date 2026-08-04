@@ -26,20 +26,12 @@ import {
   LayoutDashboard,
   FileText,
   ShieldCheck,
-  Settings,
   LogOut,
   Upload,
   Search,
   Clock,
   Briefcase,
   AlertTriangle,
-  History,
-  FileSearch,
-  Filter,
-  Lock,
-  Zap,
-  Activity,
-  Target,
   Bell,
   Trophy,
   Wallet,
@@ -66,7 +58,6 @@ import {
 } from "@/src/components/ui/card";
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/src/components/ui/tabs";
