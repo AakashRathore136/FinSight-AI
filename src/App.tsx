@@ -232,6 +232,19 @@ export default function App() {
     createdAt: new Date().toISOString(),
   });
 
+  // Fetch user role from Firestore instead of hardcoding
+  const fetchUserRole = async (userId: string): Promise<string> => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        return userDoc.data().role || "junior_analyst";
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+    }
+    return "junior_analyst";
+  };
+
   const validateUsername = (username: string): string | null => {
     if (!username) return "Username is required";
     if (!usernameRegex.test(username)) {
