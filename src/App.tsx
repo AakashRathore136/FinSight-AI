@@ -234,12 +234,22 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role:
-      currentUser.email === "aakash.ra613@gmail.com"
-        ? "admin"
-        : "junior_analyst",
+    role: "junior_analyst", // Default role, will be updated from Firestore
     createdAt: new Date().toISOString(),
   });
+
+  // Fetch user role from Firestore instead of hardcoding
+  const fetchUserRole = async (userId: string): Promise<string> => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        return userDoc.data().role || "junior_analyst";
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+    }
+    return "junior_analyst";
+  };
 
   const validateUsername = (username: string): string | null => {
     if (!username) return "Username is required";
