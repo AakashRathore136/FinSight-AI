@@ -169,6 +169,7 @@ import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
+import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
 import { CurrencyManager } from './components/currency/CurrencyManager';
@@ -1108,6 +1109,18 @@ export default function App() {
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
                 />
+              </motion.div>
+            )}
+
+            {activeTab === "budgets" && (
+              <motion.div
+                key="budgets"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BudgetDashboard user={user} />
               </motion.div>
             )}
 
