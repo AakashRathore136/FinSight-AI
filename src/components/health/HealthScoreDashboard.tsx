@@ -278,7 +278,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
           metrics: metricsPayload,
         });
         setHistoricalScores((prev) =>
-          prev.map((s) => (s.id === existing.id ? { ...s, ...metricsPayload, overallScore: overall } : s))
+          prev.map((s) => (s.id === existing.id ? { ...s, overallScore: overall, spendingScore: spending, savingsScore: savings, budgetAdherenceScore: budget, metrics: metricsPayload } : s))
         );
         toast.success('Health score recalculated');
       } else {
