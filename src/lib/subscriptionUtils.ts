@@ -137,7 +137,7 @@ export async function fetchUserTransactions(
   try {
     const q = query(
       collection(db, "transactions"),
-      where("ownerId", "==", userId),
+      where("userId", "==", userId),
       where("date", ">=", Timestamp.fromDate(subDays(new Date(), daysBack))),
     );
     const snapshot = await getDocs(q);
@@ -145,7 +145,7 @@ export async function fetchUserTransactions(
       const data = doc.data();
       return {
         id: doc.id,
-        ownerId: data.ownerId || "",
+        ownerId: data.userId || data.ownerId || "",
         amount: data.amount || 0,
         category: data.category || "Other",
         description: data.description || "",
@@ -154,8 +154,30 @@ export async function fetchUserTransactions(
       } as Transaction;
     });
   } catch (error) {
-    console.error("Error fetching transactions:", error);
-    return [];
+    // Fallback to ownerId for backward compatibility
+    try {
+      const q = query(
+        collection(db, "transactions"),
+        where("ownerId", "==", userId),
+        where("date", ">=", Timestamp.fromDate(subDays(new Date(), daysBack))),
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ownerId: data.ownerId || "",
+          amount: data.amount || 0,
+          category: data.category || "Other",
+          description: data.description || "",
+          date: toDate(data.date) || new Date(),
+          type: data.type || "expense",
+        } as Transaction;
+      });
+    } catch (fallbackError) {
+      console.error("Error fetching transactions:", fallbackError);
+      return [];
+    }
   }
 }
 
