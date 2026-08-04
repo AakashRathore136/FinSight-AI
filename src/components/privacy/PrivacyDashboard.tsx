@@ -252,6 +252,17 @@ export function PrivacyDashboard({ user }: { user: any }) {
                       })
                     }
                   />
+                  <PrivacyToggle
+                    label="Two-Factor Authentication (2FA)"
+                    description="Require an extra security step when logging in"
+                    enabled={privacySettings.mfaEnabled}
+                    onChange={(enabled) =>
+                      setPrivacySettings({
+                        ...privacySettings,
+                        mfaEnabled: enabled,
+                      })
+                    }
+                  />
                 </>
               )}
             </CardContent>

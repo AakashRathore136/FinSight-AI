@@ -26,6 +26,7 @@ export interface PrivacySettings {
   dataRetentionEnabled: boolean;
   analyticsEnabled: boolean;
   sharingEnabled: boolean;
+  mfaEnabled: boolean;
 }
 
 export interface ActivityLogEntry {
@@ -47,6 +48,7 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   dataRetentionEnabled: false,
   analyticsEnabled: false,
   sharingEnabled: false,
+  mfaEnabled: false,
 };
 
 export async function getPrivacySettings(
