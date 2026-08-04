@@ -39,7 +39,9 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
     totalIncome,
     totalExpenses,
     transactions,
+    currency,
   } = reportData;
+  const reportCurrency = currency || "INR";
 
   return (
     <div className="space-y-6">
@@ -61,7 +63,7 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
                   Total Income
                 </p>
                 <p className="text-lg font-bold text-emerald-400 tabular-nums">
-                  {formatCurrency(totalIncome)}
+                  {formatCurrency(totalIncome, reportCurrency)}
                 </p>
               </div>
               <div className="w-px bg-slate-800" />
@@ -70,7 +72,7 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
                   Total Expenses
                 </p>
                 <p className="text-lg font-bold text-red-400 tabular-nums">
-                  {formatCurrency(totalExpenses)}
+                  {formatCurrency(totalExpenses, reportCurrency)}
                 </p>
               </div>
             </div>
@@ -115,7 +117,7 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
                             {item.count}
                           </TableCell>
                           <TableCell className="text-right text-slate-300 text-sm font-semibold tabular-nums">
-                            {formatCurrency(item.total)}
+                            {formatCurrency(item.total, reportCurrency)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -162,7 +164,7 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
                             {item.count}
                           </TableCell>
                           <TableCell className="text-right text-slate-300 text-sm font-semibold tabular-nums">
-                            {formatCurrency(item.total)}
+                            {formatCurrency(item.total, reportCurrency)}
                           </TableCell>
                         </TableRow>
                       ))}

@@ -4,7 +4,8 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { auth } from "@/src/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/src/lib/firebase";
 import { Button } from "@/src/components/ui/button";
 import {
   Card,
@@ -120,6 +121,7 @@ export function ReportExport() {
   const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [baseCurrency, setBaseCurrency] = useState("INR");
 
   const expenseChartRef = useRef<HTMLDivElement>(null);
   const incomeChartRef = useRef<HTMLDivElement>(null);
@@ -150,6 +152,22 @@ export function ReportExport() {
   );
 
   useEffect(() => {
+    const loadCurrency = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const snap = await getDoc(doc(db, "currencies", auth.currentUser.uid));
+        if (snap.exists()) {
+          const data = snap.data() as { baseCurrency?: string };
+          if (data.baseCurrency) setBaseCurrency(data.baseCurrency);
+        }
+      } catch (e) {
+        console.error("Failed to load currency settings:", e);
+      }
+    };
+    loadCurrency();
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
       if (!auth.currentUser) return;
       setLoading(true);
@@ -178,6 +196,7 @@ export function ReportExport() {
       transactions,
       expenseSummary,
       incomeSummary,
+      baseCurrency,
     );
     setReportData(data);
     setShowPreview(true);
@@ -436,7 +455,7 @@ export function ReportExport() {
                       {loading ? (
                         <Skeleton className="h-8 w-20 bg-slate-700" />
                       ) : (
-                        formatCurrency(totalIncome - totalExpenses)
+                        formatCurrency(totalIncome - totalExpenses, baseCurrency)
                       )}
                     </p>
                   </div>
@@ -510,7 +529,7 @@ export function ReportExport() {
                             fontSize={12}
                             tickLine={false}
                             axisLine={false}
-                            tickFormatter={(val) => `₹${val}`}
+                            tickFormatter={(val) => formatCurrency(val, baseCurrency)}
                           />
                           <Tooltip
                             contentStyle={{
@@ -520,7 +539,7 @@ export function ReportExport() {
                             }}
                             itemStyle={{ color: "#f8fafc" }}
                             formatter={(value: any) => [
-                              formatCurrency(value),
+                              formatCurrency(value, baseCurrency),
                               "Total",
                             ]}
                           />
@@ -584,7 +603,7 @@ export function ReportExport() {
                             }}
                             itemStyle={{ color: "#f8fafc" }}
                             formatter={(value: any) => [
-                              formatCurrency(value),
+                              formatCurrency(value, baseCurrency),
                               "Total",
                             ]}
                           />
