@@ -86,6 +86,16 @@ service cloud.firestore {
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
+    match /transactions/{txnId} {
+      // SECURITY: Per-user RLS for the transactions collection
+      // Prevents cross-user access to financial transaction data
+      allow get: if isOwner(existing().userId);
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isOwner(existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
     match /auditLogs/{logId} {
       // SECURITY: Audit entries are server-generated. The Firebase Admin SDK
       // (service account) bypasses rules entirely, so allow create only for
