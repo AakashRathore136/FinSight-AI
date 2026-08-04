@@ -87,7 +87,8 @@ service cloud.firestore {
     match /documents/{docId}/analyses/{analysisId} {
       // SECURITY: Only allow reading own analyses or if admin
       // Prevents cross-user data leakage of financial AI analysis results
-      allow read: if isOwner(existing().ownerId) || isAdmin();
+      allow get: if isOwner(existing().ownerId) || isAdmin();
+      allow list: if request.auth != null && (request.query.ownerId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isValidAnalysis(incoming());
       allow update: if isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
