@@ -25,7 +25,7 @@ import {
 
 export interface Transaction {
   id: string;
-  ownerId: string;
+  userId: string;
   amount: number;
   category: string;
   description: string;
@@ -137,7 +137,7 @@ export async function fetchUserTransactions(
   try {
     const q = query(
       collection(db, "transactions"),
-      where("ownerId", "==", userId),
+      where("userId", "==", userId),
       where("date", ">=", Timestamp.fromDate(subDays(new Date(), daysBack))),
     );
     const snapshot = await getDocs(q);
@@ -145,7 +145,7 @@ export async function fetchUserTransactions(
       const data = doc.data();
       return {
         id: doc.id,
-        ownerId: data.ownerId || "",
+        userId: data.userId || "",
         amount: data.amount || 0,
         category: data.category || "Other",
         description: data.description || "",
