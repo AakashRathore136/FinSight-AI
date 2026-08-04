@@ -311,6 +311,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     setSuggestions(response.suggestions || []);
 
     const conversation = conversations.find((c) => c.id === currentConversationId);
+    const isDefaultTitle = !conversation || conversation.title === 'New Chat';
     const derivedTitle = content.trim().slice(0, 50) + (content.trim().length > 50 ? '...' : '');
     if (conversation) {
       setConversations((prev) =>
@@ -318,7 +319,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
           c.id === currentConversationId
             ? {
                 ...c,
-                title: derivedTitle,
+                ...(isDefaultTitle ? { title: derivedTitle } : {}),
                 updatedAt: new Date().toISOString(),
                 lastMessageAt: new Date().toISOString(),
               }
@@ -326,7 +327,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
         )
       );
       await updateConversation(currentConversationId, {
-        title: derivedTitle,
+        ...(isDefaultTitle ? { title: derivedTitle } : {}),
         lastMessageAt: new Date().toISOString(),
       });
     }
