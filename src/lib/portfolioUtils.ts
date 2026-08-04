@@ -257,6 +257,11 @@ export async function addTransaction(userId: string, input: TransactionInput): P
 
     return { ...transaction, id: id || '' };
   } catch (error) {
+    console.error('Error adding transaction:', error);
+    handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
+    return null;
+  }
+}
 
 export async function addHolding(userId: string, input: HoldingInput): Promise<Holding | null> {
   try {
@@ -283,12 +288,6 @@ export async function addHolding(userId: string, input: HoldingInput): Promise<H
   } catch (error) {
     console.error('Error adding holding:', error);
     handleFirestoreError(error, OperationType.CREATE, 'portfolioHoldings');
-    return null;
-  }
-}
-
-    console.error('Error adding transaction:', error);
-    handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
     return null;
   }
 }
