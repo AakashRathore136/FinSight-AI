@@ -17,6 +17,7 @@ import {
   orderBy,
   deleteDoc,
   writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { normalizeTransactionType } from './utils';
