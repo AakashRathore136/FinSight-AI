@@ -59,31 +59,52 @@ interface InsightsDashboardProps {
 
 export function InsightsDashboard({ user }: InsightsDashboardProps) {
   const [bundle, setBundle] = useState<InsightsBundle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // Derive loading state
+  const loading = !user || isLoading;
 
   useEffect(() => {
-    let active = true;
     if (!user) {
-      setLoading(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBundle(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHasError(false);
       return;
     }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const transactions = await fetchTransactions(user.uid);
-        if (!active) return;
+    let cancelled = false;
+    let loadingState = true;
+
+    // Set initial state - needed for derived loading state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasError(false);
+
+    fetchTransactions(user.uid)
+      .then(transactions => {
+        if (cancelled || !loadingState) return;
+        loadingState = false;
         setBundle(buildInsights(transactions, user.uid));
-      } catch (error) {
+      })
+      .catch(error => {
+        if (cancelled || !loadingState) return;
+        loadingState = false;
         handleFirestoreError(error, OperationType.LIST, "transactions");
-        if (active) setBundle(buildInsights([], user.uid));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+        setBundle(buildInsights([], user.uid));
+      })
+      .finally(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setIsLoading(false);
+        }
+      });
 
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 

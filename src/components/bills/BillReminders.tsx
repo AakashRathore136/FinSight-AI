@@ -76,26 +76,38 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const today = startOfDay(new Date());
 
-  // Derive loading state - no synchronous setState needed
+  // Derive loading state
   const loading = !user || isLoading;
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBills([]);
       return;
     }
     let cancelled = false;
+    let loadingState = true;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
+
     fetchUserBills(user.uid)
       .then((fetched) => {
-        if (!cancelled) {
+        if (!cancelled && loadingState) {
+          loadingState = false;
           setBills(fetched);
-          setIsLoading(false);
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && loadingState) {
+          loadingState = false;
           setBills([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsLoading(false);
         }
       });

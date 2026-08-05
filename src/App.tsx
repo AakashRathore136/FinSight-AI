@@ -299,13 +299,8 @@ export default function App() {
     }
   }, [selectedDocId]);
 
-  useEffect(() => {
-    if (!selectedDocId && selectedDocIdRef.current) {
-      setSelectedDocId(selectedDocIdRef.current);
-    }
-  }, [selectedDocId]);
-
-  const activeDocId = selectedDocId || selectedDocIdRef.current;
+  // Use selectedDocId directly - it is already initialized with getSharedDocId()
+  const activeDocId = selectedDocId;
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
