@@ -127,7 +127,6 @@ export function BillReminders({ user }: BillRemindersProps) {
       byDay[format(d, 'EEE')] = 0;
     }
     upcomingBills.forEach((b) => {
-      const due = new Date(b.nextDueDate || b.dueDate);
       const idx = getDaysUntilDue(b, today);
       if (idx >= 0 && idx < 7) {
         const key = format(addDays(today, idx), 'EEE');

@@ -59,15 +59,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/src/components/ui/card";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/src/components/ui/tabs";
-import { Badge } from "@/src/components/ui/badge";
+
+
 import { Input } from "@/src/components/ui/input";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 
 export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
   return (
@@ -176,7 +170,6 @@ import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
 import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
-import { CurrencyManager } from './components/currency/CurrencyManager';
 import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
 import { BillReminders } from './components/bills/BillReminders';
