@@ -18,10 +18,22 @@ export function isSafeExternalUrl(value: unknown): boolean {
   }
 }
 
-export function formatCurrency(amount: number): string {
+// Default currency - should be updated based on user preferences
+let defaultCurrency = 'USD';
+
+export function setDefaultCurrency(currency: string): void {
+  defaultCurrency = currency;
+}
+
+export function getDefaultCurrency(): string {
+  return defaultCurrency;
+}
+
+export function formatCurrency(amount: number, currency?: string): string {
+  const currencyCode = currency || defaultCurrency;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currencyCode,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { GoalCard } from './GoalCard';
 import { auth, db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   doc,
@@ -11,6 +10,7 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore';
 import {
   Target,
@@ -160,6 +160,11 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     [goals]
   );
 
+  const pausedGoals = useMemo(
+    () => goals.filter((g) => g.status === 'paused'),
+    [goals]
+  );
+
   const createGoal = async () => {
     if (!user) return;
     if (!formName.trim()) {
@@ -216,16 +221,22 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     const goal = goals.find((g) => g.id === goalId);
     if (!goal) return;
 
+    // Guard against the auto-complete effect writing a stale snapshot while a
+    // contribution is in flight: it skips goals present in updatingGoalIds.
+    updatingGoalIds.current.add(goalId);
     try {
-      const newAmount = goal.currentAmount + addedAmount;
+      // Apply the contribution atomically on the server so two rapid adds (or
+      // an add racing the auto-complete write) can never overwrite each other.
       await updateDoc(doc(db, 'goals', goalId), {
-        currentAmount: newAmount,
+        currentAmount: increment(addedAmount),
       });
       toast.success(`Added ${formatCurrency(addedAmount)} to ${goal.name}`);
     } catch (error) {
       console.error('Error updating goal:', error);
       handleFirestoreError(error, OperationType.UPDATE, `goals/${goalId}`);
       toast.error('Failed to update goal');
+    } finally {
+      updatingGoalIds.current.delete(goalId);
     }
   };
 
@@ -466,6 +477,39 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
             </div>
           )}
 
+          {pausedGoals.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Pause className="h-4 w-4 text-slate-400" />
+                <h2 className="text-lg font-semibold text-white">Paused Goals</h2>
+                <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[10px] uppercase tracking-wider">
+                  {pausedGoals.length}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AnimatePresence>
+                  {pausedGoals.map((goal) => (
+                    <motion.div
+                      key={goal.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <GoalCard
+                        goal={goal}
+                        onUpdateAmount={updateGoalAmount}
+                        onViewDetails={setSelectedGoal}
+                        onStatusChange={(id, status) => updateGoalStatus(id, status)}
+                        onDelete={deleteGoal}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
           {completedGoals.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -477,6 +521,35 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {completedGoals.map((goal) => (
+                  <motion.div
+                    key={goal.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <GoalCard
+                      goal={goal}
+                      onUpdateAmount={updateGoalAmount}
+                      onViewDetails={setSelectedGoal}
+                      onStatusChange={(id, status) => updateGoalStatus(id, status)}
+                      onDelete={deleteGoal}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+          {pausedGoals.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Pause className="h-4 w-4 text-amber-400" />
+                <h2 className="text-lg font-semibold text-white">Paused Goals</h2>
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] uppercase tracking-wider">
+                  {pausedGoals.length}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pausedGoals.map((goal) => (
                   <motion.div
                     key={goal.id}
                     initial={{ opacity: 0, y: 10 }}
