@@ -229,7 +229,9 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
-      toast.error('Failed to add transaction');
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to add transaction',
+      );
     }
   };
 
