@@ -65,7 +65,7 @@ const CATEGORIES = ['Utilities', 'Subscription', 'Housing', 'Insurance', 'Loan',
 
 export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [formName, setFormName] = useState('');
@@ -76,21 +76,31 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const today = startOfDay(new Date());
 
+  // Derive loading state - no synchronous setState needed
+  const loading = !user || isLoading;
+
   useEffect(() => {
     if (!user) {
       setBills([]);
-      setLoading(false);
       return;
     }
-    let active = true;
-    fetchUserBills(user.uid).then((fetched) => {
-      if (active) {
-        setBills(fetched);
-        setLoading(false);
-      }
-    });
+    let cancelled = false;
+    setIsLoading(true);
+    fetchUserBills(user.uid)
+      .then((fetched) => {
+        if (!cancelled) {
+          setBills(fetched);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBills([]);
+          setIsLoading(false);
+        }
+      });
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
