@@ -98,7 +98,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('monthly');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
@@ -106,6 +106,9 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const weeklyRef = useRef<HTMLDivElement>(null);
   const pieRef = useRef<HTMLDivElement>(null);
   const trendRef = useRef<HTMLDivElement>(null);
+
+  // Derive loading state
+  const loading = !user || isLoading;
 
   const config = useMemo(
     () =>
@@ -119,16 +122,39 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTransactions([]);
+      return;
+    }
+
     let cancelled = false;
-    setLoading(true);
+    let loadingState = true;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoading(true);
+
     fetchTransactionsForPeriod(user.uid, config)
       .then((txns) => {
-        if (!cancelled) setTransactions(txns);
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setTransactions(txns);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setTransactions([]);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setIsLoading(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };

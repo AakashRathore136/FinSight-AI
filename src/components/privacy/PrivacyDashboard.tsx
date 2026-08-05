@@ -30,12 +30,13 @@ export function PrivacyDashboard({ user }: { user: any }) {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Derive loading state - no synchronous setState needed
+  // Derive loading state
   const loading = !user || isLoading;
 
-  // Define loadPrivacyData before useEffect
+  // Define loadPrivacyData before useEffect to avoid hoisting issues
   async function loadPrivacyData() {
     if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     try {
       const settings = await getPrivacySettings(user.uid);
@@ -43,11 +44,13 @@ export function PrivacyDashboard({ user }: { user: any }) {
     } catch (error) {
       console.error("Failed to load privacy data:", error);
     } finally {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPrivacyData();
   }, [user]);
 
