@@ -20,7 +20,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { normalizeTransactionType } from './utils';
+import { normalizeTransactionType, formatCurrency } from './utils';
 import { toDate } from './utils';
 
 export interface BudgetCategory {
