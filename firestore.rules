@@ -38,6 +38,12 @@ service cloud.firestore {
              data.riskLevel in ['low', 'medium', 'high'];
     }
 
+    function isValidFailedAnalysis(data) {
+      return data.keys().hasAll(['status', 'ownerId']) &&
+             data.status == 'failed' &&
+             data.ownerId == request.auth.uid;
+    }
+
     // ----------------------------------------------------
     // COLLECTION MATCHES
     // ----------------------------------------------------
@@ -98,7 +104,7 @@ service cloud.firestore {
       // SECURITY: Per-user RLS for any top-level analyses collection
       // Prevents unauthorized access to sensitive financial analysis data
       allow read: if isOwner(existing().ownerId) || isAdmin();
-      allow create: if isSignedIn() && isValidAnalysis(incoming());
+      allow create: if isSignedIn() && (isValidAnalysis(incoming()) || isValidFailedAnalysis(incoming()));
       allow update: if isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
