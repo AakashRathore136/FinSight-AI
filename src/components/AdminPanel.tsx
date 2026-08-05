@@ -49,7 +49,7 @@ export function AdminPanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Real-time listener for users
+    // Real-time listener for users (subscribed once)
     const usersQuery = query(
       collection(db, "users"),
       orderBy("createdAt", "desc"),
@@ -57,13 +57,23 @@ export function AdminPanel() {
     const unsubscribeUsers = onSnapshot(
       usersQuery,
       (snapshot) => {
-        setUsers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        const nextUsers = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setUsers(nextUsers);
+        setSystemStats((prev) => ({ ...prev, totalUsers: nextUsers.length }));
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "users");
       },
     );
+    return () => unsubscribeUsers();
+  }, []);
 
+  useEffect(() => {
+    // Documents stats are fetched once; totalUsers is derived from the live
+    // users snapshot, not from a stale closure.
     const fetchStats = async () => {
       try {
         const allDocs = await getDocs(collection(db, "documents"));
@@ -76,12 +86,12 @@ export function AdminPanel() {
           0,
         );
 
-        setSystemStats({
-          totalUsers: users.length,
+        setSystemStats((prev) => ({
+          ...prev,
           totalDocs,
           analysisCompleted: completed,
           storageUsed: (totalSize / 1024 / 1024 / 1024).toFixed(2) + " GB",
-        });
+        }));
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, "documents");
       }
@@ -89,8 +99,7 @@ export function AdminPanel() {
     };
 
     fetchStats();
-    return () => unsubscribeUsers();
-  }, [users.length]);
+  }, []);
 
   return (
     <div className="space-y-8 pb-12">
