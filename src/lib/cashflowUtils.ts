@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { normalizeTransactionType } from "@/src/lib/utils";
 
 export interface Transaction {
   id: string;
@@ -122,7 +123,7 @@ export async function fetchUserTransactions(
           userId: data.userId || "",
           amount: Number(data.amount) || 0,
           category: data.category || "Other",
-          type: data.type === "income" ? "income" : "expense",
+        type: normalizeTransactionType(data.type),
           date,
           description: data.description,
         };
