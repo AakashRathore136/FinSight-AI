@@ -23,7 +23,7 @@ import {
 
 interface GoalCardProps {
   goal: Goal;
-  onUpdateAmount: (goalId: string, amount: number) => void;
+  onUpdateAmount: (goalId: string, amount: number) => Promise<void> | void;
   onViewDetails: (goal: Goal) => void;
   onStatusChange: (goalId: string, status: Goal['status']) => void;
   onDelete: (goalId: string) => void;
@@ -37,6 +37,7 @@ export function GoalCard({
   onDelete,
 }: GoalCardProps) {
   const [amountInput, setAmountInput] = useState('');
+  const [adding, setAdding] = useState(false);
   const daysRemaining = calculateDaysRemaining(goal.deadline);
   const progress = getProgressPercentage(goal.currentAmount, goal.targetAmount);
   const monthlyContribution = calculateMonthlyContribution(
@@ -46,11 +47,16 @@ export function GoalCard({
   );
   const status = getGoalStatus(goal);
 
-  const handleAddContribution = () => {
+  const handleAddContribution = async () => {
     const amount = parseFloat(amountInput);
     if (isNaN(amount) || amount <= 0) return;
-    onUpdateAmount(goal.id, amount);
-    setAmountInput('');
+    setAdding(true);
+    try {
+      await onUpdateAmount(goal.id, amount);
+      setAmountInput('');
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -160,12 +166,14 @@ export function GoalCard({
             className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9 rounded-lg text-xs"
             min="0"
             step="0.01"
+            disabled={adding}
           />
           <Button
             onClick={handleAddContribution}
+            disabled={adding}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold h-9 px-3 rounded-lg"
           >
-            Add
+            {adding ? 'Adding...' : 'Add'}
           </Button>
         </div>
       </CardContent>

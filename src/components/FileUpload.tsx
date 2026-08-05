@@ -184,6 +184,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       toast.error(userMsg);
 
       try {
+        if (!user?.uid) return;
         const { db } = await import("@/src/lib/firebase");
         const { collection, addDoc, serverTimestamp } =
           await import("firebase/firestore");
@@ -195,7 +196,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           errorKind: kind,
           uploadedAt: serverTimestamp(),
           failedAt: serverTimestamp(),
-          ownerId: user?.uid || null,
+          ownerId: user.uid,
         });
       } catch (firestoreErr) {
         console.error("Could not persist failed record:", firestoreErr);

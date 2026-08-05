@@ -277,9 +277,11 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
           budgetAdherenceScore: budget,
           metrics: metricsPayload,
         });
+        const updatedScore = { ...existing, ...metricsPayload, overallScore: overall, spendingScore: spending, savingsScore: savings, budgetAdherenceScore: budget };
         setHistoricalScores((prev) =>
-          prev.map((s) => (s.id === existing.id ? { ...s, ...metricsPayload, overallScore: overall } : s))
+          prev.map((s) => (s.id === existing.id ? updatedScore : s))
         );
+        setCurrentScore(updatedScore);
         toast.success('Health score recalculated');
       } else {
         const created = await createHealthScore({
@@ -298,19 +300,6 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
           toast.error('Failed to save health score');
         }
       }
-
-      setCurrentScore({
-        id: existing?.id || '',
-        userId: user.uid,
-        overallScore: overall,
-        spendingScore: spending,
-        savingsScore: savings,
-        budgetAdherenceScore: budget,
-        metrics: metricsPayload,
-        month: monthKey,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
     } catch (error) {
       console.error('Error calculating health score:', error);
       handleFirestoreError(error, OperationType.WRITE, 'health_scores');

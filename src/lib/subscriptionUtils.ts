@@ -11,6 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { normalizeTransactionType } from "./utils";
 import {
   subDays,
   addMonths,
@@ -25,7 +26,7 @@ import {
 
 export interface Transaction {
   id: string;
-  ownerId: string;
+  userId: string;
   amount: number;
   category: string;
   description: string;
@@ -145,12 +146,12 @@ export async function fetchUserTransactions(
       const data = doc.data();
       return {
         id: doc.id,
-        ownerId: data.userId || data.ownerId || "",
+        userId: data.userId || "",
         amount: data.amount || 0,
         category: data.category || "Other",
         description: data.description || "",
         date: toDate(data.date) || new Date(),
-        type: data.type || "expense",
+        type: normalizeTransactionType(data.type),
       } as Transaction;
     });
   } catch (error) {
