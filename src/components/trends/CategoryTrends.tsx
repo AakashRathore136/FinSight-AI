@@ -98,7 +98,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('monthly');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
@@ -106,6 +106,9 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const weeklyRef = useRef<HTMLDivElement>(null);
   const pieRef = useRef<HTMLDivElement>(null);
   const trendRef = useRef<HTMLDivElement>(null);
+
+  // Derive loading state - no synchronous setState needed
+  const loading = !user || isLoading;
 
   const config = useMemo(
     () =>
@@ -119,16 +122,28 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTransactions([]);
+      return;
+    }
+
     let cancelled = false;
-    setLoading(true);
+    setIsLoading(true);
+
     fetchTransactionsForPeriod(user.uid, config)
       .then((txns) => {
-        if (!cancelled) setTransactions(txns);
+        if (!cancelled) {
+          setTransactions(txns);
+          setIsLoading(false);
+        }
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) {
+          setTransactions([]);
+          setIsLoading(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };
