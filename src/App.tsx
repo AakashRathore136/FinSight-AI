@@ -41,7 +41,9 @@ import {
   MessageSquare,
   LineChart,
   Globe,
-  Shield
+  Shield,
+  Lock,
+  Activity,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
