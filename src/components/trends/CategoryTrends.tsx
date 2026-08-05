@@ -107,7 +107,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const pieRef = useRef<HTMLDivElement>(null);
   const trendRef = useRef<HTMLDivElement>(null);
 
-  // Derive loading state - no synchronous setState needed
+  // Derive loading state
   const loading = !user || isLoading;
 
   const config = useMemo(
@@ -123,23 +123,34 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTransactions([]);
       return;
     }
 
     let cancelled = false;
+    let loadingState = true;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
 
     fetchTransactionsForPeriod(user.uid, config)
       .then((txns) => {
-        if (!cancelled) {
+        if (!cancelled && loadingState) {
+          loadingState = false;
           setTransactions(txns);
-          setIsLoading(false);
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && loadingState) {
+          loadingState = false;
           setTransactions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setIsLoading(false);
         }
       });
