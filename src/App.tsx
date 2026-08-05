@@ -19,6 +19,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
@@ -331,6 +332,22 @@ export default function App() {
           const userRef = doc(db, "users", currentUser.uid);
           try {
             const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().deletedAt) {
+              // Erased account: the profile must stay deleted. Terminate the
+              // session instead of auto-recreating a fresh profile.
+              setUserProfile(null);
+              setShowVerificationScreen(false);
+              try {
+                await deleteUser(currentUser);
+              } catch (authError) {
+                console.error("Could not remove auth account:", authError);
+              }
+              await signOut(auth);
+              toast.info("This account has been deleted.");
+              setLoading(false);
+              return;
+            }
 
             if (!userSnap.exists()) {
               const profile = getDefaultProfile(currentUser);

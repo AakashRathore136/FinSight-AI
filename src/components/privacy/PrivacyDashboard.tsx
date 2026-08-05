@@ -31,6 +31,8 @@ import {
   ActivityLogEntry,
 } from "@/src/lib/privacyUtils";
 import { toast } from "sonner";
+import { auth } from "@/src/lib/firebase";
+import { deleteUser, signOut } from "firebase/auth";
 
 export function PrivacyDashboard({ user }: { user: any }) {
   const [loading, setLoading] = useState(true);
@@ -101,6 +103,13 @@ export function PrivacyDashboard({ user }: { user: any }) {
     try {
       await deleteUserData(user.uid);
       toast.success("All data deleted successfully");
+      // Terminate the Auth identity so the erased account cannot come back.
+      try {
+        if (auth.currentUser) await deleteUser(auth.currentUser);
+      } catch (authError) {
+        console.error("Auth account deletion failed:", authError);
+      }
+      await signOut(auth);
     } catch (error) {
       console.error("Delete failed:", error);
       toast.error("Failed to delete data");
