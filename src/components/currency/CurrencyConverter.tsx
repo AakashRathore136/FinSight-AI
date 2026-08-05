@@ -68,6 +68,10 @@ export function CurrencyConverter({
     setToCurrency(fromCurrency);
   };
 
+  const fromRate = rates?.rates[fromCurrency] || 1;
+  const toRate = rates?.rates[toCurrency];
+  const badgeRate = toRate != null && fromRate > 0 ? toRate / fromRate : null;
+
   return (
     <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-2xl overflow-hidden">
       <CardHeader className="p-6 border-b border-slate-800 bg-slate-900/50">
@@ -136,7 +140,11 @@ export function CurrencyConverter({
               </p>
             </div>
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 font-bold text-xs">
-              {rates ? `1 ${fromCurrency} = ${rates.rates[toCurrency]?.toFixed(4) || '---'} ${toCurrency}` : 'Loading rates...'}
+              {badgeRate != null
+                ? `1 ${fromCurrency} = ${badgeRate.toFixed(4)} ${toCurrency}`
+                : rates
+                  ? `1 ${fromCurrency} = --- ${toCurrency}`
+                  : 'Loading rates...'}
             </Badge>
           </div>
           {rates && (
