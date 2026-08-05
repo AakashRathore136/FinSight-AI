@@ -23,6 +23,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
+  Activity,
   TrendingUp,
   LayoutDashboard,
   FileText,
@@ -42,6 +43,7 @@ import {
   MessageSquare,
   LineChart,
   Globe,
+  Lock,
   Shield
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
