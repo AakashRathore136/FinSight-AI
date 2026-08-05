@@ -14,7 +14,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
-import { formatCurrency } from "./utils";
+import { formatCurrency, toDate } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
 
 export interface Transaction {
@@ -133,10 +133,7 @@ export async function fetchTransactions(
           return { ...data, id: d.id } as Transaction;
         })
         .filter((t) => {
-          const time =
-            t.date instanceof Date
-              ? t.date.getTime()
-              : new Date(t.date as any).getTime();
+          const time = toDate(t.date)?.getTime() ?? 0;
           return time >= startDate.getTime();
         });
     }
@@ -171,7 +168,7 @@ export function calculateCategoryBaseline(
         : 0;
     const monthlyTotals = new Map<string, number>();
     items.forEach((item) => {
-      const date = item.date instanceof Date ? item.date : new Date(item.date);
+      const date = toDate(item.date) || new Date();
       const key = format(date, "yyyy-MM");
       monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + Math.abs(item.amount));
     });
@@ -213,7 +210,7 @@ export function detectCategorySpikes(
   const byCategory = new Map<string, Transaction[]>();
 
   transactions.forEach((transaction) => {
-    const date = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
+    const date = toDate(transaction.date) || new Date();
     if (format(date, "yyyy-MM") !== currentMonth) return;
     const category = transaction.category || "Other";
     byCategory.set(category, [...(byCategory.get(category) || []), transaction]);
@@ -328,7 +325,7 @@ export function detectAnomalies(
   const monthlySpend = new Map<string, Map<string, number>>();
   transactions.forEach((t) => {
     const monthKey = format(
-      t.date instanceof Date ? t.date : new Date(t.date as any),
+      toDate(t.date) || new Date(),
       "yyyy-MM",
     );
     const cat = t.category || "Other";
