@@ -570,10 +570,13 @@ async function startServer() {
   };
 
   // AI Analysis Endpoint
+  // `concurrentAnalyzeLimiter` must run BEFORE `analyzeRateLimiter`: the rate
+  // limiter counts every request that reaches it, so a request rejected at the
+  // concurrency gate (429 CONCURRENT_LIMIT) must never consume daily quota.
   app.post(
     "/api/analyze",
-    analyzeRateLimiter,
     concurrentAnalyzeLimiter,
+    analyzeRateLimiter,
     upload.single("file"),
     async (req: any, res) => {
       try {
