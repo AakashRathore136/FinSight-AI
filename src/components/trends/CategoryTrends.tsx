@@ -131,7 +131,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
     let cancelled = false;
     let loadingState = true;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setIsLoading(true);
 
     fetchTransactionsForPeriod(user.uid, config)
@@ -150,7 +150,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
       .finally(() => {
         if (!cancelled && loadingState) {
           loadingState = false;
-          // eslint-disable-next-line react-hooks/set-state-in-effect
+           
           setIsLoading(false);
         }
       });
@@ -206,7 +206,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
       for (const ref of refs) {
         if (ref.current) {
           // sequential capture to avoid memory pressure
-          // eslint-disable-next-line no-await-in-loop
+           
           const canvas = await html2canvas(ref.current, { backgroundColor: CHART_BG, scale: 2 });
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
