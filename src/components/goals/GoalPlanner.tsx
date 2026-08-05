@@ -160,6 +160,11 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     [goals]
   );
 
+  const pausedGoals = useMemo(
+    () => goals.filter((g) => g.status === 'paused'),
+    [goals]
+  );
+
   const createGoal = async () => {
     if (!user) return;
     if (!formName.trim()) {
@@ -445,6 +450,39 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AnimatePresence>
                   {activeGoals.map((goal) => (
+                    <motion.div
+                      key={goal.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <GoalCard
+                        goal={goal}
+                        onUpdateAmount={updateGoalAmount}
+                        onViewDetails={setSelectedGoal}
+                        onStatusChange={(id, status) => updateGoalStatus(id, status)}
+                        onDelete={deleteGoal}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {pausedGoals.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Pause className="h-4 w-4 text-slate-400" />
+                <h2 className="text-lg font-semibold text-white">Paused Goals</h2>
+                <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[10px] uppercase tracking-wider">
+                  {pausedGoals.length}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AnimatePresence>
+                  {pausedGoals.map((goal) => (
                     <motion.div
                       key={goal.id}
                       initial={{ opacity: 0, y: 10 }}
