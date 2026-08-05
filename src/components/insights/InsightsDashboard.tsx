@@ -69,7 +69,7 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
     if (!user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBundle(null);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setHasError(false);
       return;
     }
@@ -78,9 +78,9 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
     let loadingState = true;
 
     // Set initial state - needed for derived loading state
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setIsLoading(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setHasError(false);
 
     fetchTransactions(user.uid)
@@ -98,7 +98,7 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
       .finally(() => {
         if (!cancelled && loadingState) {
           loadingState = false;
-          // eslint-disable-next-line react-hooks/set-state-in-effect
+           
           setIsLoading(false);
         }
       });

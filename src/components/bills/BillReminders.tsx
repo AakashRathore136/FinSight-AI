@@ -53,7 +53,6 @@ import {
   calculateMonthlyObligations,
   getDaysUntilDue,
   generateRecurringSchedule,
-  isOverdue,
 } from '@/src/lib/billUtils';
 
 interface BillRemindersProps {
@@ -81,15 +80,15 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   useEffect(() => {
     if (!user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setBills([]);
       setLoading(false);
       return;
     }
-    let cancelled = false;
+    const cancelled = false;
     let loadingState = true;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setIsLoading(true);
 
     fetchUserBills(user.uid)
@@ -108,7 +107,7 @@ export function BillReminders({ user }: BillRemindersProps) {
       .finally(() => {
         if (!cancelled && loadingState) {
           loadingState = false;
-          // eslint-disable-next-line react-hooks/set-state-in-effect
+           
           setIsLoading(false);
         }
       });
