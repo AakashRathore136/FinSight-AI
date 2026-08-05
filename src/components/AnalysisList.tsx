@@ -6,9 +6,8 @@ import {
   where,
   orderBy,
   onSnapshot,
-  doc,
-  deleteDoc,
 } from "firebase/firestore";
+import { apiFetch } from "@/src/lib/api";
 import {
   FileText,
   MoreVertical,
@@ -95,7 +94,41 @@ export function AnalysisList({ type, user, onSelect }: any) {
       return;
 
     try {
-      await deleteDoc(doc(db, "documents", id));
+      // Purge through the server so the analyses subcollection and the
+      // Storage object are deleted alongside the Firestore record. A bare
+      // deleteDoc would orphan the PDF and keep signed URLs working.
+      let headers: Record<string, string> = {};
+      try {
+        const idToken = await (user as any)?.getIdToken?.();
+        if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+      } catch (tErr) {
+        console.warn("Could not fetch ID token for document purge", tErr);
+      }
+
+      const res = await apiFetch(
+        "/api/documents/delete",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ documentId: id }),
+        },
+        { timeout: 30000 },
+      );
+
+      if (!res.ok) {
+        let errorText = "";
+        try {
+          const errorBody = await res.json();
+          errorText = String(errorBody?.error || "");
+        } catch {
+          errorText = await res.text().catch(() => "");
+        }
+        throw new Error(errorText || `Failed to purge record (${res.status})`);
+      }
+
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);

@@ -999,6 +999,23 @@ CRITICAL RULES:
           );
         } catch (writeError: any) {
           console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
+          // The PDF was already uploaded to Storage before these writes began.
+          // Delete it so a failed pipeline does not leave a permanent orphaned
+          // object (with uploadedBy metadata) behind.
+          try {
+            const bucket = getStorage().bucket();
+            await bucket.file(storagePath).delete();
+            console.log(
+              `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
+            );
+          } catch (storageCleanupError: any) {
+            if (storageCleanupError?.code !== 404) {
+              console.error(
+                "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
+                storageCleanupError?.message || storageCleanupError,
+              );
+            }
+          }
           throw new PipelineError(
             "FIRESTORE_WRITE",
             `Firestore database write failed: ${writeError?.message || String(writeError)}`,
@@ -1126,6 +1143,29 @@ CRITICAL RULES:
           });
         }
 
+        // Refuse to sign files whose owning documents record no longer exists.
+        // A purged record must not keep yielding working signed URLs, so the
+        // storage object must have a live Firestore document (with a matching
+        // owner) before we issue a URL.
+        const ownerDocs = await getFirestore(firestoreDatabaseId)
+          .collection("documents")
+          .where("storagePath", "==", normalizedPath)
+          .limit(1)
+          .get();
+        const ownerDoc = ownerDocs.docs[0];
+        if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
+          console.warn(
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
         const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);
         return res.status(200).json({
           signedUrl,
@@ -1162,6 +1202,110 @@ CRITICAL RULES:
         error: {
           stage: "REQUEST_PROCESSING",
           reason: "Internal server error",
+          recommendation: "Please try again.",
+        },
+      });
+    }
+  });
+
+  // Purge a document record, its analyses subcollection, and the Storage
+  // object in one operation. Firestore deletes do not cascade, and a bare
+  // client-side deleteDoc would leave the PDF readable via signed URLs
+  // forever. Ownership is verified against the Firestore record before any
+  // metadata or object is removed.
+  app.post("/api/documents/delete", async (req: any, res) => {
+    try {
+      const { documentId } = req.body;
+
+      if (!documentId || typeof documentId !== "string") {
+        return res.status(400).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "documentId is required",
+            recommendation: "Provide the id of the document to purge.",
+          },
+        });
+      }
+
+      if (!admin.apps.length) {
+        return res.status(503).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "Firebase not initialized",
+            recommendation: "Server configuration error. Please try again.",
+          },
+        });
+      }
+
+      const dbAdmin = getFirestore(firestoreDatabaseId);
+      const docRef = dbAdmin.collection("documents").doc(documentId);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "Document not found",
+            recommendation: "The document may have already been deleted.",
+          },
+        });
+      }
+
+      const docData = docSnap.data();
+      if (docData?.ownerId !== req.ownerId) {
+        console.warn(
+          `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
+        );
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "You do not have access to this document",
+            recommendation: "Verify the document belongs to your account.",
+          },
+        });
+      }
+
+      const storagePath =
+        typeof docData?.storagePath === "string" ? docData.storagePath : "";
+
+      // Delete the analyses subcollection docs and the parent document in a
+      // single batch so the record cannot be left half-purged.
+      const analysesRef = docRef.collection("analyses");
+      const analysesSnap = await analysesRef.get();
+      const batch = dbAdmin.batch();
+      analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
+      batch.delete(docRef);
+      await batch.commit();
+      console.log(
+        `DOCUMENT_PURGED: userId=${req.ownerId}, documentId=${documentId}, analysesDeleted=${analysesSnap.size}`,
+      );
+
+      // Remove the Storage object. If it is already gone (code 404) there is
+      // nothing left to clean up; any other failure is logged but must not
+      // fail the purge since the Firestore metadata is already removed.
+      if (storagePath) {
+        try {
+          await getStorage().bucket().file(storagePath).delete();
+          console.log(
+            `STORAGE_OBJECT_DELETED: userId=${req.ownerId}, storagePath=${storagePath}`,
+          );
+        } catch (storageError: any) {
+          if (storageError?.code !== 404) {
+            console.error(
+              "STORAGE_OBJECT_DELETE_ERROR:",
+              storageError?.message || storageError,
+            );
+          }
+        }
+      }
+
+      return res.status(200).json({ success: true, documentId });
+    } catch (error: any) {
+      console.error("DOCUMENT_DELETE_ERROR:", error?.message || error);
+      return res.status(500).json({
+        error: {
+          stage: "DOCUMENT_DELETE",
+          reason: "Failed to delete document",
           recommendation: "Please try again.",
         },
       });
