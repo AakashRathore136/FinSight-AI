@@ -409,14 +409,19 @@ async function runDetection(userId: string) {
     });
   });
 
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
   for (const anomaly of newAnomalies) {
     try {
+      const dedupKey =
+        anomaly.type === "category_spike"
+          ? `${anomaly.category}_category_spike_${currentMonthKey}`
+          : `transaction_${anomaly.transactionId}`;
       const existingQuery = query(
         collection(db, "anomalies"),
         where("userId", "==", userId),
-        where("transactionId", "==", anomaly.transactionId),
-        where("type", "==", anomaly.type),
-        where("dismissed", "==", false),
+        where("dedupKey", "==", dedupKey),
       );
       const existingSnap = await getDocs(existingQuery);
       if (existingSnap.empty) {
@@ -428,6 +433,7 @@ async function runDetection(userId: string) {
         );
         await addDoc(collection(db, "anomalies"), {
           ...anomaly,
+          dedupKey,
           historicalCount: historical.count,
           historicalLabel: historical.label,
           createdAt: anomaly.createdAt || serverTimestamp(),

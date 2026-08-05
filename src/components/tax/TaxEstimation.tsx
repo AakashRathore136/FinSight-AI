@@ -89,10 +89,13 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
           orderBy('createdAt', 'desc')
         );
         const snapshot = await getDocs(q);
-        // Pick the latest record that differs from the current selection
-        const prev = snapshot.docs
-          .map((d) => ({ id: d.id, ...(d.data() as Omit<TaxEstimateRecord, 'id'>) }))
-          .find((r) => r.country !== country?.name || r.region !== regions.find((x) => x.code === regionCode)?.name);
+        // Pick the latest record that matches the current jurisdiction
+        const currentRegionName = regions.find((x) => x.code === regionCode)?.name;
+        const records = snapshot.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<TaxEstimateRecord, 'id'>) }));
+        const prev = records.find(
+          (r) => r.country === country?.name && r.region === currentRegionName
+        );
         if (prev) {
           setPreviousYear({
             ...prev,

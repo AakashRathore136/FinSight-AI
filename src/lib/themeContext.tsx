@@ -40,24 +40,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (resolvedTheme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    const applyTheme = (t: Theme) => {
+      const isDark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      if (isDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+    };
+    applyTheme(theme);
     localStorage.setItem("theme", theme);
   }, [theme, resolvedTheme]);
 
   const toggleTheme = () => {
-    setThemeState((prev) => {
-      if (prev === "dark") return "light";
-      if (prev === "light") return "system";
-      return "dark";
-    });
-  };
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
+    setTheme((prev) => (prev === "dark" ? "light" : prev === "light" ? "system" : "dark"));
   };
 
   return (
