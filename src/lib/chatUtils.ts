@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
-import { formatCurrency, toDate } from '@/src/lib/utils';
+import { formatCurrency, toDate, normalizeTransactionType } from '@/src/lib/utils';
 import type { Transaction } from '@/src/lib/trendsUtils';
 
 export interface ChatMessage {
@@ -332,7 +332,7 @@ export function generateBudgetAdvice(context: FinancialContext): ChatResponse {
 
 export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse {
   const { monthlySpending, spendingByMonth } = context;
-  const months = Object.keys(monthlySpending).sort((a, b) => a - b);
+      const months = Object.keys(monthlySpending).sort((a, b) => a.localeCompare(b));
   let response = '';
 
   if (months.length < 2) {

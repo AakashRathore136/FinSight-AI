@@ -41,7 +41,6 @@ import {
 } from "@/src/components/ui/dropdown-menu";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { toast } from "sonner";
-import { apiFetch } from "@/src/lib/api";
 import { formatDateSafe } from "@/src/lib/utils";
 
 export function AnalysisList({ type, user, onSelect }: any) {

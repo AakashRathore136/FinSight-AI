@@ -64,7 +64,7 @@ const CATEGORIES = ['Utilities', 'Subscription', 'Housing', 'Insurance', 'Loan',
 
 export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [formName, setFormName] = useState('');
@@ -82,7 +82,6 @@ export function BillReminders({ user }: BillRemindersProps) {
     if (!user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBills([]);
-      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -112,7 +111,7 @@ export function BillReminders({ user }: BillRemindersProps) {
         }
       });
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
@@ -128,7 +127,6 @@ export function BillReminders({ user }: BillRemindersProps) {
       byDay[format(d, 'EEE')] = 0;
     }
     upcomingBills.forEach((b) => {
-      const due = new Date(b.nextDueDate || b.dueDate);
       const idx = getDaysUntilDue(b, today);
       if (idx >= 0 && idx < 7) {
         const key = format(addDays(today, idx), 'EEE');
