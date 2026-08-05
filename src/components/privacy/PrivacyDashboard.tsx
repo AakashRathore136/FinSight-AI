@@ -24,28 +24,32 @@ import { auth } from "@/src/lib/firebase";
 import { deleteUser, signOut } from "firebase/auth";
 
 export function PrivacyDashboard({ user }: { user: any }) {
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [privacySettings, setPrivacySettings] =
     useState<PrivacySettings | null>(null);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadPrivacyData();
-  }, [user]);
+  // Derive loading state - no synchronous setState needed
+  const loading = !user || isLoading;
 
+  // Define loadPrivacyData before useEffect
   async function loadPrivacyData() {
     if (!user) return;
-    setLoading(true);
+    setIsLoading(true);
     try {
       const settings = await getPrivacySettings(user.uid);
       setPrivacySettings(settings);
     } catch (error) {
       console.error("Failed to load privacy data:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadPrivacyData();
+  }, [user]);
 
   function handleSettingUpdate(updates: Partial<PrivacySettings>) {
     setPrivacySettings((prev) => (prev ? { ...prev, ...updates } : prev));
