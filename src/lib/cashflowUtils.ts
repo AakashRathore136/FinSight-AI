@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { toDate } from "@/src/lib/utils";
 
 export interface Transaction {
   id: string;
@@ -43,6 +44,18 @@ function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function parseTransactionDate(raw: unknown): Date {
+  if (raw && typeof (raw as any).toDate === "function") {
+    return (raw as any).toDate();
+  }
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "string" || typeof raw === "number") {
+    const d = new Date(raw as string | number);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date();
+}
+
 function getNextMonths(count: number): string[] {
   const months: string[] = [];
   const now = new Date();
@@ -71,26 +84,13 @@ export async function fetchUserTransactions(
     const snapshot = await getDocs(q);
     return snapshot.docs.map((doc) => {
       const data = doc.data();
-      let date: Date;
-      if (data.date instanceof Timestamp) {
-        date = data.date.toDate();
-      } else if (data.date instanceof Date) {
-        date = data.date;
-      } else if (
-        typeof data.date === "string" ||
-        typeof data.date === "number"
-      ) {
-        date = new Date(data.date);
-      } else {
-        date = new Date();
-      }
       return {
         id: doc.id,
         userId: data.userId || "",
         amount: Number(data.amount) || 0,
         category: data.category || "Other",
         type: data.type === "income" ? "income" : "expense",
-        date,
+        date: toDate(data.date) || new Date(),
         description: data.description,
       };
     });
@@ -104,26 +104,13 @@ export async function fetchUserTransactions(
       const snapshot = await getDocs(q);
       return snapshot.docs.map((doc) => {
         const data = doc.data();
-        let date: Date;
-        if (data.date instanceof Timestamp) {
-          date = data.date.toDate();
-        } else if (data.date instanceof Date) {
-          date = data.date;
-        } else if (
-          typeof data.date === "string" ||
-          typeof data.date === "number"
-        ) {
-          date = new Date(data.date);
-        } else {
-          date = new Date();
-        }
         return {
           id: doc.id,
           userId: data.userId || "",
           amount: Number(data.amount) || 0,
           category: data.category || "Other",
-          type: data.type === "income" ? "income" : "expense",
-          date,
+          type: normalizeTransactionType(data.type),
+          date: parseTransactionDate(data.date),
           description: data.description,
         };
       });
@@ -189,14 +176,23 @@ export function calculateBalanceProjection(
   transactions: Transaction[],
   forecast: ForecastData[],
 ): BalanceProjection[] {
+  // Seed with the sum of all fetched transactions: today's real balance,
+  // which already includes the current (partial) month's activity.
   let currentBalance = 0;
   transactions.forEach((t) => {
     if (t.type === "income") currentBalance += t.amount;
     else currentBalance -= t.amount;
   });
 
+  // The current month's actuals are already folded into currentBalance, so
+  // adding its projected net on top would count the month twice. The current
+  // month reports the real balance; only future months advance the balance.
+  const currentMonth = getMonthKey(new Date());
+
   return forecast.map((f) => {
-    currentBalance += f.projectedNet;
+    if (f.month !== currentMonth) {
+      currentBalance += f.projectedNet;
+    }
     return {
       month: f.month,
       projectedBalance: Math.round(currentBalance * 100) / 100,

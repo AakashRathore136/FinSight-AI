@@ -19,6 +19,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { normalizeTransactionType } from './utils';
 import { toDate } from './utils';
 
 export interface BudgetCategory {
@@ -345,7 +346,7 @@ async function fetchUserTransactionsInRange(
         category: data.category || 'Other',
         date: dateVal.toISOString(),
         description: data.description || '',
-        type: data.type || (data.amount < 0 ? 'expense' : 'income'),
+        type: normalizeTransactionType(data.type),
       });
     });
     transactions.sort((a, b) => b.date.localeCompare(a.date));

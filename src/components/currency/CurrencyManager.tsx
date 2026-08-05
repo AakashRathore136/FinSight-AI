@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { toDate } from '@/src/lib/utils';
 import {
   MAJOR_CURRENCIES,
   fetchExchangeRates,
@@ -64,7 +65,7 @@ interface Transaction {
   amount: number;
   currency: string;
   category: string;
-  date: string;
+  date: any;
   createdAt: any;
 }
 
@@ -86,6 +87,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
     amount: '',
     currency: 'USD',
     category: 'General',
+    type: 'expense' as 'income' | 'expense',
     date: new Date().toISOString().split('T')[0],
   });
   const [editingTx, setEditingTx] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
     amount: '',
     currency: 'USD',
     category: 'General',
+    type: 'expense' as 'income' | 'expense',
     date: '',
   });
 
@@ -198,7 +201,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(newTx.amount),
         currency: newTx.currency,
         category: newTx.category,
-        date: newTx.date,
+        date: new Date(newTx.date),
         createdAt: serverTimestamp(),
       });
       toast.success('Transaction added');
@@ -207,6 +210,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: '',
         currency: settings?.baseCurrency || 'USD',
         category: 'General',
+        type: 'expense',
         date: new Date().toISOString().split('T')[0],
       });
     } catch (error) {
@@ -226,7 +230,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(editForm.amount),
         currency: editForm.currency,
         category: editForm.category,
-        date: editForm.date,
+        date: new Date(editForm.date),
       });
       toast.success('Transaction updated');
       setEditingTx(null);
@@ -499,7 +503,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+              <div className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]">
                 <Input
                   placeholder="Description"
                   value={newTx.description}
@@ -515,6 +519,18 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                   min="0"
                   step="0.01"
                 />
+                <Select
+                  value={newTx.type}
+                  onValueChange={(val) => setNewTx({ ...newTx, type: val as 'income' | 'expense' })}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                    <SelectItem value="expense" className="cursor-pointer">Expense</SelectItem>
+                    <SelectItem value="income" className="cursor-pointer">Income</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select
                   value={newTx.currency}
                   onValueChange={(val) => setNewTx({ ...newTx, currency: val })}
@@ -614,6 +630,18 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                               ))}
                             </SelectContent>
                           </Select>
+                          <Select
+                            value={editForm.type}
+                            onValueChange={(val) => setEditForm({ ...editForm, type: val as 'income' | 'expense' })}
+                          >
+                            <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-8 w-24 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                              <SelectItem value="expense" className="cursor-pointer text-xs">Expense</SelectItem>
+                              <SelectItem value="income" className="cursor-pointer text-xs">Income</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <Input
                             type="date"
                             value={editForm.date}
@@ -664,7 +692,9 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                                   amount: tx.amount.toString(),
                                   currency: tx.currency,
                                   category: tx.category,
-                                  date: tx.date,
+                                  date: toDate(tx.date)
+                                    ? toDate(tx.date)!.toISOString().split('T')[0]
+                                    : '',
                                 });
                               }}
                               className="p-2 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-slate-800 transition-colors"
