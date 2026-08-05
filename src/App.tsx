@@ -299,16 +299,6 @@ export default function App() {
     }
   }, [selectedDocId]);
 
-  // Initialize selectedDocId from shared state if not already set
-  useEffect(() => {
-    if (!selectedDocId) {
-      const sharedId = getSharedDocId();
-      if (sharedId) {
-        setSelectedDocId(sharedId);
-      }
-    }
-  }, [selectedDocId]);
-
   // Use selectedDocId directly - it is already initialized with getSharedDocId()
   const activeDocId = selectedDocId;
 
