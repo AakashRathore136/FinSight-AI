@@ -59,31 +59,39 @@ interface InsightsDashboardProps {
 
 export function InsightsDashboard({ user }: InsightsDashboardProps) {
   const [bundle, setBundle] = useState<InsightsBundle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // Derive loading state - no synchronous setState needed
+  const loading = !user || isLoading;
 
   useEffect(() => {
-    let active = true;
     if (!user) {
-      setLoading(false);
+      setBundle(null);
+      setHasError(false);
       return;
     }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const transactions = await fetchTransactions(user.uid);
-        if (!active) return;
+    let cancelled = false;
+    setIsLoading(true);
+    setHasError(false);
+
+    fetchTransactions(user.uid)
+      .then(transactions => {
+        if (cancelled) return;
         setBundle(buildInsights(transactions, user.uid));
-      } catch (error) {
+        setIsLoading(false);
+      })
+      .catch(error => {
+        if (cancelled) return;
         handleFirestoreError(error, OperationType.LIST, "transactions");
-        if (active) setBundle(buildInsights([], user.uid));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+        setBundle(buildInsights([], user.uid));
+        setIsLoading(false);
+        setHasError(true);
+      });
 
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
