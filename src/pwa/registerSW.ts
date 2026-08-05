@@ -153,3 +153,17 @@ export function applyUpdate(): void {
 export function getNetworkStatus(): 'online' | 'offline' {
   return navigator.onLine ? 'online' : 'offline';
 }
+
+export function isNotificationSupported(): boolean {
+  return 'Notification' in window;
+}
+
+export function getNotificationPermission(): NotificationPermission {
+  if (!isNotificationSupported()) return 'denied';
+  return Notification.permission;
+}
+
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (!isNotificationSupported()) return 'denied';
+  return await Notification.requestPermission();
+}

@@ -114,6 +114,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
             if (!analysisData) {
               const analysesQuery = query(
                 collection(db, "documents", doc.id, "analyses"),
+                where("ownerId", "==", user.uid),
                 orderBy("processedAt", "desc"),
                 limit(1),
               );
