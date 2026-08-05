@@ -64,7 +64,7 @@ const CATEGORIES = ['Utilities', 'Subscription', 'Housing', 'Insurance', 'Loan',
 
 export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [formName, setFormName] = useState('');
@@ -80,12 +80,11 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   useEffect(() => {
     if (!user) {
-       
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBills([]);
-      setLoading(false);
       return;
     }
-    const cancelled = false;
+    let cancelled = false;
     let loadingState = true;
 
      
@@ -112,7 +111,7 @@ export function BillReminders({ user }: BillRemindersProps) {
         }
       });
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
