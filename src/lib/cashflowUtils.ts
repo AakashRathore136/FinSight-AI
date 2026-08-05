@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { toDate } from "@/src/lib/utils";
 
 export interface Transaction {
   id: string;
@@ -89,7 +90,7 @@ export async function fetchUserTransactions(
         amount: Number(data.amount) || 0,
         category: data.category || "Other",
         type: data.type === "income" ? "income" : "expense",
-        date: parseTransactionDate(data.date),
+        date: toDate(data.date) || new Date(),
         description: data.description,
       };
     });
