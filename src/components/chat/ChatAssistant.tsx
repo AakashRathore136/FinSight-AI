@@ -201,7 +201,12 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
             userId: data.userId || '',
             role: data.role || 'user',
             content: data.content || '',
-            timestamp: data.timestamp || new Date().toISOString(),
+            timestamp: (() => {
+              const ts = data.timestamp;
+              if (!ts) return new Date().toISOString();
+              if (typeof ts.toDate === 'function') return ts.toDate().toISOString();
+              return String(ts);
+            })(),
             metadata: data.metadata,
           });
         });
@@ -425,7 +430,8 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
   };
 
   const formatMessageTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+    const ts = timestamp as any;
+    const date = typeof ts?.toDate === 'function' ? ts.toDate() : new Date(timestamp);
     return format(date, 'h:mm a');
   };
 
