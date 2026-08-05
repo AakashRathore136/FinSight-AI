@@ -11,6 +11,7 @@ import {
   writeBatch,
   getDoc,
   setDoc,
+  DocumentReference,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
@@ -110,8 +111,26 @@ export async function exportUserData(
   return data;
 }
 
+const BATCH_SIZE = 500;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function deleteInBatches(refs: DocumentReference[]): Promise<void> {
+  for (const batchRefs of chunk(refs, BATCH_SIZE)) {
+    const batch = writeBatch(db);
+    batchRefs.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
 export async function deleteUserData(userId: string): Promise<void> {
-  const batch = writeBatch(db);
+  const docRefs: DocumentReference[] = [];
   for (const colName of [
     "transactions",
     "subscriptions",
@@ -125,18 +144,19 @@ export async function deleteUserData(userId: string): Promise<void> {
         await getDocs(
           query(collection(db, colName), where("userId", "==", userId)),
         )
-      ).docs.forEach((d) => batch.delete(d.ref));
+      ).docs.forEach((d) => docRefs.push(d.ref));
     } catch (error) {
       console.error('deleteUserData: failed to delete', colName, error);
     }
   }
+  docRefs.push(doc(db, "users", userId));
+  docRefs.push(doc(db, "privacy_settings", userId));
+  docRefs.push(doc(db, "currencies", userId));
   try {
-    batch.delete(doc(db, "users", userId));
-    batch.delete(doc(db, "privacy_settings", userId));
-    batch.delete(doc(db, "currencies", userId));
-    await batch.commit();
+    await deleteInBatches(docRefs);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, "userData");
+    throw error;
   }
 }
 
