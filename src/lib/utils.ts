@@ -39,6 +39,15 @@ export function formatCurrency(amount: number, currency?: string): string {
   }).format(amount);
 }
 
+// Canonical transaction type shared by every reader. Transactions written
+// without a `type` field (legacy manual entries) default to "expense" so all
+// dashboards classify them identically instead of inferring divergent types.
+export function normalizeTransactionType(
+  value: unknown,
+): "income" | "expense" {
+  return value === "income" ? "income" : "expense";
+}
+
 export function toDate(value: any): Date | null {
   if (!value) return null;
 

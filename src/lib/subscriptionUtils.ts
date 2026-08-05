@@ -11,6 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { normalizeTransactionType } from "./utils";
 import {
   subDays,
   addMonths,
@@ -150,7 +151,7 @@ export async function fetchUserTransactions(
         category: data.category || "Other",
         description: data.description || "",
         date: toDate(data.date) || new Date(),
-        type: data.type || "expense",
+        type: normalizeTransactionType(data.type),
       } as Transaction;
     });
   } catch (error) {

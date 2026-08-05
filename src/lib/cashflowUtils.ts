@@ -109,7 +109,7 @@ export async function fetchUserTransactions(
           userId: data.userId || "",
           amount: Number(data.amount) || 0,
           category: data.category || "Other",
-          type: data.type === "income" ? "income" : "expense",
+          type: normalizeTransactionType(data.type),
           date: parseTransactionDate(data.date),
           description: data.description,
         };
