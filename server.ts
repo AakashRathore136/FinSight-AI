@@ -564,8 +564,16 @@ async function startServer() {
       else inFlightAnalyzeByUser.set(key, updated);
     };
 
+    // The slot must be held for the full lifetime of the analysis pipeline.
+    // Binding cleanup to `res.once("close")` would refund it as soon as the
+    // client disconnects, even though the pipeline keeps running afterwards,
+    // letting clients escape the "max 2 concurrent analyses" guard. The
+    // handler releases the slot in its `finally` once the pipeline settles;
+    // the `finish` binding below is only a safety net for requests that never
+    // reach the handler body (e.g. an oversized upload rejected by
+    // `upload.single`), which fires after the (error) response is sent.
+    res.locals.releaseAnalyzeSlot = cleanup;
     res.once("finish", cleanup);
-    res.once("close", cleanup);
     next();
   };
 
@@ -1031,6 +1039,11 @@ CRITICAL RULES:
         }
 
         return res.status(500).json(errorResponse);
+      } finally {
+        // Release the concurrency slot only once the pipeline has settled.
+        // It must not be freed while the pipeline continues to run, e.g. after
+        // a client disconnects mid-analysis.
+        res.locals?.releaseAnalyzeSlot?.();
       }
     },
   );
