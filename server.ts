@@ -52,7 +52,23 @@ const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
 const firestoreDatabaseId =
   String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
   "(default)";
-
+// storage.rules hardcodes isAdmin() to check the "(default)" Firestore
+// database — Cloud Storage Security Rules cannot read env vars or accept a
+// runtime database id, so that path is a literal string baked into the
+// rules file. If this server is configured to use a *named* Firestore
+// database instead, storage.rules' admin checks will silently evaluate to
+// false (no error, no log) and admins will quietly lose the ability to
+// read/delete other users' files in Storage. Fail loudly here instead of
+// letting that ship unnoticed.
+if (firestoreDatabaseId !== "(default)") {
+  console.warn(
+    `FIRESTORE_DATABASE_MISMATCH_WARNING: FIREBASE_FIRESTORE_DATABASE_ID is ` +
+      `set to "${firestoreDatabaseId}", but storage.rules' isAdmin() check is ` +
+      `hardcoded to the "(default)" database. Admin access to Firebase ` +
+      `Storage will not work correctly until storage.rules is updated to ` +
+      `match, or FIREBASE_FIRESTORE_DATABASE_ID is reverted to "(default)".`,
+  );
+}
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
 // ports are allowed so `npm run dev` keeps working out of the box.

@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { toDate } from "@/src/lib/utils";
 
 export interface Transaction {
   id: string;
@@ -89,7 +90,7 @@ export async function fetchUserTransactions(
         amount: Number(data.amount) || 0,
         category: data.category || "Other",
         type: data.type === "income" ? "income" : "expense",
-        date: parseTransactionDate(data.date),
+        date: toDate(data.date) || new Date(),
         description: data.description,
       };
     });
@@ -175,18 +176,23 @@ export function calculateBalanceProjection(
   transactions: Transaction[],
   forecast: ForecastData[],
 ): BalanceProjection[] {
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // Seed with the sum of all fetched transactions: today's real balance,
+  // which already includes the current (partial) month's activity.
   let currentBalance = 0;
   transactions.forEach((t) => {
-    const txMonthKey = getMonthKey(t.date);
-    if (txMonthKey === currentMonthKey) return;
     if (t.type === "income") currentBalance += t.amount;
     else currentBalance -= t.amount;
   });
 
+  // The current month's actuals are already folded into currentBalance, so
+  // adding its projected net on top would count the month twice. The current
+  // month reports the real balance; only future months advance the balance.
+  const currentMonth = getMonthKey(new Date());
+
   return forecast.map((f) => {
-    currentBalance += f.projectedNet;
+    if (f.month !== currentMonth) {
+      currentBalance += f.projectedNet;
+    }
     return {
       month: f.month,
       projectedBalance: Math.round(currentBalance * 100) / 100,

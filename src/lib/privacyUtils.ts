@@ -11,9 +11,9 @@ import {
   writeBatch,
   getDoc,
   setDoc,
-  DocumentReference,
+  deleteDoc,
 } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "./firebase";
+import { db, auth, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -130,7 +130,30 @@ async function deleteInBatches(refs: DocumentReference[]): Promise<void> {
 }
 
 export async function deleteUserData(userId: string): Promise<void> {
-  const docRefs: DocumentReference[] = [];
+  // Write the deletion tombstone (users/<uid>.deletedAt) first so that
+  // onAuthStateChanged cannot resurrect the profile even if a later step fails.
+  const userRef = doc(db, "users", userId);
+  try {
+    const existing = await getDoc(userRef);
+    const profile = existing.exists() ? existing.data() : {};
+    await deleteDoc(userRef);
+    await setDoc(userRef, {
+      uid: userId,
+      email: profile.email ?? auth.currentUser?.email ?? "",
+      role:
+        profile.role && profile.role !== "admin"
+          ? profile.role
+          : "junior_analyst",
+      username: profile.username ?? "",
+      deletedAt: new Date().toISOString(),
+      deleted: true,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, "users");
+    throw error;
+  }
+
+  const batch = writeBatch(db);
   for (const colName of [
     "transactions",
     "subscriptions",
@@ -153,7 +176,9 @@ export async function deleteUserData(userId: string): Promise<void> {
   docRefs.push(doc(db, "privacy_settings", userId));
   docRefs.push(doc(db, "currencies", userId));
   try {
-    await deleteInBatches(docRefs);
+    batch.delete(doc(db, "privacy_settings", userId));
+    batch.delete(doc(db, "currencies", userId));
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, "userData");
     throw error;

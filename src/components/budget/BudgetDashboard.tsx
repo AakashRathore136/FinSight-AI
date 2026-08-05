@@ -123,14 +123,22 @@ export function BudgetDashboard({ user }: { user: any }) {
       let finalConfidence = confidence;
 
       if (savedBudget && savedBudget.categoryBudgets) {
-        finalSuggestions = generatedSuggestions.map((s) => ({
-          ...s,
-          suggestedAmount:
-            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          modifiedAmount:
-            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          status: "accepted" as const,
-        }));
+        finalSuggestions = generatedSuggestions.map((s) => {
+          const hasSaved = Object.prototype.hasOwnProperty.call(
+            savedBudget.categoryBudgets,
+            s.category,
+          );
+          const savedAmount = hasSaved
+            ? savedBudget.categoryBudgets[s.category]
+            : s.suggestedAmount;
+          const savedStatus = savedBudget.categoryStatuses?.[s.category];
+          return {
+            ...s,
+            suggestedAmount: savedAmount,
+            modifiedAmount: savedAmount,
+            status: savedStatus || (hasSaved ? "accepted" : s.status),
+          };
+        });
         finalTotal = savedBudget.totalBudget;
         finalConfidence = savedBudget.confidenceScore;
         setSaved(true);
@@ -156,10 +164,12 @@ export function BudgetDashboard({ user }: { user: any }) {
     if (!user) return;
 
     const categoryBudgets: Record<string, number> = {};
+    const categoryStatuses: Record<string, string> = {};
     newSuggestions.forEach((s) => {
       const amount =
         s.status === "rejected" ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
       categoryBudgets[s.category] = amount;
+      categoryStatuses[s.category] = s.status || "accepted";
     });
 
     const budgetData = {
@@ -167,6 +177,7 @@ export function BudgetDashboard({ user }: { user: any }) {
       month: currentMonth,
       totalBudget: calculateTotalBudget(newSuggestions),
       categoryBudgets,
+      categoryStatuses,
       confidenceScore,
       createdAt: new Date(),
       updatedAt: new Date(),
