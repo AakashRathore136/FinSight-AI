@@ -326,7 +326,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
           c.id === currentConversationId
             ? {
                 ...c,
-                title: derivedTitle,
+                ...(isDefaultTitle ? { title: derivedTitle } : {}),
                 updatedAt: new Date().toISOString(),
                 lastMessageAt: new Date().toISOString(),
               }
