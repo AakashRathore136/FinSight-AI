@@ -44,6 +44,18 @@ function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function parseTransactionDate(raw: unknown): Date {
+  if (raw && typeof (raw as any).toDate === "function") {
+    return (raw as any).toDate();
+  }
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "string" || typeof raw === "number") {
+    const d = new Date(raw as string | number);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date();
+}
+
 function getNextMonths(count: number): string[] {
   const months: string[] = [];
   const now = new Date();
@@ -92,26 +104,13 @@ export async function fetchUserTransactions(
       const snapshot = await getDocs(q);
       return snapshot.docs.map((doc) => {
         const data = doc.data();
-        let date: Date;
-        if (data.date instanceof Timestamp) {
-          date = data.date.toDate();
-        } else if (data.date instanceof Date) {
-          date = data.date;
-        } else if (
-          typeof data.date === "string" ||
-          typeof data.date === "number"
-        ) {
-          date = new Date(data.date);
-        } else {
-          date = new Date();
-        }
         return {
           id: doc.id,
           userId: data.userId || "",
           amount: Number(data.amount) || 0,
           category: data.category || "Other",
           type: data.type === "income" ? "income" : "expense",
-          date,
+          date: parseTransactionDate(data.date),
           description: data.description,
         };
       });
@@ -177,8 +176,12 @@ export function calculateBalanceProjection(
   transactions: Transaction[],
   forecast: ForecastData[],
 ): BalanceProjection[] {
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   let currentBalance = 0;
   transactions.forEach((t) => {
+    const txMonthKey = getMonthKey(t.date);
+    if (txMonthKey === currentMonthKey) return;
     if (t.type === "income") currentBalance += t.amount;
     else currentBalance -= t.amount;
   });

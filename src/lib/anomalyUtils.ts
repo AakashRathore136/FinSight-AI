@@ -16,16 +16,21 @@ import {
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { formatCurrency, toDate } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
+import {
+  calculateCategoryBaseline,
+  detectLargeTransactions,
+  type Transaction,
+  type CategoryBaseline,
+} from "./anomalyStats";
 
-export interface Transaction {
-  id: string;
-  userId: string;
-  amount: number;
-  category: string;
-  date: Date;
-  description?: string;
-  type?: "expense" | "income";
-}
+export {
+  calculateCategoryBaseline,
+  detectLargeTransactions,
+};
+export type {
+  Transaction,
+  CategoryBaseline,
+};
 
 export interface Anomaly {
   id: string;
@@ -57,12 +62,6 @@ export interface AnomalySummary {
   lowCount: number;
   byCategory: Record<string, number>;
   weeklyData: { week: string; count: number }[];
-}
-
-export interface CategoryBaseline {
-  mean: number;
-  stdDev: number;
-  monthlyTotals: number[];
 }
 
 export async function fetchAnomalies(
@@ -143,59 +142,6 @@ export async function fetchTransactions(
 }
 
 export const fetchUserTransactions = fetchTransactions;
-
-export function calculateCategoryBaseline(
-  transactions: Transaction[],
-): Map<string, CategoryBaseline> {
-  const grouped = new Map<string, Transaction[]>();
-
-  transactions.forEach((transaction) => {
-    const category = transaction.category || "Other";
-    grouped.set(category, [...(grouped.get(category) || []), transaction]);
-  });
-
-  const baseline = new Map<string, CategoryBaseline>();
-  grouped.forEach((items, category) => {
-    const amounts = items.map((item) => Math.abs(item.amount));
-    const mean =
-      amounts.length > 0
-        ? amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length
-        : 0;
-    const variance =
-      amounts.length > 0
-        ? amounts.reduce((sum, amount) => sum + Math.pow(amount - mean, 2), 0) /
-          amounts.length
-        : 0;
-    const monthlyTotals = new Map<string, number>();
-    items.forEach((item) => {
-      const date = toDate(item.date) || new Date();
-      const key = format(date, "yyyy-MM");
-      monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + Math.abs(item.amount));
-    });
-
-    baseline.set(category, {
-      mean,
-      stdDev: Math.sqrt(variance),
-      monthlyTotals: Array.from(monthlyTotals.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, total]) => total),
-    });
-  });
-
-  return baseline;
-}
-
-export function detectLargeTransactions(
-  transactions: Transaction[],
-  baseline: Map<string, CategoryBaseline>,
-): Transaction[] {
-  return transactions.filter((transaction) => {
-    const categoryBaseline = baseline.get(transaction.category || "Other");
-    if (!categoryBaseline) return false;
-    const threshold = categoryBaseline.mean + categoryBaseline.stdDev * 2;
-    return Math.abs(transaction.amount) > Math.max(threshold, 1000);
-  });
-}
 
 export function detectCategorySpikes(
   transactions: Transaction[],

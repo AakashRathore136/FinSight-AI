@@ -15,6 +15,7 @@ import {
   addDoc,
   orderBy,
   deleteDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -226,6 +227,75 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       createdAt: new Date().toISOString(),
     };
 
+    // Buy and sell must reconcile the holding quantity atomically so
+    // concurrent writes cannot clobber each other, and a sell can never push
+    // the quantity below zero. dividend/deposit/withdrawal are cash events
+    // and intentionally leave the share quantity and cost basis untouched.
+    if (input.type === 'buy' || input.type === 'sell') {
+      const holdingSnap = await getDocs(
+        query(
+          collection(db, 'portfolioHoldings'),
+          where('userId', '==', userId),
+          where('symbol', '==', input.symbol),
+        ),
+      );
+
+      if (holdingSnap.empty) {
+        if (input.type === 'sell') {
+          throw new Error(
+            `Cannot sell ${input.quantity} shares: no holding exists for ${input.symbol}`,
+          );
+        }
+      } else {
+        const holdingRef = holdingSnap.docs[0].ref;
+        const currentHolding = holdingSnap.docs[0].data();
+        if (
+          input.type === 'sell' &&
+          input.quantity > (currentHolding.quantity || 0)
+        ) {
+          throw new Error(
+            `Cannot sell ${input.quantity} shares: only ${currentHolding.quantity || 0} are held for ${input.symbol}`,
+          );
+        }
+
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(holdingRef);
+          const data = snap.data();
+          if (!data) return;
+
+          const currentQty = data.quantity || 0;
+          if (
+            input.type === 'sell' &&
+            input.quantity > currentQty
+          ) {
+            throw new Error(
+              `Cannot sell ${input.quantity} shares: only ${currentQty} are held for ${input.symbol}`,
+            );
+          }
+
+          const totalShares =
+            input.type === 'buy'
+              ? currentQty + input.quantity
+              : currentQty - input.quantity;
+
+          // Average-cost method: buys raise the per-share basis, sells leave
+          // the remaining shares' basis unchanged.
+          let avgCost = data.avgCost || 0;
+          if (input.type === 'buy') {
+            const totalCost =
+              currentQty * avgCost + input.quantity * input.price;
+            avgCost = totalShares > 0 ? totalCost / totalShares : input.price;
+          }
+
+          await tx.update(holdingRef, {
+            quantity: totalShares,
+            avgCost,
+            updatedAt: serverTimestamp(),
+          });
+        });
+      }
+    }
+
     if (input.type === 'buy') {
       await addDoc(collection(db, 'portfolioTransactions'), {
         ...transaction,
@@ -236,23 +306,6 @@ export async function addTransaction(userId: string, input: TransactionInput): P
         ...transaction,
         createdAt: serverTimestamp(),
       });
-    }
-
-    if (input.type === 'buy') {
-      const holdingRef = doc(db, 'portfolioHoldings', input.holdingId);
-      const holdingSnap = await getDocs(query(collection(db, 'portfolioHoldings'), where('userId', '==', userId), where('symbol', '==', input.symbol)));
-      if (!holdingSnap.empty) {
-        const holdingDoc = holdingSnap.docs[0];
-        const data = holdingDoc.data();
-        const totalShares = (data.quantity || 0) + input.quantity;
-        const totalCost = (data.quantity || 0) * (data.avgCost || 0) + input.quantity * input.price;
-        const newAvg = totalShares > 0 ? totalCost / totalShares : input.price;
-        await updateDoc(holdingDoc.ref, {
-          quantity: totalShares,
-          avgCost: newAvg,
-          updatedAt: serverTimestamp(),
-        });
-      }
     }
 
     return { ...transaction, id: id || '' };
