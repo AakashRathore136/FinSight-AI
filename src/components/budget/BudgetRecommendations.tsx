@@ -29,7 +29,6 @@ interface BudgetRecommendationsProps {
   totalBudget: number;
   confidenceScore: number;
   onSave: (suggestions: CategoryBudgetSuggestion[]) => void;
-  onDiscard: () => void;
   isLoading?: boolean;
 }
 
@@ -38,7 +37,6 @@ export function BudgetRecommendations({
   totalBudget,
   confidenceScore,
   onSave,
-  onDiscard,
   isLoading = false,
 }: BudgetRecommendationsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -345,7 +343,7 @@ export function BudgetRecommendations({
               <Button
                 variant="outline"
                 className="border-slate-700 text-slate-300 hover:bg-slate-800 h-9 px-4 text-xs font-bold uppercase tracking-wider"
-                onClick={onDiscard}
+                onClick={handleReset}
               >
                 Discard
               </Button>
