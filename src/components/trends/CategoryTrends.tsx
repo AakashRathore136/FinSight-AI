@@ -46,6 +46,7 @@ import {
   type Transaction,
   type TrendPeriod,
 } from '@/src/lib/trendsUtils';
+import { PeriodSelector } from './PeriodSelector';
 
 interface CategoryTrendsProps {
   user: { uid: string } | null;
@@ -199,7 +200,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
 
   const exportAll = async () => {
     if (!user) return;
-    setLoading(true);
+    setIsLoading(true);
     try {
       await saveTrendAnalysis(user.uid, config, transactions);
       const refs = [monthlyRef, weeklyRef, pieRef, trendRef];
@@ -223,7 +224,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
       console.error(err);
       toast.error('Export failed');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
