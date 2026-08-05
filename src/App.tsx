@@ -299,13 +299,18 @@ export default function App() {
     }
   }, [selectedDocId]);
 
+  // Initialize selectedDocId from shared state if not already set
   useEffect(() => {
-    if (!selectedDocId && selectedDocIdRef.current) {
-      setSelectedDocId(selectedDocIdRef.current);
+    if (!selectedDocId) {
+      const sharedId = getSharedDocId();
+      if (sharedId) {
+        setSelectedDocId(sharedId);
+      }
     }
   }, [selectedDocId]);
 
-  const activeDocId = selectedDocId || selectedDocIdRef.current;
+  // Use selectedDocId directly - it is already initialized with getSharedDocId()
+  const activeDocId = selectedDocId;
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
