@@ -209,19 +209,30 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
       const monthly = generateMonthlyChallenges(spending);
       const all = [...weekly, ...monthly];
 
+      const existingKeys = new Set(
+        challenges.map((c) => `${c.title}::${c.type}`)
+      );
+      const newChallenges = all.filter(
+        (data) => !existingKeys.has(`${data.title}::${data.type}`)
+      );
+
       let created = 0;
-      for (const data of all) {
+      for (const data of newChallenges) {
         await createChallenge(user.uid, { ...data, difficulty });
         created++;
       }
-      toast.success(`Generated ${created} personalized challenges (${difficulty} difficulty)`);
+      if (created > 0) {
+        toast.success(`Generated ${created} personalized challenges (${difficulty} difficulty)`);
+      } else {
+        toast.info('You already have these challenges');
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'challenges');
       toast.error('Failed to generate challenges');
     } finally {
       setGenerating(false);
     }
-  }, [user, spending]);
+  }, [user, spending, challenges]);
 
   const renderGrid = (items: Challenge[]) => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
