@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { GoalCard } from './GoalCard';
 import { auth, db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   doc,
@@ -11,6 +10,7 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore';
 import {
   Target,
@@ -216,16 +216,22 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     const goal = goals.find((g) => g.id === goalId);
     if (!goal) return;
 
+    // Guard against the auto-complete effect writing a stale snapshot while a
+    // contribution is in flight: it skips goals present in updatingGoalIds.
+    updatingGoalIds.current.add(goalId);
     try {
-      const newAmount = goal.currentAmount + addedAmount;
+      // Apply the contribution atomically on the server so two rapid adds (or
+      // an add racing the auto-complete write) can never overwrite each other.
       await updateDoc(doc(db, 'goals', goalId), {
-        currentAmount: newAmount,
+        currentAmount: increment(addedAmount),
       });
       toast.success(`Added ${formatCurrency(addedAmount)} to ${goal.name}`);
     } catch (error) {
       console.error('Error updating goal:', error);
       handleFirestoreError(error, OperationType.UPDATE, `goals/${goalId}`);
       toast.error('Failed to update goal');
+    } finally {
+      updatingGoalIds.current.delete(goalId);
     }
   };
 
