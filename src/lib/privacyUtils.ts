@@ -12,6 +12,7 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  type DocumentReference,
 } from "firebase/firestore";
 import { db, auth, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
@@ -154,6 +155,7 @@ export async function deleteUserData(userId: string): Promise<void> {
   }
 
   const batch = writeBatch(db);
+  const docRefs: DocumentReference[] = [];
   for (const colName of [
     "transactions",
     "subscriptions",

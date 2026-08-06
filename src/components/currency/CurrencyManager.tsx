@@ -270,7 +270,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
     : { totalBase: 0, byCurrency: {} };
 
   const historyDates = settings?.conversionHistory
-    ? Object.keys(settings.conversionHistory).sort((a, b) => a - b).reverse().slice(0, 10)
+    ? Object.keys(settings.conversionHistory).sort((a: any, b: any) => Number(a) - Number(b)).reverse().slice(0, 10)
     : [];
 
   const categories = ['General', 'Food', 'Transport', 'Utilities', 'Entertainment', 'Healthcare', 'Travel', 'Income'];
@@ -692,6 +692,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                                   amount: tx.amount.toString(),
                                   currency: tx.currency,
                                   category: tx.category,
+                                  type: (tx as any).type,
                                   date: toDate(tx.date)
                                     ? toDate(tx.date)!.toISOString().split('T')[0]
                                     : '',

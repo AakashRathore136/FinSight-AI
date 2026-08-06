@@ -167,6 +167,7 @@ export async function fetchUserTransactions(
         const data = doc.data();
         return {
           id: doc.id,
+          userId: data.userId || data.ownerId || "",
           ownerId: data.ownerId || "",
           amount: data.amount || 0,
           category: data.category || "Other",
