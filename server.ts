@@ -72,11 +72,14 @@ if (firestoreDatabaseId !== "(default)") {
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
 // ports are allowed so `npm run dev` keeps working out of the box.
+// localhost is excluded from production to prevent unauthorized cross-origin
+// requests from developer machines in hosted environments.
+const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    // Only allow localhost in non-production environments
+    ...(isProduction ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"]),
   ].filter(
     (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
   ),
@@ -525,8 +528,36 @@ async function startServer() {
   });
 
   // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // Check Firestore connectivity
+    try {
+      const db = getFirestore();
+      await db.listCollections();
+      checks.firestore = "ok";
+    } catch (err) {
+      checks.firestore = "fail";
+      healthy = false;
+    }
+
+    // Check Firebase Storage connectivity
+    try {
+      const bucket = getStorage().bucket();
+      await bucket.exists();
+      checks.storage = "ok";
+    } catch (err) {
+      checks.storage = "fail";
+      healthy = false;
+    }
+
+    const status = healthy ? 200 : 503;
+    res.status(status).json({
+      status: healthy ? "ok" : "degraded",
+      timestamp: new Date().toISOString(),
+      checks,
+    });
   });
 
   // Require a valid Firebase ID token on every other /api/* route so a
