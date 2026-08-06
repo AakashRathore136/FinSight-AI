@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { toDate } from "@/src/lib/utils";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -47,13 +48,17 @@ export interface ReportData {
   incomeSummary: IncomeSummaryItem[];
   totalIncome: number;
   totalExpenses: number;
+  currency?: string;
   createdAt: Date;
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(
+  amount: number,
+  currencyCode: string = "INR",
+): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "INR",
+    currency: currencyCode,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -88,17 +93,7 @@ export async function fetchTransactionsForDateRange(
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data = d.data() as any;
-      const dateVal = data.date;
-      let date: Date;
-      if (dateVal instanceof Date) {
-        date = dateVal;
-      } else if (typeof dateVal?.toDate === "function") {
-        date = dateVal.toDate();
-      } else if (typeof dateVal?.seconds === "number") {
-        date = new Date(dateVal.seconds * 1000);
-      } else {
-        date = new Date(dateVal as any);
-      }
+      const date = toDate(data.date) || new Date();
       return { ...data, id: d.id, date } as ReportTransaction;
     });
   } catch (error) {
@@ -114,17 +109,7 @@ export async function fetchTransactionsForDateRange(
       return snap.docs
         .map((d) => {
           const data = d.data() as any;
-          const dateVal = data.date;
-          let date: Date;
-          if (dateVal instanceof Date) {
-            date = dateVal;
-          } else if (typeof dateVal?.toDate === "function") {
-            date = dateVal.toDate();
-          } else if (typeof dateVal?.seconds === "number") {
-            date = new Date(dateVal.seconds * 1000);
-          } else {
-            date = new Date(dateVal as any);
-          }
+          const date = toDate(data.date) || new Date();
           return { ...data, id: d.id, date } as ReportTransaction;
         })
         .filter((t) => {
@@ -265,16 +250,18 @@ export async function generatePDF(
   pdf.text("Summary", margin, y);
   y += 6;
 
+  const currency = reportData.currency || "INR";
+
   pdf.setFontSize(10);
   pdf.setTextColor(51, 65, 85);
   pdf.text(
-    `Total Income: ${formatCurrency(reportData.totalIncome)}`,
+    `Total Income: ${formatCurrency(reportData.totalIncome, currency)}`,
     margin,
     y,
   );
   y += 6;
   pdf.text(
-    `Total Expenses: ${formatCurrency(reportData.totalExpenses)}`,
+    `Total Expenses: ${formatCurrency(reportData.totalExpenses, currency)}`,
     margin,
     y,
   );
@@ -293,7 +280,7 @@ export async function generatePDF(
       y = margin;
     }
     pdf.text(
-      `${item.category}: ${formatCurrency(item.total)} (${item.count} transactions)`,
+      `${item.category}: ${formatCurrency(item.total, currency)} (${item.count} transactions)`,
       margin + 4,
       y,
     );
@@ -319,7 +306,7 @@ export async function generatePDF(
       y = margin;
     }
     pdf.text(
-      `${item.source}: ${formatCurrency(item.total)} (${item.count} transactions)`,
+      `${item.source}: ${formatCurrency(item.total, currency)} (${item.count} transactions)`,
       margin + 4,
       y,
     );
@@ -367,6 +354,7 @@ export function buildReportData(
   transactions: ReportTransaction[],
   expenseSummary: ExpenseSummaryItem[],
   incomeSummary: IncomeSummaryItem[],
+  currency: string = "INR",
 ): ReportData {
   const totalIncome = incomeSummary.reduce((sum, item) => sum + item.total, 0);
   const totalExpenses = expenseSummary.reduce(
@@ -382,6 +370,7 @@ export function buildReportData(
     incomeSummary,
     totalIncome,
     totalExpenses,
+    currency,
     createdAt: new Date(),
   };
 }
@@ -406,6 +395,7 @@ export async function saveReportToFirestore(
       },
       totalIncome: reportData.totalIncome,
       totalExpenses: reportData.totalExpenses,
+      currency: reportData.currency || "INR",
       createdAt: new Date().toISOString(),
     };
     await setDoc(newDocRef, payload);

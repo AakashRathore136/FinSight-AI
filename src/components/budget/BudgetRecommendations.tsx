@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -29,7 +30,6 @@ interface BudgetRecommendationsProps {
   totalBudget: number;
   confidenceScore: number;
   onSave: (suggestions: CategoryBudgetSuggestion[]) => void;
-  onDiscard: () => void;
   isLoading?: boolean;
 }
 
@@ -38,7 +38,6 @@ export function BudgetRecommendations({
   totalBudget,
   confidenceScore,
   onSave,
-  onDiscard,
   isLoading = false,
 }: BudgetRecommendationsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,15 +54,17 @@ export function BudgetRecommendations({
 
   const handleSaveEdit = (category: string) => {
     const value = parseFloat(editValue);
-    if (!isNaN(value) && value >= 0) {
-      setLocalSuggestions((prev) =>
-        prev.map((s) =>
-          s.category === category
-            ? { ...s, modifiedAmount: value, status: "modified" as const }
-            : s,
-        ),
-      );
+    if (isNaN(value) || value < 0) {
+      toast.error("Budget must be greater than or equal to 0");
+      return;
     }
+    setLocalSuggestions((prev) =>
+      prev.map((s) =>
+        s.category === category
+          ? { ...s, modifiedAmount: value, status: "modified" as const }
+          : s,
+      ),
+    );
     setEditingId(null);
   };
 
@@ -127,7 +128,7 @@ export function BudgetRecommendations({
     );
   }
 
-  if (!localSuggestions || localSuggestions.length === 0) {
+  if (!suggestions || suggestions.length === 0) {
     return (
       <Card className="bg-slate-900 border-slate-800 rounded-2xl">
         <CardContent className="p-8 flex flex-col items-center justify-center min-h-[300px]">
@@ -235,6 +236,7 @@ export function BudgetRecommendations({
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
+                          min="0"
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
                           className="w-28 h-9 text-sm bg-slate-900 border-slate-700 text-white rounded-lg"
@@ -345,7 +347,7 @@ export function BudgetRecommendations({
               <Button
                 variant="outline"
                 className="border-slate-700 text-slate-300 hover:bg-slate-800 h-9 px-4 text-xs font-bold uppercase tracking-wider"
-                onClick={onDiscard}
+                onClick={handleReset}
               >
                 Discard
               </Button>

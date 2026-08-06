@@ -2,9 +2,6 @@ import { Anomaly } from "@/src/lib/anomalyUtils";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
@@ -17,7 +14,7 @@ import {
   History,
   BarChart3,
 } from "lucide-react";
-import { formatRelativeTime, formatDateSafe } from "@/src/lib/utils";
+import { formatRelativeTime } from "@/src/lib/utils";
 
 interface AnomalyCardProps {
   anomaly: Anomaly;

@@ -19,8 +19,10 @@ import {
   AlertTriangle,
   Filter,
   DollarSign,
+  Bell,
 } from "lucide-react";
 import { toast } from "sonner";
+import { requestNotificationPermission } from "@/src/pwa/registerSW";
 import { SubscriptionCard } from "./SubscriptionCard";
 import {
   fetchUserTransactions,
@@ -141,16 +143,31 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
             Auto-detect recurring expenses & forecast renewals
           </p>
         </div>
-        <Button
-          onClick={handleAnalyze}
-          disabled={analyzing || loading}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-900/40 rounded-2xl h-12 px-6"
-        >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${analyzing ? "animate-spin" : ""}`}
-          />
-          {analyzing ? "Analyzing..." : "Scan Transactions"}
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            onClick={async () => {
+              const perm = await requestNotificationPermission();
+              if (perm === 'granted') {
+                toast.success("Push notifications enabled!");
+              } else {
+                toast.error("Notifications were denied.");
+              }
+            }}
+            className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm uppercase tracking-widest rounded-2xl h-12 px-4"
+          >
+            <Bell className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={handleAnalyze}
+            disabled={analyzing || loading}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-indigo-900/40 rounded-2xl h-12 px-6"
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${analyzing ? "animate-spin" : ""}`}
+            />
+            {analyzing ? "Analyzing..." : "Scan Transactions"}
+          </Button>
+        </div>
       </div>
 
       {loading ? (
