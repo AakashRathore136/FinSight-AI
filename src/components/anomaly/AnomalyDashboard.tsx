@@ -375,6 +375,10 @@ async function runDetection(userId: string) {
       transactionId: tx.id,
       dismissed: false,
       createdAt: tx.date,
+      date: tx.date,
+      severity: confidence >= 80 ? "high" : confidence >= 60 ? "medium" : "low",
+      averageAmount: catBaseline.mean,
+      deviation: catBaseline.stdDev,
     });
   });
 
@@ -406,6 +410,10 @@ async function runDetection(userId: string) {
       createdAt:
         spike.transactions[spike.transactions.length - 1]?.date ||
         new Date().toISOString(),
+      date: (spike.transactions[spike.transactions.length - 1]?.date as Date) || new Date(),
+      severity: pctOver >= 50 ? "high" : pctOver >= 25 ? "medium" : "low",
+      averageAmount: avgMonthly,
+      deviation: avgMonthly > 0 ? (lastMonthTotal - avgMonthly) : 0,
     });
   });
 
