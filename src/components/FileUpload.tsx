@@ -18,6 +18,7 @@ import {
 } from "@/src/components/ui/card";
 import { toast } from "sonner";
 import { apiFetch } from "@/src/lib/api";
+import { safeJsonParse } from "@/src/lib/utils";
 
 export function FileUpload({ user, onComplete, onCancel }: any) {
   const [file, setFile] = useState<File | null>(null);
@@ -353,11 +354,9 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               </div>
             </div>
             {(() => {
-              try {
-                const diag = JSON.parse(errorMessage);
-                // Validate that diag is an object with expected structure
+                const diag = safeJsonParse(errorMessage, {} as Record<string, unknown>);
                 if (typeof diag !== 'object' || diag === null) {
-                  throw new Error('Invalid error object');
+                  return <p className="text-slate-300 font-medium">{errorMessage}</p>;
                 }
                 return (
                   <div className="mt-4 pt-4 border-t border-red-500/10 space-y-3">
@@ -393,13 +392,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
                     )}
                   </div>
                 );
-              } catch {
-                return (
-                  <p className="text-red-400/80 mt-2 font-medium">
-                    {errorMessage}
-                  </p>
-                );
-              }
             })()}
           </div>
         )}

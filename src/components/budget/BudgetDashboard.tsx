@@ -375,7 +375,6 @@ export function BudgetDashboard({ user }: { user: any }) {
             totalBudget={totalBudget}
             confidenceScore={confidenceScore}
             onSave={handleSaveBudget}
-            onDiscard={() => setSuggestions(suggestions)}
             isLoading={loading}
           />
         </div>
