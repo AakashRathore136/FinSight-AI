@@ -333,7 +333,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
             : c
         )
       );
-      const patch = { lastMessageAt: new Date().toISOString() };
+      const patch: Record<string, string> = { lastMessageAt: new Date().toISOString() };
       if (isDefaultTitle) patch.title = derivedTitle;
       await updateConversation(currentConversationId, patch);
     }
