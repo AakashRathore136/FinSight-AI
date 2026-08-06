@@ -1,4 +1,4 @@
-import { format, differenceInDays, addMonths, isBefore } from 'date-fns';
+import { format, differenceInDays, addMonths } from 'date-fns';
 
 export interface Goal {
   id: string;

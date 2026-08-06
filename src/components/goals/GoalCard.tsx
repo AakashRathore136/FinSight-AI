@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { formatDistanceToNow, format } from 'date-fns';
 import { Target, Calendar, TrendingUp, MoreVertical, Pause, Play, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Progress, ProgressIndicator, ProgressTrack } from '@/src/components/ui/progress';

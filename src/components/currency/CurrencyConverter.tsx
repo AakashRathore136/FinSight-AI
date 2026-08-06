@@ -136,7 +136,14 @@ export function CurrencyConverter({
               </p>
             </div>
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 font-bold text-xs">
-              {rates ? `1 ${fromCurrency} = ${rates.rates[toCurrency]?.toFixed(4) || '---'} ${toCurrency}` : 'Loading rates...'}
+              {rates
+                ? (() => {
+                    const fromRate = rates.rates[fromCurrency] ?? 1;
+                    const toRate = rates.rates[toCurrency] ?? 1;
+                    const crossRate = (toRate / fromRate).toFixed(4);
+                    return `1 ${fromCurrency} = ${crossRate} ${toCurrency}`;
+                  })()
+                : 'Loading rates...'}
             </Badge>
           </div>
           {rates && (
