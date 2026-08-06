@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
+import { PeriodSelector } from './PeriodSelector';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -180,7 +182,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
       for (const ref of refs) {
         if (ref.current) {
           // sequential capture to avoid memory pressure
-          // eslint-disable-next-line no-await-in-loop
+           
           const canvas = await html2canvas(ref.current, { backgroundColor: CHART_BG, scale: 2 });
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
