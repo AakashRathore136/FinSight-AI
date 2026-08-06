@@ -58,11 +58,11 @@ import {
   createPortfolio,
   addTransaction,
   removeHolding,
-  updatePortfolio,
   getAssetClassColor,
   savePortfolioSnapshot,
   fetchPortfolioHistory,
   addHolding,
+  migrateEmbeddedHoldings,
 } from '@/src/lib/portfolioUtils';
 
 interface PortfolioTrackerProps {
@@ -107,6 +107,8 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     const load = async () => {
       setLoading(true);
       try {
+        await migrateEmbeddedHoldings(user.uid);
+        if (!active) return;
         const [portfolios, h, t] = await Promise.all([
           (await import('@/src/lib/portfolioUtils')).fetchUserPortfolios(user.uid),
           fetchUserHoldings(user.uid),
@@ -229,7 +231,9 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
-      toast.error('Failed to add transaction');
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to add transaction',
+      );
     }
   };
 
@@ -664,16 +668,16 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                     <p className="text-xs text-slate-500 mb-1">All-Time Return</p>
                     <p className={cn(
                       'text-2xl font-bold tabular-nums',
-                      (performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      (performanceHistory[0]?.profitLoss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     )}>
-                      {formatCurrencyDisplay((performanceHistory[performanceHistory.length - 1]?.profitLoss ?? 0), 'USD')}
+                      {formatCurrencyDisplay((performanceHistory[0]?.profitLoss ?? 0), 'USD')}
                     </p>
                     <p className={cn(
                       'text-xs mt-1',
-                      (performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      (performanceHistory[0]?.profitLossPercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     )}>
-                      {((performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0) >= 0 ? '+' : '')}
-                      {(performanceHistory[performanceHistory.length - 1]?.profitLossPercent ?? 0).toFixed(2)}%
+                      {((performanceHistory[0]?.profitLossPercent ?? 0) >= 0 ? '+' : '')}
+                      {(performanceHistory[0]?.profitLossPercent ?? 0).toFixed(2)}%
                     </p>
                   </CardContent>
                 </Card>

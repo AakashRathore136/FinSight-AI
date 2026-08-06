@@ -19,10 +19,9 @@ ENV NODE_ENV=production
 COPY --from=builder --chown=node:node /app/package*.json ./
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
-COPY --from=builder --chown=node:node /app/build ./build
 
 USER node
 
 EXPOSE 3001
 
-CMD ["node", "build/server.cjs"]
+CMD ["node", "dist/server.cjs"]
