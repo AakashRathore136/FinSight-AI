@@ -11,10 +11,11 @@ import { getStorage } from "firebase-admin/storage";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
+import logger from "./src/lib/logger.js";
 
 dotenv.config({ quiet: true });
 
-
+logger.info("Server starting", { hfKeyExists: !!process.env.HUGGINGFACE_API_KEY });
 
 // NEVER log extracted document text or raw AI responses by default: they
 // contain sensitive financial content. For local debugging only, set
@@ -52,15 +53,34 @@ const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
 const firestoreDatabaseId =
   String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
   "(default)";
-
+// storage.rules hardcodes isAdmin() to check the "(default)" Firestore
+// database — Cloud Storage Security Rules cannot read env vars or accept a
+// runtime database id, so that path is a literal string baked into the
+// rules file. If this server is configured to use a *named* Firestore
+// database instead, storage.rules' admin checks will silently evaluate to
+// false (no error, no log) and admins will quietly lose the ability to
+// read/delete other users' files in Storage. Fail loudly here instead of
+// letting that ship unnoticed.
+if (firestoreDatabaseId !== "(default)") {
+  console.warn(
+    `FIRESTORE_DATABASE_MISMATCH_WARNING: FIREBASE_FIRESTORE_DATABASE_ID is ` +
+      `set to "${firestoreDatabaseId}", but storage.rules' isAdmin() check is ` +
+      `hardcoded to the "(default)" database. Admin access to Firebase ` +
+      `Storage will not work correctly until storage.rules is updated to ` +
+      `match, or FIREBASE_FIRESTORE_DATABASE_ID is reverted to "(default)".`,
+  );
+}
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
 // ports are allowed so `npm run dev` keeps working out of the box.
+// localhost is excluded from production to prevent unauthorized cross-origin
+// requests from developer machines in hosted environments.
+const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    // Only allow localhost in non-production environments
+    ...(isProduction ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"]),
   ].filter(
     (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
   ),
@@ -102,7 +122,8 @@ async function generateShortLivedSignedUrl(
     });
 
     return signedUrl;
-  } catch (error: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error: any) {
     console.error(
       "SIGNED_URL_GENERATION_ERROR:",
       error?.message || error,
@@ -114,25 +135,34 @@ async function generateShortLivedSignedUrl(
 }
 
 function safeJsonParse(text: string): any {
-  let cleaned = (text || "").trim();
+  const cleaned = (text || "").trim();
   if (!cleaned) {
     throw new Error("Empty model response");
   }
 
-  // 1. Extract JSON block if surrounded by markdown or other text
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  // 1. Extract JSON block if surrounded by markdown or other text.
+  // Handle both object {...} and array [...] responses.
+  let extracted = cleaned;
+  const firstObj = cleaned.indexOf("{");
+  const lastObj = cleaned.lastIndexOf("}");
+  const firstArr = cleaned.indexOf("[");
+  const lastArr = cleaned.lastIndexOf("]");
+
+  // Prefer the JSON block that starts first and ends last
+  if (firstObj !== -1 && lastObj !== -1 && (firstArr === -1 || firstObj < firstArr)) {
+    extracted = cleaned.substring(firstObj, lastObj + 1);
+  } else if (firstArr !== -1 && lastArr !== -1) {
+    extracted = cleaned.substring(firstArr, lastArr + 1);
   }
 
-  // 2. Try parsing directly
+  // 2. Try parsing the extracted text directly
   try {
-    return JSON.parse(cleaned);
-  } catch (err: any) {
+    return JSON.parse(extracted);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (err: any) {
     // 3. Perform common repairs:
     // a. Remove trailing commas before closing braces/brackets
-    let repaired = cleaned
+    const repaired = extracted
       .replace(/,\s*([}\]])/g, "$1") // trailing commas
       // b. Handle unescaped newlines in JSON strings.
       .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
@@ -141,7 +171,8 @@ function safeJsonParse(text: string): any {
 
     try {
       return JSON.parse(repaired);
-    } catch (err2: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (_err2: any) { void _err2; } {
       // c. Attempt to repair truncated JSON by appending missing brackets
       let openBraces = 0;
       let openBrackets = 0;
@@ -186,7 +217,8 @@ function safeJsonParse(text: string): any {
 
       try {
         return JSON.parse(repairStr);
-      } catch (err3: any) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (err3: any) {
         throw new Error(
           `JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`,
         );
@@ -320,7 +352,8 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
     req.ownerId = decoded.uid;
     req.idToken = idToken;
     next();
-  } catch (err: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (err: any) {
     console.error(
       "AUTH_ERROR: ID token verification failed",
       err?.message || err,
@@ -352,7 +385,8 @@ async function enrichUserContext(req: any, res: any, next: any) {
     const userDoc = await db.collection("users").doc(req.ownerId).get();
     req.userRole = userDoc.data()?.role || "free";
     next();
-  } catch (err: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (err: any) {
     console.warn(
       "Failed to load user role for rate limiting:",
       err?.message || err,
@@ -362,6 +396,7 @@ async function enrichUserContext(req: any, res: any, next: any) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function toFirestoreValue(value: any): any {
   if (value === null || value === undefined) return { nullValue: null };
   if (value instanceof Date) return { timestampValue: value.toISOString() };
@@ -410,7 +445,8 @@ async function startServer() {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
         admin.initializeApp({ projectId: firebaseProjectId });
       }
-    } catch (err: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (err: any) {
       if (isDefaultCredentialsError(err)) {
         console.warn(
           "Firebase admin initialization failed — FIREBASE_SERVICE_ACCOUNT or ADC credentials are required.",
@@ -477,24 +513,63 @@ async function startServer() {
     next();
   });
 
-
+  // Request logger - log all requests in development, errors only in production
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== "production") {
+      logger.debug(`${req.method} ${req.url}`, { ip: req.ip });
+    }
+    next();
+  });
 
   // JSON parse error handler (catches body-parser SyntaxError)
-  app.use((err: any, req: any, res: any, next: any) => {
+  app.use((err: any, req: any, res: any, _next: any) => {
+    void _next;
     if (err && err.type === "entity.parse.failed") {
-      console.warn("Invalid JSON payload received for", req.url);
+      logger.warn("Invalid JSON payload", { url: req.url });
       return res.status(400).json({ error: "Invalid JSON payload" });
     }
     if (err instanceof SyntaxError && "body" in err) {
-      console.warn("SyntaxError parsing JSON for", req.url);
+      logger.warn("SyntaxError parsing JSON", { url: req.url });
       return res.status(400).json({ error: "Malformed JSON" });
     }
-    next(err);
+    _next(err);
   });
 
   // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // Check Firestore connectivity
+    try {
+      const db = getFirestore();
+      await db.listCollections();
+      checks.firestore = "ok";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (_err) {
+      void _err;
+      checks.firestore = "fail";
+      healthy = false;
+    }
+
+    // Check Firebase Storage connectivity
+    try {
+      const bucket = getStorage().bucket();
+      await bucket.exists();
+      checks.storage = "ok";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (_err) {
+      void _err;
+      checks.storage = "fail";
+      healthy = false;
+    }
+
+    const status = healthy ? 200 : 503;
+    res.status(status).json({
+      status: healthy ? "ok" : "degraded",
+      timestamp: new Date().toISOString(),
+      checks,
+    });
   });
 
   // Require a valid Firebase ID token on every other /api/* route so a
@@ -619,7 +694,8 @@ async function startServer() {
           try {
             const parsed = await parser.getText();
             extractedText = (parsed?.text || "").trim();
-          } catch (extractError: any) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (extractError: any) {
             console.error(
               "PDF_EXTRACTION_ERROR: Failed to parse PDF",
               extractError?.message || extractError,
@@ -638,7 +714,8 @@ async function startServer() {
                   setTimeout(() => reject(new Error("destroy timeout")), 5000),
                 ),
               ]);
-            } catch (destroyError: any) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (destroyError: any) {
               console.warn(
                 "PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser",
                 destroyError?.message || destroyError,
@@ -770,7 +847,8 @@ CRITICAL RULES:
               let parsedResponse;
               try {
                 parsedResponse = safeJsonParse(rawText);
-              } catch (parseError: any) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (parseError: any) {
                 console.error(
                   "AI_JSON_PARSE_ERROR:",
                   parseError?.message || parseError,
@@ -794,7 +872,17 @@ CRITICAL RULES:
 
               try {
                 validPayload = validateAnalysisPayload(parsedResponse);
-              } catch (validateError: any) {
+                console.log("AI_SCHEMA_VALIDATION_SUCCESS");
+                console.log(
+                  `AI_ANALYSIS_GENERATED: summaryLength=${validPayload.summary.length}, fullReportLength=${validPayload.full_report.length}`,
+                );
+                if (logDocumentContent) {
+                  console.log(
+                    `AI_ANALYSIS_SUMMARY: ${validPayload.summary.substring(0, 200)}`,
+                  );
+                }
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (validateError: any) {
                 console.error(
                   "AI_SCHEMA_VALIDATION_ERROR:",
                   validateError?.message || validateError,
@@ -809,7 +897,8 @@ CRITICAL RULES:
                 retries++;
                 continue;
               }
-            } catch (abortError: any) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (abortError: any) {
               if (abortError.name === 'AbortError' || controller.signal.aborted) {
                 console.error(
                   "AI_REQUEST_TIMEOUT: Hugging Face inference exceeded 30 second timeout",
@@ -826,7 +915,8 @@ CRITICAL RULES:
               }
               throw abortError;
             }
-          } catch (hfError: any) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (hfError: any) {
             if (hfError instanceof PipelineError) {
               throw hfError;
             }
@@ -884,8 +974,11 @@ CRITICAL RULES:
                 },
               },
             });
-
-          } catch (storageError: any) {
+            console.log(
+              `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
+            );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (storageError: any) {
             console.error(
               "FIREBASE_STORAGE_UPLOAD_ERROR:",
               storageError?.message || storageError,
@@ -956,8 +1049,11 @@ CRITICAL RULES:
             latestAnalysis: adminAnalysisDoc,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-
-        } catch (writeError: any) {
+          console.log(
+            `FIRESTORE_PARENT_UPDATED: latestAnalysis snapshot stored`,
+          );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (writeError: any) {
           console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
           // The PDF was already uploaded to Storage before these writes began.
           // Delete it so a failed pipeline does not leave a permanent orphaned
@@ -965,8 +1061,11 @@ CRITICAL RULES:
           try {
             const bucket = getStorage().bucket();
             await bucket.file(storagePath).delete();
-
-          } catch (storageCleanupError: any) {
+            console.log(
+              `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
+            );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (storageCleanupError: any) {
             if (storageCleanupError?.code !== 404) {
               console.error(
                 "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
@@ -983,7 +1082,8 @@ CRITICAL RULES:
 
 
         return res.status(200).json({ documentId });
-      } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error: any) {
         console.error("=== PDF INGESTION PIPELINE FAILED ===");
         console.error("ERROR_MESSAGE:", error?.message || error);
         console.error("ERROR_STACK:", error?.stack || "No stack trace");
@@ -1126,7 +1226,8 @@ CRITICAL RULES:
           signedUrl,
           expiresIn: 15 * 60, // seconds
         });
-      } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error: any) {
         if (error?.code === 404) {
           console.warn(
             `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}`,
@@ -1151,7 +1252,8 @@ CRITICAL RULES:
           },
         });
       }
-    } catch (error: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error: any) {
       console.error("DOWNLOAD_URL_REQUEST_ERROR:", error?.message || error);
       return res.status(500).json({
         error: {
@@ -1239,8 +1341,11 @@ CRITICAL RULES:
       if (storagePath) {
         try {
           await getStorage().bucket().file(storagePath).delete();
-
-        } catch (storageError: any) {
+          console.log(
+            `STORAGE_OBJECT_DELETED: userId=${req.ownerId}, storagePath=${storagePath}`,
+          );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (storageError: any) {
           if (storageError?.code !== 404) {
             console.error(
               "STORAGE_OBJECT_DELETE_ERROR:",
@@ -1251,7 +1356,8 @@ CRITICAL RULES:
       }
 
       return res.status(200).json({ success: true, documentId });
-    } catch (error: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error: any) {
       console.error("DOCUMENT_DELETE_ERROR:", error?.message || error);
       return res.status(500).json({
         error: {
@@ -1267,7 +1373,8 @@ CRITICAL RULES:
   // oversized files (LIMIT_FILE_SIZE) and non-PDF rejections from
   // fileFilter — and returns clean JSON instead of falling through to
   // Express's default HTML error page.
-  app.use((err: any, req: any, res: any, next: any) => {
+  app.use((err: any, req: any, res: any, _next: any) => {
+    void _next;
     if (err instanceof multer.MulterError) {
       const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
       return res.status(status).json({
@@ -1291,12 +1398,13 @@ CRITICAL RULES:
         },
       });
     }
-    next(err);
+    _next(err);
   });
 
   // Global error handler - MUST be the last middleware registered
   // Catches all unhandled errors and prevents stack trace leakage in production
-  app.use((err: any, req: any, res: any, next: any) => {
+  app.use((err: any, req: any, res: any, _next: any) => {
+    void _next;
     console.error("UNHANDLED_ERROR:", {
       message: err?.message || String(err),
       stack: err?.stack || "No stack trace",

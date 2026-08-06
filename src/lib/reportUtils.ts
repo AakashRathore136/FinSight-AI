@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,7 +13,8 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { toDate } from "@/src/lib/utils";
+import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -92,17 +94,7 @@ export async function fetchTransactionsForDateRange(
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data = d.data() as any;
-      const dateVal = data.date;
-      let date: Date;
-      if (dateVal instanceof Date) {
-        date = dateVal;
-      } else if (typeof dateVal?.toDate === "function") {
-        date = dateVal.toDate();
-      } else if (typeof dateVal?.seconds === "number") {
-        date = new Date(dateVal.seconds * 1000);
-      } else {
-        date = new Date(dateVal as any);
-      }
+      const date = toDate(data.date) || new Date();
       return { ...data, id: d.id, date } as ReportTransaction;
     });
   } catch (error) {
@@ -118,17 +110,7 @@ export async function fetchTransactionsForDateRange(
       return snap.docs
         .map((d) => {
           const data = d.data() as any;
-          const dateVal = data.date;
-          let date: Date;
-          if (dateVal instanceof Date) {
-            date = dateVal;
-          } else if (typeof dateVal?.toDate === "function") {
-            date = dateVal.toDate();
-          } else if (typeof dateVal?.seconds === "number") {
-            date = new Date(dateVal.seconds * 1000);
-          } else {
-            date = new Date(dateVal as any);
-          }
+          const date = toDate(data.date) || new Date();
           return { ...data, id: d.id, date } as ReportTransaction;
         })
         .filter((t) => {

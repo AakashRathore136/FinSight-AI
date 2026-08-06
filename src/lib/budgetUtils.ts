@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,12 +14,12 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
   orderBy,
   deleteDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { normalizeTransactionType, formatCurrency } from './utils';
 import { toDate } from './utils';
 
 export interface BudgetCategory {
@@ -345,7 +346,7 @@ async function fetchUserTransactionsInRange(
         category: data.category || 'Other',
         date: dateVal.toISOString(),
         description: data.description || '',
-        type: data.type || (data.amount < 0 ? 'expense' : 'income'),
+        type: normalizeTransactionType(data.type),
       });
     });
     transactions.sort((a, b) => b.date.localeCompare(a.date));

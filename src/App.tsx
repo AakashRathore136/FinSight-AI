@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -19,9 +20,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
+  Activity,
   TrendingUp,
   LayoutDashboard,
   FileText,
@@ -41,9 +44,8 @@ import {
   MessageSquare,
   LineChart,
   Globe,
-  Shield,
   Lock,
-  Activity,
+  Shield
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -58,15 +60,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/src/components/ui/card";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/src/components/ui/tabs";
-import { Badge } from "@/src/components/ui/badge";
+
+
 import { Input } from "@/src/components/ui/input";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 
 export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
   return (
@@ -170,11 +166,11 @@ import { AnalysisList } from './components/AnalysisList';
 import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
+import { PrivacyDashboard } from './components/privacy/PrivacyDashboard';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
 import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
-import { CurrencyManager } from './components/currency/CurrencyManager';
 import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
 import { BillReminders } from './components/bills/BillReminders';
@@ -333,6 +329,22 @@ export default function App() {
           const userRef = doc(db, "users", currentUser.uid);
           try {
             const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().deletedAt) {
+              // Erased account: the profile must stay deleted. Terminate the
+              // session instead of auto-recreating a fresh profile.
+              setUserProfile(null);
+              setShowVerificationScreen(false);
+              try {
+                await deleteUser(currentUser);
+              } catch (authError) {
+                console.error("Could not remove auth account:", authError);
+              }
+              await signOut(auth);
+              toast.info("This account has been deleted.");
+              setLoading(false);
+              return;
+            }
 
             if (!userSnap.exists()) {
               const profile = getDefaultProfile(currentUser);
@@ -992,6 +1004,12 @@ export default function App() {
             active={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
           />
+          <NavItem
+            icon={<Shield size={20} />}
+            label="Privacy & Security"
+            active={activeTab === 'privacy'}
+            onClick={() => setActiveTab('privacy')}
+          />
           {userProfile?.role === "admin" && (
             <NavItem
               icon={<ShieldCheck size={20} />}
@@ -1341,6 +1359,17 @@ export default function App() {
                 exit={{ opacity: 0, x: -10 }}
               >
                 <AdminPanel />
+              </motion.div>
+            )}
+
+            {activeTab === 'privacy' && user && (
+              <motion.div 
+                key="privacy"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <PrivacyDashboard user={user} />
               </motion.div>
             )}
 

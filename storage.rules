@@ -1,4 +1,8 @@
 rules_version = '2';
+// ⚠️ IMPORTANT: This file hardcodes the Firestore database as "(default)"
+// See the isAdmin() function below for details. If FIREBASE_FIRESTORE_DATABASE_ID
+// is not "(default)", admin access will silently fail.
+// Run `npm run validate-env` to check for this mismatch.
 service firebase.storage {
   match /b/{bucket}/o {
     // Default deny all access
@@ -55,10 +59,30 @@ service firebase.storage {
     }
   }
 
-  // Helper function to check if user is admin (cached in Firestore)
-  function isAdmin(uid) {
-    return request.auth != null &&
-      firestore.exists(/databases/(default)/documents/users/$(uid)) &&
-      firestore.get(/databases/(default)/documents/users/$(uid)).data.role == 'admin';
-  }
+// Helper function to check if user is admin (cached in Firestore)
+//
+// IMPORTANT — DATABASE ID IS HARDCODED, NOT CONFIGURABLE:
+// Cloud Storage Security Rules cannot read environment variables or accept
+// a runtime parameter for which Firestore database to query — the path
+// segment after /databases/ must be a literal string. This project's
+// server.ts supports a configurable FIREBASE_FIRESTORE_DATABASE_ID
+// (see .env.example), but that setting has NO EFFECT here: these rules
+// will always check the "(default)" database for the admin role.
+//
+// If you ever deploy this app against a named (non-default) Firestore
+// database, every isAdmin() check below will silently evaluate to false
+// (not error) — admins will quietly lose the ability to read/delete other
+// users' files in Storage. There is no warning anywhere else in the app
+// for this. Two safe options:
+//   1. Keep FIREBASE_FIRESTORE_DATABASE_ID as "(default)" (the default),
+//      which is required for these rules to work as written, OR
+//   2. If you must use a named database, update the literal string below
+//      to match it, AND remove/replace this comment accordingly. Storage
+//      rules and your Firestore database id must always be kept in sync
+//      by hand — nothing enforces this automatically.
+function isAdmin(uid) {
+  return request.auth != null &&
+    firestore.exists(/databases/(default)/documents/users/$(uid)) &&
+    firestore.get(/databases/(default)/documents/users/$(uid)).data.role == 'admin';
+}
 }

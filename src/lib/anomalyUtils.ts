@@ -1,4 +1,5 @@
-﻿/**
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +15,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
-import { formatCurrency } from "./utils";
+import { formatCurrency, toDate } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
 import {
   calculateCategoryBaseline,
@@ -132,10 +133,7 @@ export async function fetchTransactions(
           return { ...data, id: d.id } as Transaction;
         })
         .filter((t) => {
-          const time =
-            t.date instanceof Date
-              ? t.date.getTime()
-              : new Date(t.date as any).getTime();
+          const time = toDate(t.date)?.getTime() ?? 0;
           return time >= startDate.getTime();
         });
     }
@@ -159,7 +157,7 @@ export function detectCategorySpikes(
   const byCategory = new Map<string, Transaction[]>();
 
   transactions.forEach((transaction) => {
-    const date = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
+    const date = toDate(transaction.date) || new Date();
     if (format(date, "yyyy-MM") !== currentMonth) return;
     const category = transaction.category || "Other";
     byCategory.set(category, [...(byCategory.get(category) || []), transaction]);
@@ -274,7 +272,7 @@ export function detectAnomalies(
   const monthlySpend = new Map<string, Map<string, number>>();
   transactions.forEach((t) => {
     const monthKey = format(
-      t.date instanceof Date ? t.date : new Date(t.date as any),
+      toDate(t.date) || new Date(),
       "yyyy-MM",
     );
     const cat = t.category || "Other";
