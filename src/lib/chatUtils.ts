@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
-import { formatCurrency } from '@/src/lib/utils';
+import { formatCurrency, toDate } from '@/src/lib/utils';
 import type { Transaction } from '@/src/lib/trendsUtils';
 
 export interface ChatMessage {
@@ -105,7 +105,7 @@ export async function loadConversations(userId: string): Promise<Conversation[]>
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const toIso = (val: any) =>
-        val && typeof val.toDate === 'function' ? val.toDate().toISOString() : (val || new Date().toISOString());
+        toDate(val) ? toDate(val)!.toISOString() : new Date().toISOString();
       conversations.push({
         id: docSnap.id,
         userId: data.userId || '',
@@ -173,7 +173,7 @@ export async function loadMessages(conversationId: string, userId: string): Prom
         content: data.content || '',
         timestamp: (() => {
           const t = data.timestamp;
-          return t && typeof t.toDate === 'function' ? t.toDate().toISOString() : (t || new Date().toISOString());
+          return toDate(t) ? toDate(t)!.toISOString() : new Date().toISOString();
         })(),
         metadata: data.metadata,
       });
@@ -191,8 +191,12 @@ export function buildFinancialContext(
   transactions: Transaction[],
   budgetCategories: { name: string; monthlyLimit: number }[]
 ): FinancialContext {
-  const expenses = transactions.filter((t) => t.type === 'expense' || !t.type);
-  const income = transactions.filter((t) => t.type === 'income');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
+  const income = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'income',
+  );
 
   const totalSpending = expenses.reduce((sum, t) => sum + t.amount, 0);
   const totalIncome = income.reduce((sum, t) => sum + t.amount, 0);
