@@ -143,12 +143,16 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     if (!user || !portfolioId || activeTab !== 'performance') return;
     let active = true;
     const loadHistory = async () => {
+      if (transactions.length === 0 && holdings.length === 0) {
+        if (active) setPerformanceHistory([]);
+        return;
+      }
       const history = await fetchPortfolioHistory(user.uid, portfolioId);
       if (active) setPerformanceHistory(history);
     };
     loadHistory();
     return () => { active = false; };
-  }, [user, portfolioId, activeTab]);
+  }, [user, portfolioId, activeTab, transactions, holdings]);
 
   const totalValue = useMemo(() => calculateTotalValue(holdings), [holdings]);
   const totalCost = useMemo(() => holdings.reduce((s, h) => s + h.quantity * h.avgCost, 0), [holdings]);
