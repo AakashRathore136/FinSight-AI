@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -55,15 +56,17 @@ export function BudgetRecommendations({
 
   const handleSaveEdit = (category: string) => {
     const value = parseFloat(editValue);
-    if (!isNaN(value) && value >= 0) {
-      setLocalSuggestions((prev) =>
-        prev.map((s) =>
-          s.category === category
-            ? { ...s, modifiedAmount: value, status: "modified" as const }
-            : s,
-        ),
-      );
+    if (isNaN(value) || value < 0) {
+      toast.error("Budget must be greater than or equal to 0");
+      return;
     }
+    setLocalSuggestions((prev) =>
+      prev.map((s) =>
+        s.category === category
+          ? { ...s, modifiedAmount: value, status: "modified" as const }
+          : s,
+      ),
+    );
     setEditingId(null);
   };
 
@@ -235,6 +238,7 @@ export function BudgetRecommendations({
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
+                          min="0"
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
                           className="w-28 h-9 text-sm bg-slate-900 border-slate-700 text-white rounded-lg"
