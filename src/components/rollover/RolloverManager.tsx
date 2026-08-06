@@ -526,3 +526,4 @@ function SummaryCard({
     </Card>
   );
 }
+
