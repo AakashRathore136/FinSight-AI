@@ -1,4 +1,8 @@
 rules_version = '2';
+// ⚠️ IMPORTANT: This file hardcodes the Firestore database as "(default)"
+// See the isAdmin() function below for details. If FIREBASE_FIRESTORE_DATABASE_ID
+// is not "(default)", admin access will silently fail.
+// Run `npm run validate-env` to check for this mismatch.
 service firebase.storage {
   match /b/{bucket}/o {
     // Default deny all access
