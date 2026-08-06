@@ -19,9 +19,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
+  Activity,
   TrendingUp,
   LayoutDashboard,
   FileText,
@@ -41,9 +43,8 @@ import {
   MessageSquare,
   LineChart,
   Globe,
-  Shield,
   Lock,
-  Activity,
+  Shield
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -170,6 +171,7 @@ import { AnalysisList } from './components/AnalysisList';
 import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
+import { PrivacyDashboard } from './components/privacy/PrivacyDashboard';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
 import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
@@ -333,6 +335,22 @@ export default function App() {
           const userRef = doc(db, "users", currentUser.uid);
           try {
             const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().deletedAt) {
+              // Erased account: the profile must stay deleted. Terminate the
+              // session instead of auto-recreating a fresh profile.
+              setUserProfile(null);
+              setShowVerificationScreen(false);
+              try {
+                await deleteUser(currentUser);
+              } catch (authError) {
+                console.error("Could not remove auth account:", authError);
+              }
+              await signOut(auth);
+              toast.info("This account has been deleted.");
+              setLoading(false);
+              return;
+            }
 
             if (!userSnap.exists()) {
               const profile = getDefaultProfile(currentUser);
@@ -992,6 +1010,12 @@ export default function App() {
             active={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
           />
+          <NavItem
+            icon={<Shield size={20} />}
+            label="Privacy & Security"
+            active={activeTab === 'privacy'}
+            onClick={() => setActiveTab('privacy')}
+          />
           {userProfile?.role === "admin" && (
             <NavItem
               icon={<ShieldCheck size={20} />}
@@ -1341,6 +1365,17 @@ export default function App() {
                 exit={{ opacity: 0, x: -10 }}
               >
                 <AdminPanel />
+              </motion.div>
+            )}
+
+            {activeTab === 'privacy' && user && (
+              <motion.div 
+                key="privacy"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <PrivacyDashboard user={user} />
               </motion.div>
             )}
 

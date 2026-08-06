@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Transaction } from './anomalyUtils';
+import { normalizeTransactionType } from './utils';
 
 export interface HealthMetric {
   name: string;
@@ -66,7 +67,9 @@ export function getScoreColor(score: number): string {
 }
 
 export function calculateSpendingScore(transactions: Transaction[]): number {
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   if (expenses.length === 0) return 100;
 
   const totalSpent = expenses.reduce((sum, t) => sum + t.amount, 0);
@@ -92,7 +95,9 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
 }
 
 export function calculateSavingsScore(transactions: Transaction[]): number {
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   const income = transactions.filter((t) => t.type === 'income');
 
   const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
@@ -116,7 +121,9 @@ export function calculateBudgetAdherence(
 ): number {
   if (budgetCategories.length === 0) return 70;
 
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   const categorySpend = new Map<string, number>();
   expenses.forEach((t) => {
     categorySpend.set(t.category, (categorySpend.get(t.category) || 0) + t.amount);
