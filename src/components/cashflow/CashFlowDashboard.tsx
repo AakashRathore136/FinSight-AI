@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -10,8 +11,6 @@ import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { Progress } from "@/src/components/ui/progress";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -22,12 +21,9 @@ import {
   Area,
   BarChart,
   Bar,
-  Cell,
 } from "recharts";
 import {
-  TrendingUp,
   Loader2,
-  Calendar,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,

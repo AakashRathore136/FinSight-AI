@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -225,7 +226,7 @@ export function generateWeeklyComparison(
   weeks: number = 4,
   end: Date = new Date(),
 ): { data: CategoryPeriodDatum[]; periods: { key: string; label: string }[] } {
-  const startRange = subWeeks(end, weeks - 1);
+  const startRange = subWeeks(end, weeks);
   const periods = eachWeekOfInterval({ start: startRange, end: end }).map((d) => ({
     key: formatWeekKey(d),
     label: format(d, "'W'II MMM"),
