@@ -14,6 +14,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import {
   Globe,
@@ -71,6 +72,11 @@ interface Transaction {
 
 interface CurrencyManagerProps {
   user: any;
+}
+
+function toFirestoreDate(dateString: string): Timestamp {
+  const parsed = new Date(dateString);
+  return Timestamp.fromDate(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
 }
 
 export function CurrencyManager({ user }: CurrencyManagerProps) {
@@ -201,7 +207,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(newTx.amount),
         currency: newTx.currency,
         category: newTx.category,
-        date: new Date(newTx.date),
+        date: toFirestoreDate(newTx.date),
         createdAt: serverTimestamp(),
       });
       toast.success('Transaction added');
@@ -230,7 +236,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(editForm.amount),
         currency: editForm.currency,
         category: editForm.category,
-        date: new Date(editForm.date),
+        date: toFirestoreDate(editForm.date),
       });
       toast.success('Transaction updated');
       setEditingTx(null);
