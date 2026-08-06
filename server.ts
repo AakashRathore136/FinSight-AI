@@ -517,8 +517,36 @@ async function startServer() {
   });
 
   // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // Check Firestore connectivity
+    try {
+      const db = getFirestore();
+      await db.listCollections();
+      checks.firestore = "ok";
+    } catch (err) {
+      checks.firestore = "fail";
+      healthy = false;
+    }
+
+    // Check Firebase Storage connectivity
+    try {
+      const bucket = getStorage().bucket();
+      await bucket.exists();
+      checks.storage = "ok";
+    } catch (err) {
+      checks.storage = "fail";
+      healthy = false;
+    }
+
+    const status = healthy ? 200 : 503;
+    res.status(status).json({
+      status: healthy ? "ok" : "degraded",
+      timestamp: new Date().toISOString(),
+      checks,
+    });
   });
 
   // Require a valid Firebase ID token on every other /api/* route so a
