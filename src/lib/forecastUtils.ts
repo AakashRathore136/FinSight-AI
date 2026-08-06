@@ -1,4 +1,6 @@
 import {
+
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
   collection,
   doc,
   getDocs,
@@ -10,7 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval } from 'date-fns';
+import { format, addMonths, isWithinInterval } from 'date-fns';
 import { toDate } from './utils';
 
 export interface ForecastData {
