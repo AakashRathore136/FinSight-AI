@@ -2,6 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
+import { PeriodSelector } from './PeriodSelector';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {

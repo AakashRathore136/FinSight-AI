@@ -138,20 +138,28 @@ function safeJsonParse(text: string): any {
     throw new Error("Empty model response");
   }
 
-  // 1. Extract JSON block if surrounded by markdown or other text
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  // 1. Extract JSON block if surrounded by markdown or other text.
+  // Handle both object {...} and array [...] responses.
+  let extracted = cleaned;
+  const firstObj = cleaned.indexOf("{");
+  const lastObj = cleaned.lastIndexOf("}");
+  const firstArr = cleaned.indexOf("[");
+  const lastArr = cleaned.lastIndexOf("]");
+
+  // Prefer the JSON block that starts first and ends last
+  if (firstObj !== -1 && lastObj !== -1 && (firstArr === -1 || firstObj < firstArr)) {
+    extracted = cleaned.substring(firstObj, lastObj + 1);
+  } else if (firstArr !== -1 && lastArr !== -1) {
+    extracted = cleaned.substring(firstArr, lastArr + 1);
   }
 
-  // 2. Try parsing directly
+  // 2. Try parsing the extracted text directly
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(extracted);
   } catch (err: any) {
     // 3. Perform common repairs:
     // a. Remove trailing commas before closing braces/brackets
-    let repaired = cleaned
+    let repaired = extracted
       .replace(/,\s*([}\]])/g, "$1") // trailing commas
       // b. Handle unescaped newlines in JSON strings.
       .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
@@ -520,8 +528,36 @@ async function startServer() {
   });
 
   // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // Check Firestore connectivity
+    try {
+      const db = getFirestore();
+      await db.listCollections();
+      checks.firestore = "ok";
+    } catch (err) {
+      checks.firestore = "fail";
+      healthy = false;
+    }
+
+    // Check Firebase Storage connectivity
+    try {
+      const bucket = getStorage().bucket();
+      await bucket.exists();
+      checks.storage = "ok";
+    } catch (err) {
+      checks.storage = "fail";
+      healthy = false;
+    }
+
+    const status = healthy ? 200 : 503;
+    res.status(status).json({
+      status: healthy ? "ok" : "degraded",
+      timestamp: new Date().toISOString(),
+      checks,
+    });
   });
 
   // Require a valid Firebase ID token on every other /api/* route so a
