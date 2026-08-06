@@ -52,8 +52,10 @@ export function CurrencyConverter({
     loadRates();
   }, []);
 
-  const numericAmount = parseFloat(amount) || 0;
-  const converted = rates
+  const numericAmount = parseFloat(amount);
+  const isValidAmount = !isNaN(numericAmount) && numericAmount >= 0;
+  
+  const converted = (rates && isValidAmount)
     ? convertAmount(numericAmount, fromCurrency, toCurrency, rates.rates)
     : 0;
 
