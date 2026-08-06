@@ -47,6 +47,25 @@ export interface ForecastFilter {
   categories?: string[];
 }
 
+export function aggregateTransactionsByMonth(
+  transactions: { amount: number; date: unknown; type?: string }[]
+): { month: string; income: number; expenses: number }[] {
+  const byMonth: Record<string, { income: number; expenses: number }> = {};
+
+  for (const t of transactions) {
+    const d = toDate(t.date);
+    if (!d) continue;
+    const key = format(d, 'yyyy-MM');
+    if (!byMonth[key]) byMonth[key] = { income: 0, expenses: 0 };
+    if (t.type === 'income') byMonth[key].income += t.amount;
+    else byMonth[key].expenses += t.amount;
+  }
+
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({ month, ...v }));
+}
+
 export function generateMonthlyForecast(
   historicalData: { month: string; income: number; expenses: number }[],
   monthsAhead = 6
