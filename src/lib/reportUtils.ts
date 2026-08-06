@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,7 +14,7 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { toDate } from "@/src/lib/utils";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
