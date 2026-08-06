@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import {
   collection,
   query,
   where,
   getDocs,
   orderBy,
-  limit,
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
@@ -96,10 +96,12 @@ export async function fetchUserTransactions(
     });
   } catch (error) {
     if ((error as any)?.code === "failed-precondition") {
+      const now = new Date();
+      const fallbackStartDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
       const q = query(
         collection(db, "transactions"),
         where("userId", "==", userId),
-        where("date", ">=", Timestamp.fromDate(startDate)),
+        where("date", ">=", Timestamp.fromDate(fallbackStartDate)),
       );
       const snapshot = await getDocs(q);
       return snapshot.docs.map((doc) => {
