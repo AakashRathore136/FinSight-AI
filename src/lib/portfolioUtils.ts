@@ -359,6 +359,46 @@ export async function removeHolding(userId: string, holdingId: string): Promise<
   }
 }
 
+function mapHoldingData(id: string, data: Record<string, unknown>, fallbackUserId = ''): Holding {
+  return {
+    id,
+    userId: (data.userId as string) || fallbackUserId,
+    symbol: (data.symbol as string) || '',
+    name: (data.name as string) || '',
+    assetClass: (data.assetClass as AssetClass) || 'equities',
+    quantity: (data.quantity as number) || 0,
+    avgCost: (data.avgCost as number) || 0,
+    currentPrice: (data.currentPrice as number) || 0,
+    currency: (data.currency as string) || 'USD',
+    createdAt: (data.createdAt as string) || '',
+    updatedAt: (data.updatedAt as string) || '',
+  };
+}
+
+/** Prefer collection holdings; keep embedded ones that are not already present. */
+export function mergeCollectionAndEmbeddedHoldings(
+  collectionHoldings: Holding[],
+  embeddedHoldings: Holding[],
+): Holding[] {
+  const byId = new Map<string, Holding>();
+  const symbols = new Set<string>();
+
+  for (const h of collectionHoldings) {
+    byId.set(h.id, h);
+    if (h.symbol) symbols.add(h.symbol.toUpperCase());
+  }
+
+  for (const h of embeddedHoldings) {
+    if (!h.id || byId.has(h.id)) continue;
+    const symbolKey = (h.symbol || '').toUpperCase();
+    if (symbolKey && symbols.has(symbolKey)) continue;
+    byId.set(h.id, h);
+    if (symbolKey) symbols.add(symbolKey);
+  }
+
+  return Array.from(byId.values());
+}
+
 export async function fetchUserHoldings(userId: string): Promise<Holding[]> {
   try {
     const holdingsRef = collection(db, 'portfolioHoldings');
@@ -372,25 +412,63 @@ export async function fetchUserHoldings(userId: string): Promise<Holding[]> {
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       if (data.deleted) return;
-      holdings.push({
-        id: docSnap.id,
-        userId: data.userId || '',
-        symbol: data.symbol || '',
-        name: data.name || '',
-        assetClass: data.assetClass || 'equities',
-        quantity: data.quantity || 0,
-        avgCost: data.avgCost || 0,
-        currentPrice: data.currentPrice || 0,
-        currency: data.currency || 'USD',
-        createdAt: data.createdAt || '',
-        updatedAt: data.updatedAt || '',
-      });
+      holdings.push(mapHoldingData(docSnap.id, data, userId));
     });
     return holdings;
   } catch (error) {
     console.error('Error fetching holdings:', error);
     handleFirestoreError(error, OperationType.LIST, 'portfolioHoldings');
     return [];
+  }
+}
+
+/**
+ * Copy legacy portfolio.holdings[] into portfolioHoldings, then clear the
+ * embedded arrays so add/fetch/delete share one persistence model.
+ */
+export async function migrateEmbeddedHoldings(userId: string): Promise<number> {
+  try {
+    const portfolios = await fetchUserPortfolios(userId);
+    const existing = await fetchUserHoldings(userId);
+    const existingIds = new Set(existing.map((h) => h.id));
+    const existingSymbols = new Set(existing.map((h) => h.symbol.toUpperCase()));
+    let migrated = 0;
+
+    for (const portfolio of portfolios) {
+      const embedded = Array.isArray(portfolio.holdings) ? portfolio.holdings : [];
+      if (embedded.length === 0) continue;
+
+      for (const raw of embedded) {
+        const holding = mapHoldingData(
+          raw.id || doc(collection(db, 'portfolioHoldings')).id,
+          raw as unknown as Record<string, unknown>,
+          userId,
+        );
+        if (existingIds.has(holding.id)) continue;
+        if (holding.symbol && existingSymbols.has(holding.symbol.toUpperCase())) continue;
+
+        await setDoc(doc(db, 'portfolioHoldings', holding.id), {
+          ...holding,
+          userId,
+          createdAt: holding.createdAt || serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        existingIds.add(holding.id);
+        if (holding.symbol) existingSymbols.add(holding.symbol.toUpperCase());
+        migrated += 1;
+      }
+
+      await updateDoc(doc(db, 'portfolios', portfolio.id), {
+        holdings: [],
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return migrated;
+  } catch (error) {
+    console.error('Error migrating embedded holdings:', error);
+    handleFirestoreError(error, OperationType.UPDATE, 'portfolios');
+    return 0;
   }
 }
 

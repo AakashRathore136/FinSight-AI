@@ -539,36 +539,6 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
               </div>
             </div>
           )}
-          {pausedGoals.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Pause className="h-4 w-4 text-amber-400" />
-                <h2 className="text-lg font-semibold text-white">Paused Goals</h2>
-                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] uppercase tracking-wider">
-                  {pausedGoals.length}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {pausedGoals.map((goal) => (
-                  <motion.div
-                    key={goal.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <GoalCard
-                      goal={goal}
-                      onUpdateAmount={updateGoalAmount}
-                      onViewDetails={setSelectedGoal}
-                      onStatusChange={(id, status) => updateGoalStatus(id, status)}
-                      onDelete={deleteGoal}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {!loading && goals.length === 0 && (
             <Card className="border-slate-800 bg-slate-900 shadow-lg rounded-2xl">
               <CardContent className="py-16 text-center">
