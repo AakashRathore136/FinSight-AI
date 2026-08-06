@@ -32,6 +32,7 @@ import {
   type BadgeTier,
   BADGE_META,
   DIFFICULTY_REWARDS,
+  deriveSpendingPattern,
   generateWeeklyChallenges,
   generateMonthlyChallenges,
   generateRecommendations,
@@ -43,31 +44,19 @@ import {
   completeChallenge,
   deleteChallenge,
 } from '@/src/lib/challengeUtils';
+import { fetchUserTransactions } from '@/src/lib/cashflowUtils';
 import { ChallengeCard } from './ChallengeCard';
 
 interface ChallengesDashboardProps {
   user: import('firebase/auth').User | null;
 }
 
-function getEmptySpending(): SpendingPattern {
-  return {
-    totalMonthlySpend: 2000,
-    coffeeSpend: 40,
-    diningSpend: 220,
-    subscriptionsSpend: 45,
-    entertainmentSpend: 120,
-    topCategory: 'Dining',
-    discretionarySpend: 425,
-    savingsRate: 0.08,
-  };
-}
-
 export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-
-  const spending = useMemo<SpendingPattern>(() => getEmptySpending(), []);
+  const [spending, setSpending] = useState<SpendingPattern | null>(null);
+  const [spendingLoading, setSpendingLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
@@ -116,6 +105,33 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
     return () => unsubscribe();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setSpending(null);
+      setSpendingLoading(false);
+      return;
+    }
+    let active = true;
+    fetchUserTransactions(user.uid, 6)
+      .then((transactions) => {
+        if (!active) return;
+        if (transactions.length === 0) {
+          setSpending(null);
+        } else {
+          setSpending(deriveSpendingPattern(transactions));
+        }
+      })
+      .catch(() => {
+        if (active) setSpending(null);
+      })
+      .finally(() => {
+        if (active) setSpendingLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const weeklyChallenges = useMemo(
     () => challenges.filter((c) => c.type === 'weekly' && !c.isCompleted),
     [challenges]
@@ -133,7 +149,10 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
     [challenges]
   );
 
-  const recommendations = useMemo(() => generateRecommendations(spending), [spending]);
+  const recommendations = useMemo(
+    () => (spending ? generateRecommendations(spending) : []),
+    [spending]
+  );
 
   const stats = useMemo(() => {
     const totalPoints = challenges.reduce(
@@ -202,6 +221,10 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
 
   const generateChallenges = useCallback(async () => {
     if (!user) return;
+    if (!spending) {
+      toast.error('Add a few transactions first so we can personalize your challenges');
+      return;
+    }
     setGenerating(true);
     try {
       const difficulty: Difficulty = calculateDifficulty(spending);
@@ -344,23 +367,37 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {recommendations.map((rec, i) => (
-                <div key={i} className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-white">{rec.title}</p>
-                    <Badge variant="outline" className={cn(
-                      'text-[10px] uppercase tracking-wider',
-                      rec.difficulty === 'easy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : rec.difficulty === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                        : 'bg-red-500/10 text-red-400 border-red-500/30'
-                    )}>
-                      {rec.difficulty}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-400">{rec.description}</p>
-                  <p className="text-[10px] text-yellow-500/80 uppercase tracking-wider">{rec.reason}</p>
+              {spendingLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-16 rounded-xl bg-slate-800/50 border border-slate-700/50 animate-pulse" />
+                  ))}
                 </div>
-              ))}
+              ) : !spending ? (
+                <div className="rounded-xl bg-slate-800/30 border border-slate-700/50 p-4 text-center">
+                  <p className="text-xs text-slate-400">
+                    Add a few transactions so we can analyze your spending and suggest personalized challenges.
+                  </p>
+                </div>
+              ) : (
+                recommendations.map((rec, i) => (
+                  <div key={i} className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-white">{rec.title}</p>
+                      <Badge variant="outline" className={cn(
+                        'text-[10px] uppercase tracking-wider',
+                        rec.difficulty === 'easy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : rec.difficulty === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-red-500/10 text-red-400 border-red-500/30'
+                      )}>
+                        {rec.difficulty}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-400">{rec.description}</p>
+                    <p className="text-[10px] text-yellow-500/80 uppercase tracking-wider">{rec.reason}</p>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
