@@ -46,16 +46,51 @@ import {
   type ForecastFilter,
   generateMonthlyForecast,
   generateQuarterlyForecast,
-  calculateNetBalance,
   applyFilters,
   exportForecastChart,
   calculateTrend,
   getForecasts,
   createForecast,
+  updateForecast,
+  aggregateTransactionsByMonth,
 } from '@/src/lib/forecastUtils';
+import { fetchTransactions } from '@/src/lib/anomalyUtils';
 
 interface ForecastComparisonProps {
   user: import('firebase/auth').User | null;
+}
+
+async function buildForecastFromTransactions(
+  userId: string,
+  monthsAhead = 12
+): Promise<MonthlyForecast[]> {
+  const txns = await fetchTransactions(userId, 12);
+  const historicalData = aggregateTransactionsByMonth(txns);
+  return generateMonthlyForecast(historicalData, monthsAhead);
+}
+
+async function persistGeneratedForecasts(
+  userId: string,
+  generated: MonthlyForecast[]
+): Promise<void> {
+  if (!generated.length) return;
+  const existing = await getForecasts(userId);
+  const byMonth = new Map(existing.map((f) => [f.month, f]));
+  for (const m of generated.slice(0, 6)) {
+    const payload = {
+      month: m.month,
+      projectedIncome: m.income,
+      projectedExpenses: m.expenses,
+      netBalance: m.net,
+      confidence: m.confidence,
+    };
+    const match = byMonth.get(m.month);
+    if (match) {
+      await updateForecast(match.id, payload);
+    } else {
+      await createForecast(userId, payload);
+    }
+  }
 }
 
 export function ForecastComparison({ user }: ForecastComparisonProps) {
@@ -92,18 +127,15 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
           setMonthly(mapped);
           setQuarterly(generateQuarterlyForecast(mapped));
         } else if (active) {
-          const generated = generateMonthlyForecast([], 12);
+          const generated = await buildForecastFromTransactions(user.uid, 12);
+          if (!active) return;
           setMonthly(generated);
           setQuarterly(generateQuarterlyForecast(generated));
-          for (const m of generated.slice(0, 6)) {
-            await createForecast(user.uid, {
-              month: m.month,
-              projectedIncome: m.income,
-              projectedExpenses: m.expenses,
-              netBalance: m.net,
-              confidence: m.confidence,
-            });
+          if (generated.length === 0) {
+            toast.error('Not enough transaction history to generate a forecast');
+            return;
           }
+          await persistGeneratedForecasts(user.uid, generated);
         }
       } catch (error) {
         console.error('Error loading forecasts:', error);
@@ -173,9 +205,16 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
     if (!user) return;
     setSaving(true);
     try {
-      const generated = generateMonthlyForecast([], 12);
+      const generated = await buildForecastFromTransactions(user.uid, 12);
+      if (generated.length === 0) {
+        setMonthly([]);
+        setQuarterly([]);
+        toast.error('Not enough transaction history to generate a forecast');
+        return;
+      }
       setMonthly(generated);
       setQuarterly(generateQuarterlyForecast(generated));
+      await persistGeneratedForecasts(user.uid, generated);
       toast.success('Forecast regenerated');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'forecasts');
