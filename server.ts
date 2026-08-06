@@ -52,7 +52,23 @@ const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
 const firestoreDatabaseId =
   String(process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)").trim() ||
   "(default)";
-
+// storage.rules hardcodes isAdmin() to check the "(default)" Firestore
+// database — Cloud Storage Security Rules cannot read env vars or accept a
+// runtime database id, so that path is a literal string baked into the
+// rules file. If this server is configured to use a *named* Firestore
+// database instead, storage.rules' admin checks will silently evaluate to
+// false (no error, no log) and admins will quietly lose the ability to
+// read/delete other users' files in Storage. Fail loudly here instead of
+// letting that ship unnoticed.
+if (firestoreDatabaseId !== "(default)") {
+  console.warn(
+    `FIRESTORE_DATABASE_MISMATCH_WARNING: FIREBASE_FIRESTORE_DATABASE_ID is ` +
+      `set to "${firestoreDatabaseId}", but storage.rules' isAdmin() check is ` +
+      `hardcoded to the "(default)" database. Admin access to Firebase ` +
+      `Storage will not work correctly until storage.rules is updated to ` +
+      `match, or FIREBASE_FIRESTORE_DATABASE_ID is reverted to "(default)".`,
+  );
+}
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
 // ports are allowed so `npm run dev` keeps working out of the box.
@@ -564,16 +580,27 @@ async function startServer() {
       else inFlightAnalyzeByUser.set(key, updated);
     };
 
+    // The slot must be held for the full lifetime of the analysis pipeline.
+    // Binding cleanup to `res.once("close")` would refund it as soon as the
+    // client disconnects, even though the pipeline keeps running afterwards,
+    // letting clients escape the "max 2 concurrent analyses" guard. The
+    // handler releases the slot in its `finally` once the pipeline settles;
+    // the `finish` binding below is only a safety net for requests that never
+    // reach the handler body (e.g. an oversized upload rejected by
+    // `upload.single`), which fires after the (error) response is sent.
+    res.locals.releaseAnalyzeSlot = cleanup;
     res.once("finish", cleanup);
-    res.once("close", cleanup);
     next();
   };
 
   // AI Analysis Endpoint
+  // `concurrentAnalyzeLimiter` must run BEFORE `analyzeRateLimiter`: the rate
+  // limiter counts every request that reaches it, so a request rejected at the
+  // concurrency gate (429 CONCURRENT_LIMIT) must never consume daily quota.
   app.post(
     "/api/analyze",
-    analyzeRateLimiter,
     concurrentAnalyzeLimiter,
+    analyzeRateLimiter,
     upload.single("file"),
     async (req: any, res) => {
       try {
@@ -771,7 +798,7 @@ CRITICAL RULES:
                 messages,
                 max_tokens: 5000,
                 temperature: 0.2,
-              });
+              }, { signal: controller.signal });
               console.log(
                 "AI_REQUEST_COMPLETE: received response from Llama-3.3-70B-Instruct",
               );
@@ -988,6 +1015,23 @@ CRITICAL RULES:
           );
         } catch (writeError: any) {
           console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
+          // The PDF was already uploaded to Storage before these writes began.
+          // Delete it so a failed pipeline does not leave a permanent orphaned
+          // object (with uploadedBy metadata) behind.
+          try {
+            const bucket = getStorage().bucket();
+            await bucket.file(storagePath).delete();
+            console.log(
+              `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
+            );
+          } catch (storageCleanupError: any) {
+            if (storageCleanupError?.code !== 404) {
+              console.error(
+                "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
+                storageCleanupError?.message || storageCleanupError,
+              );
+            }
+          }
           throw new PipelineError(
             "FIRESTORE_WRITE",
             `Firestore database write failed: ${writeError?.message || String(writeError)}`,
@@ -1028,6 +1072,11 @@ CRITICAL RULES:
         }
 
         return res.status(500).json(errorResponse);
+      } finally {
+        // Release the concurrency slot only once the pipeline has settled.
+        // It must not be freed while the pipeline continues to run, e.g. after
+        // a client disconnects mid-analysis.
+        res.locals?.releaseAnalyzeSlot?.();
       }
     },
   );
@@ -1110,6 +1159,29 @@ CRITICAL RULES:
           });
         }
 
+        // Refuse to sign files whose owning documents record no longer exists.
+        // A purged record must not keep yielding working signed URLs, so the
+        // storage object must have a live Firestore document (with a matching
+        // owner) before we issue a URL.
+        const ownerDocs = await getFirestore(firestoreDatabaseId)
+          .collection("documents")
+          .where("storagePath", "==", normalizedPath)
+          .limit(1)
+          .get();
+        const ownerDoc = ownerDocs.docs[0];
+        if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
+          console.warn(
+            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
         const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);
         return res.status(200).json({
           signedUrl,
@@ -1146,6 +1218,110 @@ CRITICAL RULES:
         error: {
           stage: "REQUEST_PROCESSING",
           reason: "Internal server error",
+          recommendation: "Please try again.",
+        },
+      });
+    }
+  });
+
+  // Purge a document record, its analyses subcollection, and the Storage
+  // object in one operation. Firestore deletes do not cascade, and a bare
+  // client-side deleteDoc would leave the PDF readable via signed URLs
+  // forever. Ownership is verified against the Firestore record before any
+  // metadata or object is removed.
+  app.post("/api/documents/delete", async (req: any, res) => {
+    try {
+      const { documentId } = req.body;
+
+      if (!documentId || typeof documentId !== "string") {
+        return res.status(400).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "documentId is required",
+            recommendation: "Provide the id of the document to purge.",
+          },
+        });
+      }
+
+      if (!admin.apps.length) {
+        return res.status(503).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "Firebase not initialized",
+            recommendation: "Server configuration error. Please try again.",
+          },
+        });
+      }
+
+      const dbAdmin = getFirestore(firestoreDatabaseId);
+      const docRef = dbAdmin.collection("documents").doc(documentId);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: {
+            stage: "DOCUMENT_DELETE",
+            reason: "Document not found",
+            recommendation: "The document may have already been deleted.",
+          },
+        });
+      }
+
+      const docData = docSnap.data();
+      if (docData?.ownerId !== req.ownerId) {
+        console.warn(
+          `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
+        );
+        return res.status(403).json({
+          error: {
+            stage: "AUTHORIZATION",
+            reason: "You do not have access to this document",
+            recommendation: "Verify the document belongs to your account.",
+          },
+        });
+      }
+
+      const storagePath =
+        typeof docData?.storagePath === "string" ? docData.storagePath : "";
+
+      // Delete the analyses subcollection docs and the parent document in a
+      // single batch so the record cannot be left half-purged.
+      const analysesRef = docRef.collection("analyses");
+      const analysesSnap = await analysesRef.get();
+      const batch = dbAdmin.batch();
+      analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
+      batch.delete(docRef);
+      await batch.commit();
+      console.log(
+        `DOCUMENT_PURGED: userId=${req.ownerId}, documentId=${documentId}, analysesDeleted=${analysesSnap.size}`,
+      );
+
+      // Remove the Storage object. If it is already gone (code 404) there is
+      // nothing left to clean up; any other failure is logged but must not
+      // fail the purge since the Firestore metadata is already removed.
+      if (storagePath) {
+        try {
+          await getStorage().bucket().file(storagePath).delete();
+          console.log(
+            `STORAGE_OBJECT_DELETED: userId=${req.ownerId}, storagePath=${storagePath}`,
+          );
+        } catch (storageError: any) {
+          if (storageError?.code !== 404) {
+            console.error(
+              "STORAGE_OBJECT_DELETE_ERROR:",
+              storageError?.message || storageError,
+            );
+          }
+        }
+      }
+
+      return res.status(200).json({ success: true, documentId });
+    } catch (error: any) {
+      console.error("DOCUMENT_DELETE_ERROR:", error?.message || error);
+      return res.status(500).json({
+        error: {
+          stage: "DOCUMENT_DELETE",
+          reason: "Failed to delete document",
           recommendation: "Please try again.",
         },
       });
