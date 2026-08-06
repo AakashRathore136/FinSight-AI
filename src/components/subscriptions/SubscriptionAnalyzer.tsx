@@ -259,7 +259,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
               <CardContent>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black text-white">
-                    {summary.subscriptionBurden}%
+                    {isNaN(summary.subscriptionBurden) ? 0 : summary.subscriptionBurden}%
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1 font-medium">
