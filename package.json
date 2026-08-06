@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "validate-env": "node scripts/validate-storage-rules.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

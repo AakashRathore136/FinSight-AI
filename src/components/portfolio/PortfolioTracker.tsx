@@ -58,6 +58,7 @@ import {
   savePortfolioSnapshot,
   fetchPortfolioHistory,
   addHolding,
+  migrateEmbeddedHoldings,
 } from '@/src/lib/portfolioUtils';
 
 interface PortfolioTrackerProps {
@@ -102,6 +103,8 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     const load = async () => {
       setLoading(true);
       try {
+        await migrateEmbeddedHoldings(user.uid);
+        if (!active) return;
         const [portfolios, h, t] = await Promise.all([
           (await import('@/src/lib/portfolioUtils')).fetchUserPortfolios(user.uid),
           fetchUserHoldings(user.uid),

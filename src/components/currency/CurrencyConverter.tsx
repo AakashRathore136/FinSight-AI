@@ -54,8 +54,10 @@ export function CurrencyConverter({
     loadRates();
   }, []);
 
-  const numericAmount = parseFloat(amount) || 0;
-  const converted = rates
+  const numericAmount = parseFloat(amount);
+  const isValidAmount = !isNaN(numericAmount) && numericAmount >= 0;
+  
+  const converted = (rates && isValidAmount)
     ? convertAmount(numericAmount, fromCurrency, toCurrency, rates.rates)
     : 0;
 
@@ -69,6 +71,10 @@ export function CurrencyConverter({
     setFromCurrency(toCurrency);
     setToCurrency(fromCurrency);
   };
+
+  const fromRate = rates?.rates[fromCurrency] || 1;
+  const toRate = rates?.rates[toCurrency];
+  const badgeRate = toRate != null && fromRate > 0 ? toRate / fromRate : null;
 
   return (
     <Card className="border-slate-800 bg-slate-900 shadow-2xl rounded-2xl overflow-hidden">
@@ -138,14 +144,11 @@ export function CurrencyConverter({
               </p>
             </div>
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 font-bold text-xs">
-              {rates
-                ? (() => {
-                    const fromRate = rates.rates[fromCurrency] ?? 1;
-                    const toRate = rates.rates[toCurrency] ?? 1;
-                    const crossRate = (toRate / fromRate).toFixed(4);
-                    return `1 ${fromCurrency} = ${crossRate} ${toCurrency}`;
-                  })()
-                : 'Loading rates...'}
+              {badgeRate != null
+                ? `1 ${fromCurrency} = ${badgeRate.toFixed(4)} ${toCurrency}`
+                : rates
+                  ? `1 ${fromCurrency} = --- ${toCurrency}`
+                  : 'Loading rates...'}
             </Badge>
           </div>
           {rates && (
