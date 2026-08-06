@@ -72,11 +72,14 @@ if (firestoreDatabaseId !== "(default)") {
 // Explicit CORS allowlist. In production, only APP_URL (the deployed
 // frontend origin) may call this API with credentials. Local Vite dev
 // ports are allowed so `npm run dev` keeps working out of the box.
+// localhost is excluded from production to prevent unauthorized cross-origin
+// requests from developer machines in hosted environments.
+const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    // Only allow localhost in non-production environments
+    ...(isProduction ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"]),
   ].filter(
     (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
   ),
@@ -135,20 +138,28 @@ function safeJsonParse(text: string): any {
     throw new Error("Empty model response");
   }
 
-  // 1. Extract JSON block if surrounded by markdown or other text
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  // 1. Extract JSON block if surrounded by markdown or other text.
+  // Handle both object {...} and array [...] responses.
+  let extracted = cleaned;
+  const firstObj = cleaned.indexOf("{");
+  const lastObj = cleaned.lastIndexOf("}");
+  const firstArr = cleaned.indexOf("[");
+  const lastArr = cleaned.lastIndexOf("]");
+
+  // Prefer the JSON block that starts first and ends last
+  if (firstObj !== -1 && lastObj !== -1 && (firstArr === -1 || firstObj < firstArr)) {
+    extracted = cleaned.substring(firstObj, lastObj + 1);
+  } else if (firstArr !== -1 && lastArr !== -1) {
+    extracted = cleaned.substring(firstArr, lastArr + 1);
   }
 
-  // 2. Try parsing directly
+  // 2. Try parsing the extracted text directly
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(extracted);
   } catch (err: any) {
     // 3. Perform common repairs:
     // a. Remove trailing commas before closing braces/brackets
-    let repaired = cleaned
+    let repaired = extracted
       .replace(/,\s*([}\]])/g, "$1") // trailing commas
       // b. Handle unescaped newlines in JSON strings.
       .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
