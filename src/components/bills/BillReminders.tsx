@@ -52,7 +52,6 @@ import {
   getOverdueBills,
   calculateMonthlyObligations,
   getDaysUntilDue,
-  generateRecurringSchedule,
   isOverdue,
 } from '@/src/lib/billUtils';
 
@@ -161,23 +160,10 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const handlePay = async (bill: Bill) => {
     if (!user) return;
-    const ok = await markBillAsPaid(bill, user.uid);
-    if (ok) {
+    const updated = await markBillAsPaid(bill, user.uid);
+    if (updated) {
       setBills((prev) =>
-        prev.map((b) =>
-          b.id === bill.id
-            ? {
-                ...b,
-                isPaid: true,
-                lastPaidDate: new Date().toISOString(),
-                nextDueDate: generateRecurringSchedule(
-                  { ...b, isPaid: true, lastPaidDate: new Date().toISOString() },
-                  new Date(),
-                  1
-                )[0] || b.nextDueDate,
-              }
-            : b
-        )
+        prev.map((b) => (b.id === bill.id ? updated : b))
       );
       toast.success(`${bill.name} marked as paid`, {
         description: `${formatCurrency(bill.amount)} recorded as expense`,
