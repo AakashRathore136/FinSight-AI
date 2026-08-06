@@ -139,26 +139,49 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
       toast.error('Enter your monthly expenses to calculate a target');
       return;
     }
-    const monthly = parseFloat(monthlyContribution) || calculateMonthlySavings(targetAmount, 0, targetMonths);
-    const created = await createEmergencyFund({
-      userId: user.uid,
-      targetAmount,
-      currentAmount: 0,
-      monthlyContribution: monthly,
-      monthsCovered: targetMonths,
-      estimatedCompletionDate: estimateCompletionDate(targetAmount, 0, monthly),
-      reminderEnabled: false,
-      reminderDayOfMonth: 1,
-    });
-    if (created) {
-      setFund(created);
-      toast.success('Emergency fund plan created');
-      setSetupOpen(false);
-      setMonthlyExpenses('');
-      setMonthlyContribution('');
+    const monthly = parseFloat(monthlyContribution) || (fund ? fund.monthlyContribution : calculateMonthlySavings(targetAmount, 0, targetMonths));
+
+    if (fund) {
+      const ok = await updateEmergencyFund(fund.id, {
+        targetAmount,
+        currentAmount: fund.currentAmount,
+        monthlyContribution: monthly,
+        monthsCovered: targetMonths,
+        estimatedCompletionDate: estimateCompletionDate(targetAmount, fund.currentAmount, monthly),
+      });
+      if (ok) {
+        setFund({
+          ...fund,
+          targetAmount,
+          monthlyContribution: monthly,
+          monthsCovered: targetMonths,
+          estimatedCompletionDate: estimateCompletionDate(targetAmount, fund.currentAmount, monthly),
+        });
+        toast.success('Emergency fund plan updated');
+      } else {
+        toast.error('Failed to update emergency fund');
+      }
     } else {
-      toast.error('Failed to create emergency fund');
+      const created = await createEmergencyFund({
+        userId: user.uid,
+        targetAmount,
+        currentAmount: 0,
+        monthlyContribution: monthly,
+        monthsCovered: targetMonths,
+        estimatedCompletionDate: estimateCompletionDate(targetAmount, 0, monthly),
+        reminderEnabled: false,
+        reminderDayOfMonth: 1,
+      });
+      if (created) {
+        setFund(created);
+        toast.success('Emergency fund plan created');
+      } else {
+        toast.error('Failed to create emergency fund');
+      }
     }
+    setSetupOpen(false);
+    setMonthlyExpenses('');
+    setMonthlyContribution('');
   };
 
   const updateGoal = async (patch: Partial<EmergencyFund>) => {

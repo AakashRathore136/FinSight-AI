@@ -11,12 +11,11 @@ import { getStorage } from "firebase-admin/storage";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
+import logger from "./src/lib/logger.js";
 
 dotenv.config({ quiet: true });
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-
-console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
+logger.info("Server starting", { hfKeyExists: !!process.env.HUGGINGFACE_API_KEY });
 
 // NEVER log extracted document text or raw AI responses by default: they
 // contain sensitive financial content. For local debugging only, set
@@ -518,9 +517,11 @@ async function startServer() {
     next();
   });
 
-  // Simple request logger for debugging
+  // Request logger - log all requests in development, errors only in production
   app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    if (process.env.NODE_ENV !== "production") {
+      logger.debug(`${req.method} ${req.url}`, { ip: req.ip });
+    }
     next();
   });
 
@@ -528,11 +529,11 @@ async function startServer() {
   app.use((err: any, req: any, res: any, _next: any) => {
     void _next;
     if (err && err.type === "entity.parse.failed") {
-      console.warn("Invalid JSON payload received for", req.url);
+      logger.warn("Invalid JSON payload", { url: req.url });
       return res.status(400).json({ error: "Invalid JSON payload" });
     }
     if (err instanceof SyntaxError && "body" in err) {
-      console.warn("SyntaxError parsing JSON for", req.url);
+      logger.warn("SyntaxError parsing JSON", { url: req.url });
       return res.status(400).json({ error: "Malformed JSON" });
     }
     _next(err);
