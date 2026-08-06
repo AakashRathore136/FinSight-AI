@@ -14,7 +14,7 @@ import DOMPurify from "isomorphic-dompurify";
 
 dotenv.config({ quiet: true });
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 
 console.log("HF_KEY_EXISTS:", !!process.env.HUGGINGFACE_API_KEY);
 
