@@ -160,6 +160,10 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
   };
 
   const loadRates = async () => {
+    if (!navigator.onLine) {
+      toast.error('Currency conversion is unavailable offline');
+      return;
+    }
     setRefreshing(true);
     try {
       const data = await fetchExchangeRates(settings?.baseCurrency || 'USD');
