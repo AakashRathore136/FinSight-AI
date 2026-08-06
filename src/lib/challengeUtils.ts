@@ -123,7 +123,13 @@ export function generateWeeklyChallenges(spending: SpendingPattern): Omit<Challe
     },
   ];
 
-  return challenges;
+  // Deduplicate by title to prevent creating duplicate challenges if called multiple times
+  const seen = new Set<string>();
+  return challenges.filter((c) => {
+    if (seen.has(c.title)) return false;
+    seen.add(c.title);
+    return true;
+  });
 }
 
 export function generateMonthlyChallenges(spending: SpendingPattern): Omit<Challenge, 'id' | 'userId' | 'createdAt'>[] {
@@ -171,7 +177,13 @@ export function generateMonthlyChallenges(spending: SpendingPattern): Omit<Chall
     },
   ];
 
-  return challenges;
+  // Deduplicate by title to prevent creating duplicate challenges if called multiple times
+  const seen = new Set<string>();
+  return challenges.filter((c) => {
+    if (seen.has(c.title)) return false;
+    seen.add(c.title);
+    return true;
+  });
 }
 
 export interface ChallengeRecommendation {
