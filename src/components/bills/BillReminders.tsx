@@ -65,7 +65,7 @@ const CATEGORIES = ['Utilities', 'Subscription', 'Housing', 'Insurance', 'Loan',
 
 export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [formName, setFormName] = useState('');
@@ -76,21 +76,43 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const today = startOfDay(new Date());
 
+  // Derive loading state
+  const loading = !user || isLoading;
+
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBills([]);
-      setLoading(false);
       return;
     }
-    let active = true;
-    fetchUserBills(user.uid).then((fetched) => {
-      if (active) {
-        setBills(fetched);
-        setLoading(false);
-      }
-    });
+    let cancelled = false;
+    let loadingState = true;
+
+     
+    setIsLoading(true);
+
+    fetchUserBills(user.uid)
+      .then((fetched) => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setBills(fetched);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setBills([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+           
+          setIsLoading(false);
+        }
+      });
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
@@ -106,7 +128,6 @@ export function BillReminders({ user }: BillRemindersProps) {
       byDay[format(d, 'EEE')] = 0;
     }
     upcomingBills.forEach((b) => {
-      const due = new Date(b.nextDueDate || b.dueDate);
       const idx = getDaysUntilDue(b, today);
       if (idx >= 0 && idx < 7) {
         const key = format(addDays(today, idx), 'EEE');

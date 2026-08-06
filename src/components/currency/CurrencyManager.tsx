@@ -64,6 +64,7 @@ interface Transaction {
   amount: number;
   currency: string;
   category: string;
+  type: 'income' | 'expense';
   date: any;
   createdAt: any;
 }
