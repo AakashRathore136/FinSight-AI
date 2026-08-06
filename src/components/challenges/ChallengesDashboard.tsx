@@ -117,11 +117,11 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
   }, [user]);
 
   const weeklyChallenges = useMemo(
-    () => challenges.filter((c) => c.type === 'weekly'),
+    () => challenges.filter((c) => c.type === 'weekly' && !c.isCompleted),
     [challenges]
   );
   const monthlyChallenges = useMemo(
-    () => challenges.filter((c) => c.type === 'monthly'),
+    () => challenges.filter((c) => c.type === 'monthly' && !c.isCompleted),
     [challenges]
   );
   const completedChallenges = useMemo(

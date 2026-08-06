@@ -274,7 +274,9 @@ export async function createChallenge(userId: string, data: Omit<Challenge, 'id'
 export async function updateChallengeProgress(challengeId: string, currentProgress: number): Promise<void> {
   const snap = await getDoc(doc(db, 'challenges', challengeId));
   if (!snap.exists()) return;
-  const targetAmount = (snap.data() as Challenge).targetAmount ?? 0;
+  const data = snap.data() as Challenge;
+  if (data.isCompleted) return;
+  const targetAmount = data.targetAmount ?? 0;
   const completed = currentProgress >= targetAmount && targetAmount > 0;
   const patch: Record<string, unknown> = { currentProgress };
   if (completed) {
