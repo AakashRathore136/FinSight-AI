@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/src/components/ui/table";
 import { Badge } from "@/src/components/ui/badge";
-import { formatCurrency } from "@/src/lib/reportUtils";
+import { formatCurrency } from "@/src/lib/utils";
 import type {
   ExpenseSummaryItem,
   IncomeSummaryItem,
