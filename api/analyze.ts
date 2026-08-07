@@ -535,7 +535,38 @@ full_report MUST be at least 300 words.`;
     const riskLevel = normalizeRiskLevel(rawRisk);
     const now = new Date();
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${filename}`;
-    const fileUrl = `https://finsight.local/storage/${encodeURIComponent(storagePath)}`;
+
+    // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
+    // then derive fileUrl from the real object URL instead of a placeholder domain.
+    let fileUrl = "";
+    if (admin.apps.length) {
+      try {
+        const bucket = admin.storage().bucket();
+        const storageFile = bucket.file(storagePath);
+        await storageFile.save(fileBuffer, {
+          metadata: {
+            contentType: "application/pdf",
+            metadata: {
+              uploadedBy: ownerId,
+              uploadedAt: now.toISOString(),
+            },
+          },
+        });
+        const bucketName =
+          bucket.name ||
+          getEnv("VITE_FIREBASE_STORAGE_BUCKET") ||
+          `${getFirebaseProjectId()}.firebasestorage.app`;
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+        console.log(
+          `[analyze] Storage upload OK: ${storagePath} (${fileBuffer.length} bytes)`,
+        );
+      } catch (storageError: any) {
+        console.warn(
+          "[analyze] Storage upload failed:",
+          storageError?.message || storageError,
+        );
+      }
+    }
 
     const docData: any = {
       ownerId,

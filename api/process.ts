@@ -481,12 +481,44 @@ export default async function handler(req: any, res: any) {
       : "low";
 
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${filename}`;
-    const fileUrl = `https://storage.finsight.ai/${encodeURIComponent(storagePath)}`;
+
+    const appCtx = await getAdminApp();
+
+    // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
+    // then derive fileUrl from the real object URL instead of a placeholder domain.
+    let fileUrl = "";
+    if (appCtx) {
+      try {
+        const bucket = appCtx.admin.storage().bucket();
+        const storageFile = bucket.file(storagePath);
+        await storageFile.save(fileBuffer, {
+          metadata: {
+            contentType: "application/pdf",
+            metadata: {
+              uploadedBy: ownerId,
+              uploadedAt: now.toISOString(),
+            },
+          },
+        });
+        const bucketName =
+          bucket.name ||
+          getEnv("VITE_FIREBASE_STORAGE_BUCKET") ||
+          `${getFirebaseProjectId()}.firebasestorage.app`;
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+        console.log(
+          `[process] Storage upload OK: ${storagePath} (${fileBuffer.length} bytes)`,
+        );
+      } catch (storageError: any) {
+        console.warn(
+          "[process] Storage upload failed:",
+          storageError?.message || storageError,
+        );
+      }
+    }
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
     let persistenceMode = "local";
 
-    const appCtx = await getAdminApp();
     if (appCtx) {
       try {
         const db = appCtx.getFirestore();
