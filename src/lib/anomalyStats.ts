@@ -5,7 +5,7 @@
  */
 
 import { format } from "date-fns";
-import { toDate } from "./utils";
+import { toDate } from "./utils.ts";
 
 export interface Transaction {
   id: string;
