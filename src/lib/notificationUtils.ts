@@ -142,7 +142,6 @@ export async function subscribeToTopic(userId: string, topic: string): Promise<b
   try {
     // This would integrate with Firebase Cloud Messaging
     // For now, return true to indicate the function exists
-    console.log(`Subscribing user ${userId} to topic: ${topic}`);
     return true;
   } catch (error) {
     console.error('Error subscribing to topic:', error);
