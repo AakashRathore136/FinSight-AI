@@ -386,6 +386,10 @@ async function readMultipartFile(req: VercelLikeRequest, res: VercelLikeResponse
 
 export default async function handler(req: VercelLikeRequest, res: VercelLikeResponse) {
   const method = String(req.method || "GET").toUpperCase();
+  console.info("api/analyze request received", {
+    method,
+    url: req.url,
+  });
   if (method === "OPTIONS") {
     res.status(204).end();
     return;
@@ -397,6 +401,7 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
   }
 
   try {
+    console.info("api/analyze stage", "auth-check");
     await ensureAdminInitialized();
 
     const authHeader = String(req.headers.authorization || "");
@@ -429,6 +434,7 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     req.ownerId = decoded.uid;
     req.idToken = idToken;
 
+    console.info("api/analyze stage", "multipart-parse");
     await readMultipartFile(req, res);
 
     const file = req.file;
@@ -448,6 +454,7 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     }
 
     const ownerId = req.ownerId as string;
+    console.info("api/analyze stage", "pdf-parse");
     const parser = new PDFParse({ data: file.buffer });
     const parsed = await parser.getText();
     const extractedText = String(parsed?.text || "").trim();
@@ -471,6 +478,7 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     }
 
     const hfClient = new InferenceClient(huggingFaceApiKey);
+    console.info("api/analyze stage", "hf-analysis-start");
     const systemPrompt = `You are a senior financial intelligence analyst. Produce detailed financial analysis based ONLY on the provided document.
 
 Return ONLY valid JSON with keys summary, key_metrics, risk_assessment, action_items, sentiment_score, entities, full_report.`;
@@ -640,6 +648,11 @@ Return ONLY valid JSON with keys summary, key_metrics, risk_assessment, action_i
         );
       }
     }
+
+    console.info("api/analyze stage", "response-ready", {
+      documentId,
+      persistenceMode: documentId.startsWith("local-") ? "local" : "firestore",
+    });
 
     res.status(200).json({
       documentId,
