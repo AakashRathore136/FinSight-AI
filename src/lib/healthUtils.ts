@@ -90,9 +90,11 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
   if (discretionaryRatio > 0.5) score -= 20;
   if (discretionaryRatio > 0.35) score -= 10;
   if (categoryCount < 3) score -= 10;
-  score *= concentration;
+  if (concentration < 1) {
+    score = Math.round(score * 0.9);
+  }
 
-  return Math.min(100, Math.max(0, Math.round(score)));
+  return Math.min(100, Math.max(0, score));
 }
 
 export function calculateSavingsScore(transactions: Transaction[]): number {
