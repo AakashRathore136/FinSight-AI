@@ -619,9 +619,7 @@ async function startServer() {
     }
   }
 
-  // Explicit CORS policy — only the deployed frontend origin (and local
-  // dev ports) may call this API, instead of the implicit wildcard that
-  // cors() with no options would produce.
+  // Simplified CORS for local Docker development
   app.use(
     cors({
       origin(origin, callback) {
