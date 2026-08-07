@@ -85,17 +85,31 @@ export function generateMonthlyForecast(
     historicalData.reduce((s, d) => s + Math.pow(d.expenses - avgExpenses, 2), 0) / historicalData.length
   );
 
+  // Deterministic forecast: identical history always produces the same
+  // projection (no Math.random), so reloads, exports and summaries match.
+  const incomeCV = avgIncome > 0 ? incomeVariance / avgIncome : 0;
+  const expenseCV = avgExpenses > 0 ? expenseVariance / avgExpenses : 0;
+  // Volatility penalty is normalized by the means (coefficient of variation)
+  // so confidence is comparable across currencies and income levels instead of
+  // being pinned to 0 by high-magnitude absolute variances.
+  const volatilityPenalty = (incomeCV + expenseCV) * 100;
+
   const forecasts: MonthlyForecast[] = [];
   for (let i = 0; i < monthsAhead; i++) {
     const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
-    const income = avgIncome + (Math.random() - 0.5) * incomeVariance;
-    const expenses = avgExpenses + (Math.random() - 0.5) * expenseVariance;
-    const confidence = Math.max(0, Math.min(100, 100 - (i * 8) - (incomeVariance + expenseVariance) / 100));
+    const income = avgIncome;
+    const expenses = avgExpenses;
+    const confidence = Math.max(
+      0,
+      Math.min(100, 100 - (i * 8) - volatilityPenalty),
+    );
+    const roundedIncome = Math.round(income);
+    const roundedExpenses = Math.round(expenses);
     forecasts.push({
       month,
-      income: Math.round(income),
-      expenses: Math.round(expenses),
-      net: Math.round(income - expenses),
+      income: roundedIncome,
+      expenses: roundedExpenses,
+      net: roundedIncome - roundedExpenses,
       confidence: Math.round(confidence),
     });
   }
