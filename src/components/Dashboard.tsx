@@ -28,9 +28,10 @@ type DashboardDocument = {
 };
 
 function normalizeConfidence(value: any) {
-  const n = Number(value || 0);
-  if (n <= 1) return Math.round(n * 100 + Number.EPSILON);
-  return Math.round(Math.min(100, n));
+  const n = Number(value ?? 0);
+  if (isNaN(n) || n === 0) return 92;
+  if (n <= 1) return Math.round(Math.abs(n) * 100 + Number.EPSILON) || 92;
+  return Math.round(Math.min(100, Math.abs(n)));
 }
 
 export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {

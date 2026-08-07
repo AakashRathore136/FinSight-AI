@@ -205,8 +205,11 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
 
       const result = await analysisRes.json();
       const documentId = result?.documentId;
-      if (!documentId)
-        throw new Error("Server did not return documentId");
+      // Ensure record & analysis carry user.uid
+      if (user?.uid) {
+        if (result.record) result.record.ownerId = user.uid;
+        if (result.analysis) result.analysis.ownerId = user.uid;
+      }
 
       // Save locally in localStorage + sessionStorage
       saveLocalAnalysis(result);
