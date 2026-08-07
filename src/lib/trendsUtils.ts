@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { OperationType, handleFirestoreError } from './firebase';
-import { toDate } from './utils';
+import { normalizeTransactionType, toDate } from './utils';
 import {
   format,
   startOfWeek,
@@ -173,7 +173,7 @@ export function groupByCategoryAndPeriod(
   const totals: Record<string, number> = {};
 
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     const tDate = toDate(t.date) || new Date();
     const key = isMonth ? formatMonthKey(tDate) : formatWeekKey(tDate);
     if (!byCategory.has(t.category)) {
@@ -204,7 +204,7 @@ export function generateMonthlyComparison(
 
   const map = new Map<string, CategoryPeriodDatum>();
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     const tDate = toDate(t.date) || new Date();
     const key = formatMonthKey(tDate);
     if (!key.match(/^\d{4}-\d{2}$/)) return;
@@ -236,7 +236,7 @@ export function generateWeeklyComparison(
 
   const map = new Map<string, CategoryPeriodDatum>();
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     const tDate = toDate(t.date) || new Date();
     const key = formatWeekKey(tDate);
     if (!map.has(t.category)) {
@@ -266,7 +266,7 @@ export function calculateCategoryDistribution(
 ): PieDatum[] {
   const totals = new Map<string, number>();
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     if (filterCategory && t.category !== filterCategory) return;
     totals.set(t.category, (totals.get(t.category) || 0) + Math.abs(t.amount));
   });
@@ -291,7 +291,7 @@ export function generateTrendLines(
 
   const categories = new Set<string>();
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     if (filterCategory && t.category !== filterCategory) return;
     categories.add(t.category);
   });
@@ -299,7 +299,7 @@ export function generateTrendLines(
   const matrix = new Map<string, Map<string, number>>();
   periods.forEach((p) => matrix.set(p.key, new Map()));
   transactions.forEach((t) => {
-    if (normalizeTransactionType(t.type) !== expense) return;
+    if (normalizeTransactionType(t.type) !== 'expense') return;
     if (filterCategory && t.category !== filterCategory) return;
     const tDate = toDate(t.date) || new Date();
     const key = formatMonthKey(tDate);

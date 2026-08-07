@@ -493,14 +493,14 @@ export function calculateCategoryTrends(
   });
 
   // Determine top categories over the window to limit chart lines.
-  const windowTx = filterByPeriod(expenseTransactions, startWindow, endOfMonth(now));
+  const windowTx = filterByPeriod(transactions, startWindow, endOfMonth(now));
   const topCategories = sumByCategory(windowTx)
     .slice(0, 5)
     .map((c) => c.category);
 
   const trends: TrendPoint[] = intervalMonths.map((monthStart) => {
     const monthEnd = endOfMonth(monthStart);
-    const monthTx = filterByPeriod(expenseTransactions, monthStart, monthEnd);
+    const monthTx = filterByPeriod(transactions, monthStart, monthEnd);
     const totals = sumByCategory(monthTx);
     const totalsMap = new Map(totals.map((t) => [t.category, t.total]));
 
