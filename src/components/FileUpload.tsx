@@ -143,7 +143,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       }
 
       const analysisRes = await apiFetch(
-        "/api/analyze",
+        "/api/process",
         {
           method: "POST",
           body: formData,
