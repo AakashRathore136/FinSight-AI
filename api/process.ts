@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-empty */
 /**
  * Vercel Serverless Function: /api/process
  *
@@ -198,10 +199,14 @@ async function readRawBody(req: any): Promise<Buffer> {
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
-    const mod = await import("pdf-parse");
-    const pdfParse = (mod as any).default ?? (mod as any);
-    const result = await pdfParse(buffer);
-    return String(result?.text ?? "").trim();
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return String(result?.text ?? "").trim();
+    } finally {
+      await parser.destroy();
+    }
   } catch (err: any) {
     console.warn("[process] pdf-parse failed:", err?.message);
     // Do not feed binary garbage into the model; caller handles empty text.
@@ -285,7 +290,7 @@ function safeJsonParse(text: string): unknown {
   const fa = c.indexOf("["), la = c.lastIndexOf("]");
   if (fo !== -1 && lo !== -1 && (fa === -1 || fo < fa)) extracted = c.slice(fo, lo + 1);
   else if (fa !== -1 && la !== -1) extracted = c.slice(fa, la + 1);
-  try { return JSON.parse(extracted); } catch {}
+  try { return JSON.parse(extracted); } catch { /* try repaired JSON below */ }
   const rep = extracted.replace(/,\s*([}\]])/g, "$1");
   try { return JSON.parse(rep); } catch (e: any) { throw new Error(`JSON parse failed: ${e.message}`); }
 }
@@ -430,7 +435,12 @@ async function getAdminApp(): Promise<any | null> {
       }
     }
 
-    _adminApp = { admin, getFirestore: () => admin.firestore() };
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const databaseId = getFirestoreDatabaseId();
+    _adminApp = {
+      admin,
+      getFirestore: () => getFirestore(databaseId),
+    };
     return _adminApp;
   } catch (err: any) {
     console.warn("[process] Firebase Admin init failed:", err?.message);
@@ -499,10 +509,10 @@ export default async function handler(req: any, res: any) {
 
     if (boundary && rawBody.length > 0) {
       const parsed = parseMultipartBody(rawBody, boundary);
-      fileBuffer = parsed.buffer;
+      fileBuffer = Buffer.from(parsed.buffer);
       filename = parsed.filename ?? filename;
     } else if (rawBody.length > 0) {
-      fileBuffer = rawBody;
+      fileBuffer = Buffer.from(rawBody);
     }
 
     if (!fileBuffer || fileBuffer.length < 10) {
