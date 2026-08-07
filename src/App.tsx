@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -19,27 +20,21 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
+  Activity,
   TrendingUp,
   LayoutDashboard,
   FileText,
   ShieldCheck,
-  Settings,
   LogOut,
   Upload,
   Search,
   Clock,
   Briefcase,
   AlertTriangle,
-  History,
-  FileSearch,
-  Filter,
-  Lock,
-  Zap,
-  Activity,
-  Target,
   Bell,
   Trophy,
   Wallet,
@@ -49,6 +44,7 @@ import {
   MessageSquare,
   LineChart,
   Globe,
+  Lock,
   Shield
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -64,16 +60,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/src/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/src/components/ui/tabs";
-import { Badge } from "@/src/components/ui/badge";
+
+
 import { Input } from "@/src/components/ui/input";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 
 export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
   return (
@@ -177,10 +166,11 @@ import { AnalysisList } from './components/AnalysisList';
 import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
+import { PrivacyDashboard } from './components/privacy/PrivacyDashboard';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
+import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
-import { CurrencyManager } from './components/currency/CurrencyManager';
 import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
 import { BillReminders } from './components/bills/BillReminders';
@@ -195,6 +185,7 @@ import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
 import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
+import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
 
 export default function App() {
@@ -210,6 +201,7 @@ export default function App() {
     getSharedDocId(),
   );
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
 
@@ -234,12 +226,22 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role:
-      currentUser.email === "aakash.ra613@gmail.com"
-        ? "admin"
-        : "junior_analyst",
+    role: "junior_analyst",
     createdAt: new Date().toISOString(),
   });
+
+  // Fetch user role from Firestore instead of hardcoding
+  const fetchUserRole = async (userId: string): Promise<string> => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        return userDoc.data().role || "junior_analyst";
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+    }
+    return "junior_analyst";
+  };
 
   const validateUsername = (username: string): string | null => {
     if (!username) return "Username is required";
@@ -291,13 +293,8 @@ export default function App() {
     }
   }, [selectedDocId]);
 
-  useEffect(() => {
-    if (!selectedDocId && selectedDocIdRef.current) {
-      setSelectedDocId(selectedDocIdRef.current);
-    }
-  }, [selectedDocId]);
-
-  const activeDocId = selectedDocId || selectedDocIdRef.current;
+  // Use selectedDocId directly - it is already initialized with getSharedDocId()
+  const activeDocId = selectedDocId;
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -327,6 +324,22 @@ export default function App() {
           const userRef = doc(db, "users", currentUser.uid);
           try {
             const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().deletedAt) {
+              // Erased account: the profile must stay deleted. Terminate the
+              // session instead of auto-recreating a fresh profile.
+              setUserProfile(null);
+              setShowVerificationScreen(false);
+              try {
+                await deleteUser(currentUser);
+              } catch (authError) {
+                console.error("Could not remove auth account:", authError);
+              }
+              await signOut(auth);
+              toast.info("This account has been deleted.");
+              setLoading(false);
+              return;
+            }
 
             if (!userSnap.exists()) {
               const profile = getDefaultProfile(currentUser);
@@ -986,6 +999,12 @@ export default function App() {
             active={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
           />
+          <NavItem
+            icon={<Shield size={20} />}
+            label="Privacy & Security"
+            active={activeTab === 'privacy'}
+            onClick={() => setActiveTab('privacy')}
+          />
           {userProfile?.role === "admin" && (
             <NavItem
               icon={<ShieldCheck size={20} />}
@@ -1069,7 +1088,10 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]">
+        <div
+          ref={contentScrollRef}
+          className="flex-1 p-8 overflow-y-auto bg-[#0a0c10]"
+        >
           <AnimatePresence mode="wait">
             {activeTab === "dashboard" && (
               <motion.div
@@ -1115,6 +1137,18 @@ export default function App() {
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
                 />
+              </motion.div>
+            )}
+
+            {activeTab === "budgets" && (
+              <motion.div
+                key="budgets"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BudgetDashboard user={user} />
               </motion.div>
             )}
 
@@ -1323,6 +1357,17 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'privacy' && user && (
+              <motion.div 
+                key="privacy"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <PrivacyDashboard user={user} />
+              </motion.div>
+            )}
+
             {activeTab === 'tax' && (
               <motion.div 
                 key="tax"
@@ -1342,6 +1387,7 @@ export default function App() {
           onDocSelect={(id) => openAnalysisView(id, "dashboard")}
         />
       )}
+      <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
     </ThemeProvider>

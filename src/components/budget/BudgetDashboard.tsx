@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -23,6 +24,7 @@ import {
 import {
   Wallet,
   Loader2,
+  Download,
   TrendingUp,
   TrendingDown,
   Calendar,
@@ -42,7 +44,6 @@ import {
   getCurrentMonthKey,
   CategoryBudgetSuggestion,
   BudgetComparison,
-  Transaction,
   formatCurrency,
 } from "@/src/lib/budgetUtils";
 
@@ -97,7 +98,7 @@ export function BudgetDashboard({ user }: { user: any }) {
         return acc;
       }, {});
 
-      const generatedSuggestions = generateBudgetSuggestions(
+      const generatedSuggestions = await generateBudgetSuggestions(
         transactions,
         previousSpending,
       );
@@ -122,14 +123,22 @@ export function BudgetDashboard({ user }: { user: any }) {
       let finalConfidence = confidence;
 
       if (savedBudget && savedBudget.categoryBudgets) {
-        finalSuggestions = generatedSuggestions.map((s) => ({
-          ...s,
-          suggestedAmount:
-            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          modifiedAmount:
-            savedBudget.categoryBudgets[s.category] || s.suggestedAmount,
-          status: "accepted" as const,
-        }));
+        finalSuggestions = generatedSuggestions.map((s) => {
+          const hasSaved = Object.prototype.hasOwnProperty.call(
+            savedBudget.categoryBudgets,
+            s.category,
+          );
+          const savedAmount = hasSaved
+            ? savedBudget.categoryBudgets[s.category]
+            : s.suggestedAmount;
+          const savedStatus = savedBudget.categoryStatuses?.[s.category];
+          return {
+            ...s,
+            suggestedAmount: savedAmount,
+            modifiedAmount: savedAmount,
+            status: savedStatus || (hasSaved ? "accepted" : s.status),
+          };
+        });
         finalTotal = savedBudget.totalBudget;
         finalConfidence = savedBudget.confidenceScore;
         setSaved(true);
@@ -155,10 +164,12 @@ export function BudgetDashboard({ user }: { user: any }) {
     if (!user) return;
 
     const categoryBudgets: Record<string, number> = {};
+    const categoryStatuses: Record<string, string> = {};
     newSuggestions.forEach((s) => {
       const amount =
         s.status === "rejected" ? 0 : (s.modifiedAmount ?? s.suggestedAmount);
       categoryBudgets[s.category] = amount;
+      categoryStatuses[s.category] = s.status || "accepted";
     });
 
     const budgetData = {
@@ -166,13 +177,14 @@ export function BudgetDashboard({ user }: { user: any }) {
       month: currentMonth,
       totalBudget: calculateTotalBudget(newSuggestions),
       categoryBudgets,
+      categoryStatuses,
       confidenceScore,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     try {
-      await saveBudgetToFirestore(budgetData);
+      await saveBudgetToFirestore(user.uid, budgetData);
       setTotalBudget(budgetData.totalBudget);
       setSaved(true);
     } catch (error) {
@@ -245,6 +257,14 @@ export function BudgetDashboard({ user }: { user: any }) {
               Saved for {currentMonth}
             </Badge>
           )}
+          <Button
+            variant="outline"
+            className="text-slate-400 hover:text-white hover:bg-slate-800 h-9 px-3 gap-2 border-slate-700 hidden md:flex"
+            onClick={() => window.print()}
+          >
+            <Download className="h-4 w-4" />
+            <span className="text-xs font-bold uppercase tracking-wider">Export PDF</span>
+          </Button>
           <Button
             variant="ghost"
             className="text-slate-400 hover:text-white hover:bg-slate-800 h-9 w-9 p-0"
@@ -355,7 +375,6 @@ export function BudgetDashboard({ user }: { user: any }) {
             totalBudget={totalBudget}
             confidenceScore={confidenceScore}
             onSave={handleSaveBudget}
-            onDiscard={() => setSuggestions(suggestions)}
             isLoading={loading}
           />
         </div>

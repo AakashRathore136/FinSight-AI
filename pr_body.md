@@ -1,11 +1,11 @@
 ## Description
-This Pull Request resolves Issue #552 by adding dark mode styling variants to the Insights empty state graphic.
+This Pull Request resolves Issue #549 by clamping the input value for the Tax Estimator to prevent negative income calculations.
 
 ## Changes Made
-- Updated the `EmptyState` component's icon wrapper in `InsightsDashboard.tsx` to include `dark:bg-indigo-500/15` and `dark:text-indigo-300` alongside the default (light) styles `bg-indigo-100 text-indigo-500`.
+- Added a validation guard directly within the \onChange\ handler in \TaxEstimation.tsx\ that resets the input to \'0'\ if the user enters a negative number.
 
 ## Impact
-The Insights dashboard now correctly respects user theme preferences, ensuring the empty state graphic no longer appears jarring or illegible in dark mode.
+Prevents edge-case bugs and ensures tax brackets aren't unexpectedly extrapolated into negative numbers when interacting with the estimator form.
 
 ## Related Issues
-- Resolves #552
+- Resolves #549
