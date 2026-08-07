@@ -15,6 +15,7 @@ export default tseslint.config(
       "coverage/**",
       "node_modules/**",
       ".vite/**",
+      "scripts/**",
     ],
   },
   js.configs.recommended,
