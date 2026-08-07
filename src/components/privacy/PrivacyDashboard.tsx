@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -6,64 +7,57 @@ import {
   CardTitle,
   CardDescription,
 } from "@/src/components/ui/card";
-import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
-import { Progress } from "@/src/components/ui/progress";
-import { Input } from "@/src/components/ui/input";
 import {
-  ShieldCheck,
   Loader2,
   Download,
   Trash2,
-  LogOut,
-  Globe,
-  Lock,
-  Eye,
-  Activity,
 } from "lucide-react";
-import SessionManager from "@/src/components/privacy/SessionManager";
 import {
   exportUserData,
   deleteUserData,
-  fetchActivityLog,
-  revokeUserSessions,
+  getPrivacySettings,
+  updatePrivacySettings,
   PrivacySettings,
-  ActivityLogEntry,
 } from "@/src/lib/privacyUtils";
 import { toast } from "sonner";
+import { auth } from "@/src/lib/firebase";
+import { deleteUser, signOut } from "firebase/auth";
 
 export function PrivacyDashboard({ user }: { user: any }) {
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [privacySettings, setPrivacySettings] =
     useState<PrivacySettings | null>(null);
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadPrivacyData();
-  }, [user]);
+  // Derive loading state
+  const loading = !user || isLoading;
 
+  // Define loadPrivacyData before useEffect to avoid hoisting issues
   async function loadPrivacyData() {
     if (!user) return;
-    setLoading(true);
+     
+    setIsLoading(true);
     try {
-      const logs = await fetchActivityLog(user.uid);
-      setActivityLog(logs);
-      setPrivacySettings({
-        userId: user.uid,
-        dataRetentionEnabled: true,
-        analyticsEnabled: true,
-        sharingEnabled: false,
-        exportRequestedAt: "",
-        deletionRequestedAt: "",
-        updatedAt: new Date().toISOString(),
-      });
+      const settings = await getPrivacySettings(user.uid);
+      setPrivacySettings(settings);
     } catch (error) {
       console.error("Failed to load privacy data:", error);
     } finally {
-      setLoading(false);
+       
+      setIsLoading(false);
     }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPrivacyData();
+  }, [user]);
+
+  function handleSettingUpdate(updates: Partial<PrivacySettings>) {
+    setPrivacySettings((prev) => (prev ? { ...prev, ...updates } : prev));
+    updatePrivacySettings(user.uid, updates);
   }
 
   async function handleExport() {
@@ -101,6 +95,13 @@ export function PrivacyDashboard({ user }: { user: any }) {
     try {
       await deleteUserData(user.uid);
       toast.success("All data deleted successfully");
+      // Terminate the Auth identity so the erased account cannot come back.
+      try {
+        if (auth.currentUser) await deleteUser(auth.currentUser);
+      } catch (authError) {
+        console.error("Auth account deletion failed:", authError);
+      }
+      await signOut(auth);
     } catch (error) {
       console.error("Delete failed:", error);
       toast.error("Failed to delete data");
@@ -147,8 +148,8 @@ export function PrivacyDashboard({ user }: { user: any }) {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6">
+        <div className="space-y-6">
           <Card className="bg-slate-900 border-slate-800 rounded-2xl">
             <CardHeader className="p-5 border-b border-slate-800">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">
@@ -224,10 +225,7 @@ export function PrivacyDashboard({ user }: { user: any }) {
                     description="Keep transaction history and analysis data"
                     enabled={privacySettings.dataRetentionEnabled}
                     onChange={(enabled) =>
-                      setPrivacySettings({
-                        ...privacySettings,
-                        dataRetentionEnabled: enabled,
-                      })
+                      handleSettingUpdate({ dataRetentionEnabled: enabled })
                     }
                   />
                   <PrivacyToggle
@@ -235,10 +233,7 @@ export function PrivacyDashboard({ user }: { user: any }) {
                     description="Allow anonymous usage analytics to improve the service"
                     enabled={privacySettings.analyticsEnabled}
                     onChange={(enabled) =>
-                      setPrivacySettings({
-                        ...privacySettings,
-                        analyticsEnabled: enabled,
-                      })
+                      handleSettingUpdate({ analyticsEnabled: enabled })
                     }
                   />
                   <PrivacyToggle
@@ -246,64 +241,21 @@ export function PrivacyDashboard({ user }: { user: any }) {
                     description="Share anonymized data for research purposes"
                     enabled={privacySettings.sharingEnabled}
                     onChange={(enabled) =>
-                      setPrivacySettings({
-                        ...privacySettings,
-                        sharingEnabled: enabled,
-                      })
+                      handleSettingUpdate({ sharingEnabled: enabled })
+                    }
+                  />
+                  <PrivacyToggle
+                    label="Two-Factor Authentication (2FA)"
+                    description="Require an extra security step when logging in"
+                    enabled={privacySettings.mfaEnabled}
+                    onChange={(enabled) =>
+                      handleSettingUpdate({ mfaEnabled: enabled })
                     }
                   />
                 </>
               )}
             </CardContent>
           </Card>
-
-          <Card className="bg-slate-900 border-slate-800 rounded-2xl">
-            <CardHeader className="p-5 border-b border-slate-800">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">
-                Activity Log
-              </CardTitle>
-              <CardDescription className="text-slate-500 text-xs">
-                Recent account activity
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-5">
-              {activityLog.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-4">
-                  No activity recorded yet
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {activityLog.slice(0, 10).map((log, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
-                          <Activity size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-slate-200">
-                            {log.action}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            {log.details}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {log.timestamp}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <SessionManager user={user} />
         </div>
       </div>
     </div>

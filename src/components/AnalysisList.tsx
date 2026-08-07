@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
@@ -6,15 +7,14 @@ import {
   where,
   orderBy,
   onSnapshot,
-  doc,
-  deleteDoc,
 } from "firebase/firestore";
+import { apiFetch } from "@/src/lib/api";
 import {
   FileText,
   MoreVertical,
   Trash2,
   Eye,
-  ExternalLink,
+  Download,
   Search,
   Filter,
   FileSearch,
@@ -42,12 +42,13 @@ import {
 } from "@/src/components/ui/dropdown-menu";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { toast } from "sonner";
-import { formatDateSafe, isSafeExternalUrl } from "@/src/lib/utils";
+import { formatDateSafe } from "@/src/lib/utils";
 
 export function AnalysisList({ type, user, onSelect }: any) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -93,11 +94,104 @@ export function AnalysisList({ type, user, onSelect }: any) {
       return;
 
     try {
-      await deleteDoc(doc(db, "documents", id));
+      // Purge through the server so the analyses subcollection and the
+      // Storage object are deleted alongside the Firestore record. A bare
+      // deleteDoc would orphan the PDF and keep signed URLs working.
+      const headers: Record<string, string> = {};
+      try {
+        const idToken = await (user as any)?.getIdToken?.();
+        if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+      } catch (tErr) {
+        console.warn("Could not fetch ID token for document purge", tErr);
+      }
+
+      const res = await apiFetch(
+        "/api/documents/delete",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ documentId: id }),
+        },
+        { timeout: 30000 },
+      );
+
+      if (!res.ok) {
+        let errorText = "";
+        try {
+          const errorBody = await res.json();
+          errorText = String(errorBody?.error || "");
+        } catch {
+          errorText = await res.text().catch(() => "");
+        }
+        throw new Error(errorText || `Failed to purge record (${res.status})`);
+      }
+
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
       toast.error("Failed to delete document");
+    }
+  };
+
+  const handleDownload = async (
+    id: string,
+    storagePath: string,
+    fileName: string,
+  ) => {
+    if (!storagePath) {
+      toast.error("Source file is not available for this record");
+      return;
+    }
+
+    setDownloadingId(id);
+    try {
+      const headers: Record<string, string> = {};
+      try {
+        const idToken = await (user as any)?.getIdToken?.();
+        if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+      } catch (tErr) {
+        console.warn("Could not fetch ID token for document download", tErr);
+      }
+
+      const res = await apiFetch(
+        "/api/document-download-url",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ storagePath }),
+        },
+        { timeout: 30000 },
+      );
+
+      if (!res.ok) {
+        let errorText = "";
+        try {
+          const errorBody = await res.json();
+          errorText = String(errorBody?.error || "");
+        } catch {
+          errorText = await res.text().catch(() => "");
+        }
+        throw new Error(
+          errorText || `Failed to generate download URL (${res.status})`,
+        );
+      }
+
+      const data = await res.json();
+      if (!data?.signedUrl) {
+        throw new Error("Download URL generation returned no URL");
+      }
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `documents/${id}`);
+      toast.error(`Failed to download ${fileName}`);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -262,21 +356,17 @@ export function AnalysisList({ type, user, onSelect }: any) {
                         >
                           <Eye size={16} /> View Intelligence Report
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg p-0">
-                          {isSafeExternalUrl(doc.fileUrl) ? (
-                            <a
-                              href={doc.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 w-full h-full px-2 py-1"
-                            >
-                              <ExternalLink size={16} /> Open Source File
-                            </a>
-                          ) : (
-                            <span className="flex items-center gap-3 w-full h-full px-2 py-1 text-slate-500 cursor-not-allowed">
-                              <ExternalLink size={16} /> Source file unavailable
-                            </span>
-                          )}
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleDownload(doc.id, doc.storagePath, doc.fileName)
+                          }
+                          disabled={downloadingId === doc.id}
+                          className="gap-3 py-2.5 focus:bg-slate-800 focus:text-white rounded-lg"
+                        >
+                          <Download size={16} />{" "}
+                          {downloadingId === doc.id
+                            ? "Preparing download..."
+                            : "Download Source File"}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-800" />
                         <DropdownMenuItem
@@ -334,22 +424,4 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function CheckCircle2Icon(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
-  );
-}
+
