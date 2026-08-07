@@ -13,7 +13,7 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
+  writeBatch,
   orderBy,
 } from 'firebase/firestore';
 import {
@@ -280,8 +280,6 @@ export async function markBillAsPaid(
     const paidDate = new Date();
     const payment = applyBillPayment(bill, paidDate);
 
-    await updateDoc(doc(db, 'bills', bill.id), payment);
-
     const transactionData = {
       userId,
       amount: bill.amount,
@@ -292,7 +290,14 @@ export async function markBillAsPaid(
       billId: bill.id,
       createdAt: serverTimestamp(),
     };
-    await addDoc(collection(db, 'transactions'), transactionData);
+
+    // The bill update and its expense transaction commit atomically: either
+    // both persist or neither does, so a failed write can never advance the
+    // bill without a matching expense record (or double-charge on retry).
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'bills', bill.id), payment);
+    batch.set(doc(collection(db, 'transactions')), transactionData);
+    await batch.commit();
 
     return { ...bill, ...payment };
   } catch (error) {
