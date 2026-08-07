@@ -177,18 +177,16 @@ export function calculateMonthlyForecast(
 export function calculateBalanceProjection(
   transactions: Transaction[],
   forecast: ForecastData[],
+  startingBalance: number = 0,
 ): BalanceProjection[] {
-  // Seed with the sum of all fetched transactions: today's real balance,
-  // which already includes the current (partial) month's activity.
-  let currentBalance = 0;
-  transactions.forEach((t) => {
-    if (t.type === "income") currentBalance += t.amount;
-    else currentBalance -= t.amount;
-  });
+  // Seed with the user's real current account balance. Past net cash flow is
+  // NOT used as the seed (it is a cumulative figure, not a balance) so the
+  // projection reflects an actual account balance rather than a fabricated
+  // sum of up to six months of activity.
+  let currentBalance = startingBalance;
 
-  // The current month's actuals are already folded into currentBalance, so
-  // adding its projected net on top would count the month twice. The current
-  // month reports the real balance; only future months advance the balance.
+  // The current month's projected net is not applied: the current month
+  // reports the real starting balance; only future months advance the balance.
   const currentMonth = getMonthKey(new Date());
 
   return forecast.map((f) => {
