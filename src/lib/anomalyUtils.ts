@@ -117,7 +117,7 @@ export async function fetchTransactions(
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data = d.data() as Omit<Transaction, "id">;
-      return { ...data, id: d.id } as Transaction;
+      return { ...data, date: toDate(data.date) || new Date(), id: d.id } as Transaction;
     });
   } catch (error) {
     if ((error as any)?.code === "failed-precondition") {
@@ -130,7 +130,7 @@ export async function fetchTransactions(
       return snap.docs
         .map((d) => {
           const data = d.data() as Omit<Transaction, "id">;
-          return { ...data, id: d.id } as Transaction;
+          return { ...data, date: toDate(data.date) || new Date(), id: d.id } as Transaction;
         })
         .filter((t) => {
           const time = toDate(t.date)?.getTime() ?? 0;
