@@ -106,19 +106,63 @@ export function generateQuarterlyForecast(
   monthly: MonthlyForecast[]
 ): QuarterlyForecast[] {
   const quarters: QuarterlyForecast[] = [];
-  for (let i = 0; i < monthly.length; i += 3) {
-    const slice = monthly.slice(i, i + 3);
-    if (slice.length === 0) break;
-    const quarter = `${slice[0].month.slice(0, 4)} Q${Math.floor(i / 3) + 1}`;
+
+  const flush = (group: {
+    quarter: string;
+    month: string;
+    income: number;
+    expenses: number;
+    net: number;
+    confidence: number[];
+  }) => {
     quarters.push({
-      quarter,
-      month: slice[0].month,
-      income: slice.reduce((s, d) => s + d.income, 0),
-      expenses: slice.reduce((s, d) => s + d.expenses, 0),
-      net: slice.reduce((s, d) => s + d.net, 0),
-      confidence: Math.round(slice.reduce((s, d) => s + d.confidence, 0) / slice.length),
+      quarter: group.quarter,
+      month: group.month,
+      income: group.income,
+      expenses: group.expenses,
+      net: group.net,
+      confidence: Math.round(
+        group.confidence.reduce((s, c) => s + c, 0) / group.confidence.length,
+      ),
     });
+  };
+
+  let group: {
+    quarter: string;
+    month: string;
+    income: number;
+    expenses: number;
+    net: number;
+    confidence: number[];
+  } | null = null;
+
+  for (const d of monthly) {
+    const [year, monthStr] = d.month.split("-");
+    const monthNum = Number(monthStr);
+    if (!monthNum) continue;
+    // Label by the actual calendar quarter and year of the month, not by its
+    // array index. A forecast starting in Jul-Aug-Sep is "2026 Q3", Oct-Dec is
+    // "2026 Q4" and Jan-Mar the following year is "2027 Q1".
+    const quarterLabel = `${year} Q${Math.floor((monthNum - 1) / 3) + 1}`;
+
+    if (!group || group.quarter !== quarterLabel) {
+      if (group) flush(group);
+      group = {
+        quarter: quarterLabel,
+        month: d.month,
+        income: 0,
+        expenses: 0,
+        net: 0,
+        confidence: [],
+      };
+    }
+    group.income += d.income;
+    group.expenses += d.expenses;
+    group.net += d.net;
+    group.confidence.push(d.confidence);
   }
+  if (group) flush(group);
+
   return quarters;
 }
 
