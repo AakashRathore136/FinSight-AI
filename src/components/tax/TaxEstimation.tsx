@@ -285,7 +285,14 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
                   type="number"
                   placeholder={`Income in ${currency}`}
                   value={incomeInput}
-                  onChange={(e) => setIncomeInput(e.target.value)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val < 0) {
+                      setIncomeInput('0');
+                    } else {
+                      setIncomeInput(e.target.value);
+                    }
+                  }}
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-12 tabular-nums"
                   min="0"
                   step="100"
