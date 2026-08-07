@@ -64,7 +64,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
       const starting = Number.isFinite(stored) ? stored : 0;
       setStartingBalance(starting);
       const transactions = await fetchUserTransactions(user.uid, 6);
-      const forecastData = calculateMonthlyForecast(transactions);
+      const forecastData = calculateMonthlyForecast(transactions, 6);
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
