@@ -16,7 +16,8 @@ import {
   deleteDoc,
   type DocumentReference,
 } from "firebase/firestore";
-import { db, auth, handleFirestoreError, OperationType } from "./firebase";
+import { deleteObject, listAll, ref } from "firebase/storage";
+import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -128,6 +129,7 @@ const USER_COLLECTIONS = [
   "portfolioTransactions",
   "portfolios",
   "tax_estimates",
+  "bills",
 ];
 
 export async function exportUserData(
@@ -175,6 +177,17 @@ export async function exportUserData(
     console.error('exportUserData: failed to fetch documents', error);
     data.documents = [];
   }
+  // The top-level analyses collection is keyed by ownerId (e.g. failed
+  // upload attempts persisted from the client), so it is handled separately.
+  try {
+    const analysesSnap = await getDocs(
+      query(collection(db, "analyses"), where("ownerId", "==", userId)),
+    );
+    data.analyses = analysesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('exportUserData: failed to fetch analyses', error);
+    data.analyses = [];
+  }
   try {
     data.profile = (await getDoc(doc(db, "users", userId))).data();
   } catch (error) {
@@ -198,6 +211,52 @@ async function deleteInBatches(refs: DocumentReference[]): Promise<void> {
     const batch = writeBatch(db);
     batchRefs.forEach((ref) => batch.delete(ref));
     await batch.commit();
+  }
+}
+
+async function collectStoragePaths(
+  prefixRef: ReturnType<typeof ref>,
+  out: Set<string>,
+): Promise<void> {
+  const result = await listAll(prefixRef);
+  result.items.forEach((item) => out.add(item.fullPath));
+  for (const prefix of result.prefixes) {
+    await collectStoragePaths(prefix, out);
+  }
+}
+
+/**
+ * Best-effort deletion of the user's stored PDFs under analyses/<uid>/,
+ * including any orphaned objects not referenced by a Firestore document.
+ * Failures are logged but never block the rest of the account erasure.
+ */
+async function deleteUserStorageFiles(userId: string): Promise<void> {
+  const pathsToDelete = new Set<string>();
+  try {
+    await collectStoragePaths(ref(storage, `analyses/${userId}`), pathsToDelete);
+  } catch (error) {
+    console.error("deleteUserStorageFiles: failed to list storage prefix", error);
+  }
+  try {
+    const docsSnap = await getDocs(
+      query(collection(db, "documents"), where("ownerId", "==", userId)),
+    );
+    for (const d of docsSnap.docs) {
+      const storagePath = d.data().storagePath as string | undefined;
+      if (storagePath) pathsToDelete.add(storagePath);
+    }
+  } catch (error) {
+    console.error("deleteUserStorageFiles: failed to enumerate documents", error);
+  }
+  for (const path of pathsToDelete) {
+    try {
+      await deleteObject(ref(storage, path));
+      console.log("deleteUserStorageFiles: deleted", path);
+    } catch (error: any) {
+      if (error?.code !== "storage/object-not-found") {
+        console.error("deleteUserStorageFiles: failed to delete", path, error);
+      }
+    }
   }
 }
 
@@ -225,6 +284,11 @@ export async function deleteUserData(userId: string): Promise<void> {
     throw error;
   }
 
+  // Delete the user's stored PDFs in Storage (including orphans) before the
+  // Firestore records are removed, so document records are available to map
+  // storage paths even if a later erasure step fails.
+  await deleteUserStorageFiles(userId);
+
   const docRefs: DocumentReference[] = [];
   for (const colName of USER_COLLECTIONS) {
     try {
@@ -236,6 +300,17 @@ export async function deleteUserData(userId: string): Promise<void> {
     } catch (error) {
       console.error('deleteUserData: failed to delete', colName, error);
     }
+  }
+  // The top-level analyses collection is keyed by ownerId, so it is handled
+  // separately from the userId-keyed USER_COLLECTIONS above.
+  try {
+    (
+      await getDocs(
+        query(collection(db, "analyses"), where("ownerId", "==", userId)),
+      )
+    ).docs.forEach((d) => docRefs.push(d.ref));
+  } catch (error) {
+    console.error('deleteUserData: failed to delete analyses', error);
   }
   // documents are keyed by ownerId and keep their analyses as subcollections
   try {
