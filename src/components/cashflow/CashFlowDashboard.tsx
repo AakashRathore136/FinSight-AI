@@ -64,7 +64,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
       const starting = Number.isFinite(stored) ? stored : 0;
       setStartingBalance(starting);
       const transactions = await fetchUserTransactions(user.uid, 6);
-      const forecastData = calculateMonthlyForecast(transactions, 6);
+      const forecastData = calculateMonthlyForecast(transactions);
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
@@ -90,7 +90,6 @@ export function CashFlowDashboard({ user }: { user: any }) {
     setStartingBalance(balance);
     localStorage.setItem("finsight_starting_balance", String(balance));
     setProjection(calculateBalanceProjection([], forecast, balance));
-  }
   }
 
   async function handleRefresh() {
