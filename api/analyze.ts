@@ -1,4 +1,5 @@
-import pdfParse from "pdf-parse";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { PDFParse } from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
@@ -286,7 +287,7 @@ async function ensureAdminInitialized(): Promise<boolean> {
   const rawServiceAccount = getEnv("FIREBASE_SERVICE_ACCOUNT");
   if (rawServiceAccount) {
     try {
-      let svc =
+      const svc =
         typeof rawServiceAccount === "string"
           ? JSON.parse(rawServiceAccount)
           : rawServiceAccount;
@@ -466,8 +467,13 @@ export default async function handler(req: VercelReq, res: VercelRes) {
 
     let extractedText = "";
     try {
-      const parsedPdf = await pdfParse(fileBuffer);
-      extractedText = String(parsedPdf?.text || "").trim();
+      const parser = new PDFParse({ data: fileBuffer });
+      try {
+        const parsedPdf = await parser.getText();
+        extractedText = String(parsedPdf?.text || "").trim();
+      } finally {
+        await parser.destroy();
+      }
     } catch (pdfErr: any) {
       console.warn("[analyze] pdfParse failed, using text fallback:", pdfErr?.message);
       extractedText = fileBuffer.toString("utf8").replace(/[^\x20-\x7E\n\r\t]/g, " ").trim();
