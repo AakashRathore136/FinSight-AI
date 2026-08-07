@@ -13,7 +13,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { toDate } from "@/src/lib/utils";
+import { toDate, formatCurrency } from "@/src/lib/utils";
 import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -51,18 +51,6 @@ export interface ReportData {
   totalExpenses: number;
   currency?: string;
   createdAt: Date;
-}
-
-export function formatCurrency(
-  amount: number,
-  currencyCode: string = "INR",
-): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
 }
 
 export function formatDate(value: Date | any): string {

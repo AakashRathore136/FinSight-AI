@@ -424,7 +424,7 @@ function buildFallbackAnalysis(
     action_items: actionItems,
     sentiment_score: sentimentScore,
     entities,
-    full_report,
+    full_report: fullReport,
   };
 }
 
@@ -581,11 +581,21 @@ async function startServer() {
       const storageBucket = process.env.VITE_FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.firebasestorage.app`;
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        admin.initializeApp({
-          credential: admin.credential.cert(svc),
-          projectId: firebaseProjectId,
-          storageBucket: storageBucket,
-        });
+        if (svc.project_id && svc.project_id !== firebaseProjectId) {
+          console.warn(
+            `Service account project_id (${svc.project_id}) does not match FIREBASE_PROJECT_ID (${firebaseProjectId}). Skipping cert credential.`,
+          );
+          admin.initializeApp({
+            projectId: firebaseProjectId,
+            storageBucket: storageBucket,
+          });
+        } else {
+          admin.initializeApp({
+            credential: admin.credential.cert(svc),
+            projectId: firebaseProjectId,
+            storageBucket: storageBucket,
+          });
+        }
       } else {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
         admin.initializeApp({
@@ -609,9 +619,7 @@ async function startServer() {
     }
   }
 
-  // Explicit CORS policy — only the deployed frontend origin (and local
-  // dev ports) may call this API, instead of the implicit wildcard that
-  // cors() with no options would produce.
+  // Simplified CORS for local Docker development
   app.use(
     cors({
       origin(origin, callback) {
@@ -1220,33 +1228,60 @@ CRITICAL RULES:
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (writeError: any) {
           console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
-          // The PDF was already uploaded to Storage before these writes began.
-          // Delete it so a failed pipeline does not leave a permanent orphaned
-          // object (with uploadedBy metadata) behind.
-          try {
-            const bucket = getStorage().bucket();
-            await bucket.file(storagePath).delete();
-            console.log(
-              `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
+          const writeErrorCode = String(writeError?.code || "").toLowerCase();
+          const writeErrorMessage = String(writeError?.message || writeError || "").toLowerCase();
+          const isPermissionDenied =
+            writeErrorCode === "7" ||
+            writeErrorCode === "permission-denied" ||
+            writeErrorCode === "permission_denied" ||
+            writeErrorMessage.includes("permission_denied") ||
+            writeErrorMessage.includes("permission-denied") ||
+            writeErrorMessage.includes("missing or insufficient permissions");
+
+          if (isPermissionDenied) {
+            documentId = `local-${ownerId}-${now.getTime()}`;
+            console.warn(
+              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
             );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (storageCleanupError: any) {
-            if (storageCleanupError?.code !== 404) {
-              console.error(
-                "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
-                storageCleanupError?.message || storageCleanupError,
+          } else {
+            // The PDF was already uploaded to Storage before these writes began.
+            // Delete it so a failed pipeline does not leave a permanent orphaned
+            // object (with uploadedBy metadata) behind.
+            try {
+              const bucket = getStorage().bucket();
+              await bucket.file(storagePath).delete();
+              console.log(
+                `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
               );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (storageCleanupError: any) {
+              if (storageCleanupError?.code !== 404) {
+                console.error(
+                  "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
+                  storageCleanupError?.message || storageCleanupError,
+                );
+              }
             }
+            throw new PipelineError(
+              "FIRESTORE_WRITE",
+              `Firestore database write failed: ${writeError?.message || String(writeError)}`,
+              "Check database security rules, database existence, and network connection."
+            );
           }
-          throw new PipelineError(
-            "FIRESTORE_WRITE",
-            `Firestore database write failed: ${writeError?.message || String(writeError)}`,
-            "Check database security rules, database existence, and network connection."
-          );
         }
 
-
-        return res.status(200).json({ documentId });
+        return res.status(200).json({
+          documentId,
+          persistenceMode: documentId.startsWith("local-") ? "local" : "firestore",
+          record: {
+            ...docData,
+            id: documentId,
+          },
+          analysis: {
+            ...analysisDoc,
+            documentId,
+          },
+        });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (error: any) {
         console.error("=== PDF INGESTION PIPELINE FAILED ===");

@@ -1,0 +1,91 @@
+name: SBOM & Build Provenance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '**/yarn.lock'
+      - '**/pnpm-lock.yaml'
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/poetry.lock'
+      - '.github/workflows/sbom.yml'
+  release:
+    types: [ published ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---- Phase 1: SBOM Generation ----
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: false
+
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      # ---- Phase 2: Artifact Management ----
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
+          retention-days: 90
+          if-no-files-found: error
+
+      # ---- Phase 3: Build Provenance ----
+      # Only for code that actually ships: pushes to main and releases.
+      # Skipped on pull_request — fork PRs can't be granted the OIDC
+      # token needed to sign an attestation, and provenance for
+      # unmerged code isn't meaningful anyway.
+      - name: Generate build provenance attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
+
+      - name: Summarize run
+        run: |
+          echo "### SBOM & Provenance Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SBOM formats: CycloneDX JSON, SPDX JSON" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)" >> "$GITHUB_STEP_SUMMARY"
+          fi

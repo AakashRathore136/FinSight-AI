@@ -7,6 +7,7 @@ import {
   collection,
   query,
   where,
+  orderBy,
   getDocs,
   doc,
   writeBatch,
@@ -81,6 +82,31 @@ export async function updatePrivacySettings(
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, "privacy_settings");
+  }
+}
+
+export async function fetchActivityLog(
+  userId: string,
+): Promise<ActivityLogEntry[]> {
+  try {
+    const logRef = collection(db, "activity_log");
+    const q = query(logRef, where("userId", "==", userId), orderBy("timestamp", "desc"));
+    const snapshot = await getDocs(q);
+    const entries: ActivityLogEntry[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      entries.push({
+        id: docSnap.id,
+        action: data.action || "",
+        timestamp: data.timestamp?.toDate?.() ?? new Date(),
+        details: data.details || "",
+        category: data.category || "data",
+      });
+    });
+    return entries;
+  } catch (err) {
+    console.error("fetchActivityLog: failed to retrieve activity log", err);
+    return [];
   }
 }
 

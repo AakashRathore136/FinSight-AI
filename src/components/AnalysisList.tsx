@@ -43,6 +43,7 @@ import {
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { toast } from "sonner";
 import { formatDateSafe } from "@/src/lib/utils";
+import { getLocalDocuments, deleteLocalDocument } from "@/src/lib/storageUtils";
 
 export function AnalysisList({ type, user, onSelect }: any) {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -68,21 +69,59 @@ export function AnalysisList({ type, user, onSelect }: any) {
       );
     }
 
+    const updateCombinedDocuments = (remoteDocs: any[]) => {
+      const localDocs = getLocalDocuments(user.uid);
+      const docMap = new Map<string, any>();
+
+      for (const ld of localDocs) {
+        if (type === "completed" && ld.status !== "completed") continue;
+        docMap.set(ld.id, ld);
+      }
+
+      for (const rd of remoteDocs) {
+        if (type === "completed" && rd.status !== "completed") continue;
+        docMap.set(rd.id, rd);
+      }
+
+      const merged = Array.from(docMap.values());
+      merged.sort((a, b) => {
+        const getTs = (d: any) => {
+          if (!d.createdAt) return 0;
+          if (typeof d.createdAt === "number") return d.createdAt;
+          if (typeof d.createdAt.toDate === "function") return d.createdAt.toDate().getTime();
+          if (d.createdAt.seconds) return d.createdAt.seconds * 1000;
+          const parsed = new Date(d.createdAt).getTime();
+          return isNaN(parsed) ? 0 : parsed;
+        };
+        return getTs(b) - getTs(a);
+      });
+
+      setDocuments(merged);
+      setLoading(false);
+    };
+
     const unsubscribe = onSnapshot(
       docsQuery,
       (snapshot) => {
-        setDocuments(
-          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-        );
-        setLoading(false);
+        const remoteDocs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        updateCombinedDocuments(remoteDocs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "documents");
-        setLoading(false);
+        // Even if Firestore fails, show local documents
+        updateCombinedDocuments([]);
       },
     );
 
-    return () => unsubscribe();
+    const handleLocalDocsChanged = () => {
+      updateCombinedDocuments(documents.filter((d) => !d.id?.startsWith("local-")));
+    };
+    window.addEventListener("fin_local_docs_changed", handleLocalDocsChanged);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("fin_local_docs_changed", handleLocalDocsChanged);
+    };
   }, [user, type]);
 
   const handleDelete = async (id: string, fileName: string) => {
@@ -93,10 +132,14 @@ export function AnalysisList({ type, user, onSelect }: any) {
     )
       return;
 
+    if (id.startsWith("local-")) {
+      deleteLocalDocument(id);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+      toast.success("Document removed");
+      return;
+    }
+
     try {
-      // Purge through the server so the analyses subcollection and the
-      // Storage object are deleted alongside the Firestore record. A bare
-      // deleteDoc would orphan the PDF and keep signed URLs working.
       const headers: Record<string, string> = {};
       try {
         const idToken = await (user as any)?.getIdToken?.();
@@ -132,6 +175,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
+      deleteLocalDocument(id);
       toast.error("Failed to delete document");
     }
   };

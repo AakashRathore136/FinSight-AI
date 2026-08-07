@@ -5,6 +5,7 @@
  */
 
 import { format } from "date-fns";
+import { toDate } from "./utils.ts";
 
 export interface Transaction {
   id: string;
@@ -51,7 +52,8 @@ export function calculateCategoryBaseline(
         : 0;
     const monthlyTotals = new Map<string, number>();
     items.forEach((item) => {
-      const date = item.date instanceof Date ? item.date : new Date(item.date);
+      const date = toDate(item.date);
+      if (!date) return;
       const key = format(date, "yyyy-MM");
       monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + Math.abs(item.amount));
     });
