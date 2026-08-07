@@ -43,12 +43,12 @@ import {
   downloadCSV,
   generatePDF,
   saveReportToFirestore,
-  formatCurrency,
   type ReportTransaction,
   type ExpenseSummaryItem,
   type IncomeSummaryItem,
   type ReportData,
 } from "@/src/lib/reportUtils";
+import { formatCurrency } from "@/src/lib/utils";
 import { ReportPreview } from "@/src/components/reports/ReportPreview";
 import {
   BarChart,
