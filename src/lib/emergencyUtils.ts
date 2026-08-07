@@ -87,7 +87,11 @@ export function estimateMonthsToCompletion(
   const target = toDate(completionDate);
   if (!target) return 0;
   const days = differenceInCalendarDays(target, new Date());
-  return Math.max(0, Math.round(days / 30));
+  // Fractional months preserve the exact horizon so the recommended monthly
+  // contribution reaches the target by the completion date, instead of
+  // Math.round(days / 30) drifting past the 0.5 boundary and either
+  // under-funding or over-shooting the deadline.
+  return Math.max(0, days / 30);
 }
 
 export function estimateCompletionDate(
