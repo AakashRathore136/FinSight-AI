@@ -1238,15 +1238,11 @@ CRITICAL RULES:
             writeErrorMessage.includes("permission-denied") ||
             writeErrorMessage.includes("missing or insufficient permissions");
 
-          if (isPermissionDenied) {
-            documentId = `local-${ownerId}-${now.getTime()}`;
-            console.warn(
-              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
-            );
-          } else {
-            // The PDF was already uploaded to Storage before these writes began.
-            // Delete it so a failed pipeline does not leave a permanent orphaned
-            // object (with uploadedBy metadata) behind.
+          // The PDF was already uploaded to Storage before these writes began.
+          // Delete it on ANY Firestore write failure so a failed pipeline never
+          // leaves a permanent orphaned object (with uploadedBy metadata) that
+          // cannot be downloaded (no owning Firestore record) or swept later.
+          const cleanupUploadedPdf = async () => {
             try {
               const bucket = getStorage().bucket();
               await bucket.file(storagePath).delete();
@@ -1262,6 +1258,16 @@ CRITICAL RULES:
                 );
               }
             }
+          };
+
+          if (isPermissionDenied) {
+            await cleanupUploadedPdf();
+            documentId = `local-${ownerId}-${now.getTime()}`;
+            console.warn(
+              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
+            );
+          } else {
+            await cleanupUploadedPdf();
             throw new PipelineError(
               "FIRESTORE_WRITE",
               `Firestore database write failed: ${writeError?.message || String(writeError)}`,
