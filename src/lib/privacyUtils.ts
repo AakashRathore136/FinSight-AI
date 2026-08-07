@@ -61,12 +61,18 @@ export async function getPrivacySettings(
   try {
     const docRef = doc(db, "privacy_settings", userId);
     const snap = await getDoc(docRef);
-    if (snap.exists()) return snap.data() as PrivacySettings;
+    if (snap.exists()) {
+      // Merge over the defaults so documents written before every field was
+      // introduced still expose a complete, typed settings object.
+      return { ...DEFAULT_PRIVACY_SETTINGS, ...snap.data() };
+    }
     await setDoc(docRef, DEFAULT_PRIVACY_SETTINGS);
     return DEFAULT_PRIVACY_SETTINGS;
   } catch (err) {
+    // Re-throw so callers can fall back to their offline cache instead of
+    // silently presenting defaults that overwrite the user's saved choices.
     console.error("getPrivacySettings: failed to retrieve privacy settings", err);
-    return DEFAULT_PRIVACY_SETTINGS;
+    throw err;
   }
 }
 
