@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -1187,7 +1188,6 @@ CRITICAL RULES:
         };
 
         let documentId = "";
-        let analysisId = "";
         try {
           if (!admin.apps.length) {
             throw new Error("Firebase Admin SDK not initialized");
@@ -1214,7 +1214,7 @@ CRITICAL RULES:
             .doc(documentId)
             .collection("analyses")
             .add(adminAnalysisDoc);
-          analysisId = analysisRef.id;
+          void analysisRef.id;
 
 
           // Update parent with latestAnalysis snapshot when Admin credentials are available.

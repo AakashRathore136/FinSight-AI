@@ -125,7 +125,7 @@ export function deleteLocalDocument(documentId: string): void {
 
   try {
     window.sessionStorage.removeItem(`fin_local_doc_${documentId}`);
-  } catch (_e) {
+  } catch {
     /* ignore */
   }
 
