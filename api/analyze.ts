@@ -424,21 +424,58 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     await ensureAdminInitialized();
 
     const authHeader = String(req.headers.authorization || "");
-    let uid = "";
-
-    if (authHeader.startsWith("Bearer ")) {
-      const idToken = authHeader.slice(7);
-      if (admin.apps.length) {
-        try {
-          const decoded = await admin.auth().verifyIdToken(idToken);
-          uid = decoded.uid;
-        } catch (authErr: any) {
-          console.warn("[analyze] verifyIdToken failed:", authErr?.message);
-        }
-      }
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Missing or invalid Authorization token",
+          recommendation:
+            "You are not authorized. Please sign in and try again.",
+        },
+      });
+      return;
     }
 
-    const ownerId = uid || "anonymous_user";
+    if (!admin.apps.length) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Authentication could not be verified",
+          recommendation:
+            "Server configuration error. Please try again later.",
+        },
+      });
+      return;
+    }
+
+    const idToken = authHeader.slice(7);
+    let ownerId = "";
+    try {
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      if (decoded.email_verified !== true) {
+        res.status(403).json({
+          error: {
+            stage: "AUTH_VERIFICATION",
+            reason: "Email address is not verified",
+            recommendation:
+              "Verify your email address to access this feature, then sign in again.",
+          },
+        });
+        return;
+      }
+      ownerId = decoded.uid;
+    } catch (authErr: any) {
+      console.warn("[analyze] verifyIdToken failed:", authErr?.message);
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: `Invalid ID token: ${authErr?.message || String(authErr)}`,
+          recommendation:
+            "Your session token has expired or is invalid. Please sign out and sign in again.",
+        },
+      });
+      return;
+    }
 
     const contentType = String(req.headers["content-type"] || "");
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
