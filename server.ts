@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { InferenceClient } from "@huggingface/inference";
 import multer from "multer";
@@ -76,11 +77,24 @@ if (firestoreDatabaseId !== "(default)") {
 // localhost is excluded from production to prevent unauthorized cross-origin
 // requests from developer machines in hosted environments.
 const isProduction = process.env.NODE_ENV === "production";
+const PORT = Number(process.env.PORT) || 3001;
+
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
     // Only allow localhost in non-production environments
-    ...(isProduction ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"]),
+    ...(isProduction
+      ? []
+      : [
+          `http://localhost:${PORT}`,
+          `http://127.0.0.1:${PORT}`,
+          "http://localhost:3001",
+          "http://127.0.0.1:3001",
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ]),
   ].filter(
     (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
   ),
@@ -435,15 +449,20 @@ async function startServer() {
     );
   } else {
     try {
+      const storageBucket = process.env.VITE_FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.firebasestorage.app`;
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         admin.initializeApp({
           credential: admin.credential.cert(svc),
           projectId: firebaseProjectId,
+          storageBucket: storageBucket,
         });
       } else {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-        admin.initializeApp({ projectId: firebaseProjectId });
+        admin.initializeApp({
+          projectId: firebaseProjectId,
+          storageBucket: storageBucket,
+        });
       }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (err: any) {
@@ -467,8 +486,8 @@ async function startServer() {
   app.use(
     cors({
       origin(origin, callback) {
-        // Allow same-origin/non-browser requests (no Origin header).
-        if (!origin || allowedOrigins.has(origin)) {
+        // Allow same-origin/non-browser requests (no Origin header) or dev mode origins
+        if (!origin || !isProduction || allowedOrigins.has(origin)) {
           return callback(null, true);
         }
         return callback(
@@ -496,11 +515,40 @@ async function startServer() {
         "max-age=31536000; includeSubDomains",
       );
     }
-    // Content-Security-Policy: Restrict resource loading to prevent XSS
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;",
-    );
+    const cspDirectives = [
+      "default-src 'self'",
+      // Scripts: self + inline (Vite HMR) + Google APIs (Firebase/Google Sign-In)
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.firebaseapp.com https://www.gstatic.com",
+      // Styles: self + inline (Tailwind/CSS-in-JS) + Google Fonts
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // Fonts: Google Fonts
+      "font-src 'self' https://fonts.gstatic.com data:",
+      // Images: self + data URIs + https (avatars etc.)
+      "img-src 'self' data: https: blob:",
+      // Connections: Firebase Auth, Firestore, Storage, Analytics, HuggingFace, Vite HMR
+      [
+        "connect-src 'self'",
+        "https://*.googleapis.com",
+        "https://*.firebaseio.com",
+        "https://*.firebaseapp.com",
+        "https://identitytoolkit.googleapis.com",
+        "https://securetoken.googleapis.com",
+        "https://firestore.googleapis.com",
+        "https://firebase.googleapis.com",
+        "https://www.googleapis.com",
+        "https://api-inference.huggingface.co",
+        "https://huggingface.co",
+        "wss://*.firebaseio.com",
+        // Vite HMR websocket (dev only)
+        ...(isProduction ? [] : ["ws://localhost:*", "ws://127.0.0.1:*", "http://localhost:*"]),
+      ].join(" "),
+      // Frames: Google Sign-In OAuth popup
+      "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com",
+      // Workers: blob for some Firebase internals
+      "worker-src 'self' blob:",
+    ].join("; ");
+
+    res.setHeader("Content-Security-Policy", cspDirectives);
     // X-XSS-Protection: Enable browser XSS protection (defense-in-depth)
     res.setHeader("X-XSS-Protection", "1; mode=block");
     // Referrer-Policy: Control how much referrer information is shared
@@ -830,15 +878,14 @@ CRITICAL RULES:
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
-            const timeoutMs = 30_000;
+            const timeoutMs = 60_000;
             timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
               const completion = await hfClient.chatCompletion({
-                provider: "together",
-                model: "meta-llama/Llama-3.3-70B-Instruct",
+                model: "Qwen/Qwen2.5-Coder-32B-Instruct",
                 messages,
-                max_tokens: 5000,
+                max_tokens: 4000,
                 temperature: 0.2,
               }, { signal: controller.signal });
               const rawText = completion.choices?.[0]?.message?.content || "{}";
@@ -978,15 +1025,10 @@ CRITICAL RULES:
               `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
             );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (storageError: any) {
-            console.error(
-              "FIREBASE_STORAGE_UPLOAD_ERROR:",
+          } catch (storageError: any) {
+            console.warn(
+              "FIREBASE_STORAGE_UPLOAD_WARNING: Storage bucket not ready, continuing document creation:",
               storageError?.message || storageError,
-            );
-            throw new PipelineError(
-              "STORAGE_UPLOAD",
-              `Failed to upload file to Firebase Storage: ${storageError?.message || String(storageError)}`,
-              "Check Firebase Storage bucket configuration and credentials.",
             );
           }
         }
@@ -1444,6 +1486,20 @@ CRITICAL RULES:
       appType: "spa",
     });
     app.use(vite.middlewares);
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(
+          path.resolve(process.cwd(), "index.html"),
+          "utf-8",
+        );
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
 

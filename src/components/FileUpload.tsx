@@ -354,7 +354,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               </div>
             </div>
             {(() => {
-                const diag = safeJsonParse(errorMessage, {} as Record<string, unknown>);
+                const diag = safeJsonParse(errorMessage, {} as Record<string, any>);
                 if (typeof diag !== 'object' || diag === null) {
                   return <p className="text-slate-300 font-medium">{errorMessage}</p>;
                 }

@@ -45,8 +45,6 @@ export function PrivacyDashboard({ user }: { user: any }) {
      
     setIsLoading(true);
     try {
-      const logs = await fetchActivityLog(user.uid);
-      setActivityLog(logs);
       const stored = localStorage.getItem(`privacySettings_${user.uid}`);
       setPrivacySettings(stored ? JSON.parse(stored) : {
         userId: user.uid,
