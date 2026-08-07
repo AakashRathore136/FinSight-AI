@@ -27,7 +27,7 @@ import {
   differenceInDays,
 } from "date-fns";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { toDate } from "@/src/lib/utils";
+import { normalizeTransactionType, toDate } from "@/src/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +46,7 @@ export interface Transaction {
   merchant?: string;
   /** Firestore Timestamp | ISO string | epoch millis. Normalized via toDate(). */
   date: any;
+  type?: "income" | "expense";
 }
 
 export interface Insight {
@@ -142,6 +143,7 @@ function inRange(tx: Transaction, start: Date, end: Date): boolean {
 function sumByCategory(transactions: Transaction[]): CategoryTotal[] {
   const map = new Map<string, CategoryTotal>();
   for (const tx of transactions) {
+    if (normalizeTransactionType(tx.type) !== "expense") continue;
     const category = tx.category || "Uncategorized";
     const existing = map.get(category) || { category, total: 0, count: 0 };
     existing.total += normalizeAmount(tx.amount);
@@ -152,7 +154,9 @@ function sumByCategory(transactions: Transaction[]): CategoryTotal[] {
 }
 
 function total(transactions: Transaction[]): number {
-  return transactions.reduce((acc, tx) => acc + normalizeAmount(tx.amount), 0);
+  return transactions.reduce((acc, tx) =>
+    normalizeTransactionType(tx.type) === "expense" ? acc + normalizeAmount(tx.amount) : acc,
+  0);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +224,7 @@ export function detectAnomalies(
 ): Insight[] {
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
+    if (normalizeTransactionType(tx.type) !== "expense") continue;
     const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
@@ -306,6 +311,7 @@ export function identifyOpportunities(
   // --- 1. Subscriptions -----------------------------------------------------
   const merchantGroups = new Map<string, Transaction[]>();
   for (const tx of transactions) {
+    if (normalizeTransactionType(tx.type) !== "expense") continue;
     const key = (tx.merchant || tx.description || "").trim().toLowerCase();
     if (!key) continue;
     const list = merchantGroups.get(key) || [];
@@ -368,6 +374,7 @@ export function identifyOpportunities(
   // --- 2. High-frequency small purchases ------------------------------------
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
+    if (normalizeTransactionType(tx.type) !== "expense") continue;
     const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
@@ -486,14 +493,14 @@ export function calculateCategoryTrends(
   });
 
   // Determine top categories over the window to limit chart lines.
-  const windowTx = filterByPeriod(transactions, startWindow, endOfMonth(now));
+  const windowTx = filterByPeriod(expenseTransactions, startWindow, endOfMonth(now));
   const topCategories = sumByCategory(windowTx)
     .slice(0, 5)
     .map((c) => c.category);
 
   const trends: TrendPoint[] = intervalMonths.map((monthStart) => {
     const monthEnd = endOfMonth(monthStart);
-    const monthTx = filterByPeriod(transactions, monthStart, monthEnd);
+    const monthTx = filterByPeriod(expenseTransactions, monthStart, monthEnd);
     const totals = sumByCategory(monthTx);
     const totalsMap = new Map(totals.map((t) => [t.category, t.total]));
 
@@ -604,6 +611,9 @@ export function buildInsights(
   transactions: Transaction[],
   userId?: string,
 ): InsightsBundle {
+  const expenseTransactions = transactions.filter(
+    (tx) => normalizeTransactionType(tx.type) === "expense",
+  );
   const now = new Date();
 
   // Weekly windows (week starts Monday).
@@ -613,8 +623,8 @@ export function buildInsights(
   const lastWeekStart = startOfWeek(subWeeks(now, 1), weekOpts);
   const lastWeekEnd = endOfWeek(subWeeks(now, 1), weekOpts);
 
-  const thisWeek = filterByPeriod(transactions, thisWeekStart, thisWeekEnd);
-  const lastWeek = filterByPeriod(transactions, lastWeekStart, lastWeekEnd);
+  const thisWeek = filterByPeriod(expenseTransactions, thisWeekStart, thisWeekEnd);
+  const lastWeek = filterByPeriod(expenseTransactions, lastWeekStart, lastWeekEnd);
 
   // Monthly windows.
   const thisMonthStart = startOfMonth(now);
@@ -622,24 +632,24 @@ export function buildInsights(
   const lastMonthStart = startOfMonth(subMonths(now, 1));
   const lastMonthEnd = endOfMonth(subMonths(now, 1));
 
-  const thisMonth = filterByPeriod(transactions, thisMonthStart, thisMonthEnd);
-  const lastMonth = filterByPeriod(transactions, lastMonthStart, lastMonthEnd);
+  const thisMonth = filterByPeriod(expenseTransactions, thisMonthStart, thisMonthEnd);
+  const lastMonth = filterByPeriod(expenseTransactions, lastMonthStart, lastMonthEnd);
 
   const weeklySummary = buildPeriodSummary("This Week", thisWeek, lastWeek);
   const monthlySummary = buildPeriodSummary("This Month", thisMonth, lastMonth);
 
-  const { trends, categories } = calculateCategoryTrends(transactions, 6);
+  const { trends, categories } = calculateCategoryTrends(expenseTransactions, 6);
 
   return {
     weekly: computeCategoryDeltas(thisWeek, lastWeek),
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(transactions, userId),
-    opportunities: identifyOpportunities(transactions, userId),
+    anomalies: detectAnomalies(expenseTransactions, userId),
+    opportunities: identifyOpportunities(expenseTransactions, userId),
     trends,
     trendCategories: categories,
-    transactionCount: transactions.length,
+    transactionCount: expenseTransactions.length,
   };
 }
 
