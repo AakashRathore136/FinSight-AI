@@ -34,14 +34,29 @@ export function PrivacyDashboard({ user }: { user: any }) {
   // Derive loading state
   const loading = !user || isLoading;
 
-  // Define loadPrivacyData before useEffect to avoid hoisting issues
+  useEffect(() => {
+    if (privacySettings && user) {
+      localStorage.setItem(`privacySettings_${user.uid}`, JSON.stringify(privacySettings));
+    }
+  }, [privacySettings, user]);
+
   async function loadPrivacyData() {
     if (!user) return;
      
     setIsLoading(true);
     try {
-      const settings = await getPrivacySettings(user.uid);
-      setPrivacySettings(settings);
+      const logs = await fetchActivityLog(user.uid);
+      setActivityLog(logs);
+      const stored = localStorage.getItem(`privacySettings_${user.uid}`);
+      setPrivacySettings(stored ? JSON.parse(stored) : {
+        userId: user.uid,
+        dataRetentionEnabled: true,
+        analyticsEnabled: true,
+        sharingEnabled: false,
+        exportRequestedAt: "",
+        deletionRequestedAt: "",
+        updatedAt: new Date().toISOString(),
+      });
     } catch (error) {
       console.error("Failed to load privacy data:", error);
     } finally {
