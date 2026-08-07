@@ -124,8 +124,9 @@ export async function fetchUserTransactions(
 
 export function calculateMonthlyForecast(
   transactions: Transaction[],
+  windowMonths: number = 6,
 ): ForecastData[] {
-  const months = getNextMonths(6);
+  const months = getNextMonths(windowMonths);
   const incomeByMonth: Record<string, number> = {};
   const expenseByMonth: Record<string, Record<string, number>> = {};
 
@@ -140,23 +141,25 @@ export function calculateMonthlyForecast(
     }
   });
 
+  // Averages are computed over the full observation window: months without
+  // activity are zero-filled so a charge that appears once in the window is
+  // projected at its true monthly rate instead of its per-month-with-activity
+  // rate.
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
-        Object.values(incomeByMonth).length
+        windowMonths
       : 0;
 
   const categoryTotals: Record<string, number> = {};
-  const categoryCounts: Record<string, number> = {};
   Object.values(expenseByMonth).forEach((monthData) => {
     Object.entries(monthData).forEach(([cat, amt]) => {
       categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
-      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     });
   });
   const avgByCategory: Record<string, number> = {};
   Object.entries(categoryTotals).forEach(([cat, total]) => {
-    avgByCategory[cat] = total / (categoryCounts[cat] || 1);
+    avgByCategory[cat] = total / windowMonths;
   });
 
   return months.map((month) => {

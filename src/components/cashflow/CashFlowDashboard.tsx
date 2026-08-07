@@ -59,7 +59,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
     setLoading(true);
     try {
       const transactions = await fetchUserTransactions(user.uid, 6);
-      const forecastData = calculateMonthlyForecast(transactions);
+      const forecastData = calculateMonthlyForecast(transactions, 6);
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
