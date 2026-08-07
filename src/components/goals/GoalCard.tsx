@@ -125,7 +125,7 @@ export function GoalCard({
                   'h-full transition-all',
                   progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'
                 )}
-                style={{ width: `${progress}%` }}
+                style={{ width: `${Math.min(100, progress)}%` }}
               />
             </ProgressTrack>
           </Progress>

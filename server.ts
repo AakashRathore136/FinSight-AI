@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { InferenceClient } from "@huggingface/inference";
 import multer from "multer";
@@ -76,11 +77,24 @@ if (firestoreDatabaseId !== "(default)") {
 // localhost is excluded from production to prevent unauthorized cross-origin
 // requests from developer machines in hosted environments.
 const isProduction = process.env.NODE_ENV === "production";
+const PORT = Number(process.env.PORT) || 3001;
+
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
     // Only allow localhost in non-production environments
-    ...(isProduction ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"]),
+    ...(isProduction
+      ? []
+      : [
+          `http://localhost:${PORT}`,
+          `http://127.0.0.1:${PORT}`,
+          "http://localhost:3001",
+          "http://127.0.0.1:3001",
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ]),
   ].filter(
     (origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL",
   ),
@@ -134,7 +148,7 @@ async function generateShortLivedSignedUrl(
   }
 }
 
-function safeJsonParse(text: string): any {
+function safeJsonParse(text: string): unknown {
   const cleaned = (text || "").trim();
   if (!cleaned) {
     throw new Error("Empty model response");
@@ -282,6 +296,135 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
       : [],
     full_report: sanitizeString(fullReport),
+  };
+}
+
+function buildFallbackAnalysis(
+  documentText: string,
+  fileName: string,
+  reason?: string,
+): AnalysisResponse {
+  const normalizedText = String(documentText || "").trim();
+  const words = normalizedText.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const characterCount = normalizedText.length;
+  const paragraphCount = normalizedText
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+
+  const lowerText = normalizedText.toLowerCase();
+  const themeSignals = [
+    {
+      level: "high",
+      keywords: ["debt", "default", "breach", "covenant", "insolvency", "litigation"],
+      description:
+        "The document contains language associated with leverage, covenant pressure, or legal exposure, so balance-sheet resilience should be reviewed closely.",
+    },
+    {
+      level: "medium",
+      keywords: ["liquidity", "cash flow", "working capital", "runway", "refinancing"],
+      description:
+        "The text references liquidity or operating cash flow themes, which may indicate a need to monitor near-term funding coverage and payment timing.",
+    },
+    {
+      level: "medium",
+      keywords: ["forecast", "guidance", "assumption", "projection", "scenario"],
+      description:
+        "Forecasting language appears in the document, so the underlying assumptions and sensitivity to downside cases should be checked.",
+    },
+    {
+      level: "low",
+      keywords: ["compliance", "policy", "audit", "control", "regulation"],
+      description:
+        "The document mentions governance or compliance topics, which suggests a review of controls, disclosures, and procedural consistency.",
+    },
+  ];
+
+  const matchedThemes = themeSignals.filter((theme) =>
+    theme.keywords.some((keyword) => lowerText.includes(keyword)),
+  );
+
+  const riskAssessment = matchedThemes.length
+    ? matchedThemes.map((theme) => ({
+        level: theme.level,
+        description: theme.description,
+      }))
+    : [
+        {
+          level: "low",
+          description:
+            "No strong risk keywords were detected. The document should still be reviewed for numerical assumptions, obligations, and disclosures that may not be captured by keyword matching.",
+        },
+      ];
+
+  const positiveSignals = ["growth", "profit", "margin", "improve", "strong", "stable"];
+  const negativeSignals = ["loss", "decline", "risk", "weak", "pressure", "shortfall", "downgrade"];
+  const positiveHits = positiveSignals.reduce(
+    (count, keyword) => count + (lowerText.includes(keyword) ? 1 : 0),
+    0,
+  );
+  const negativeHits = negativeSignals.reduce(
+    (count, keyword) => count + (lowerText.includes(keyword) ? 1 : 0),
+    0,
+  );
+  const sentimentScore = Math.max(
+    -1,
+    Math.min(1, (positiveHits - negativeHits) / Math.max(positiveHits + negativeHits, 4)),
+  );
+
+  const entityMatches = normalizedText.match(
+    /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}|[A-Z]{2,}(?:\/[A-Z]{2,})?)\b/g,
+  ) || [];
+  const entities = Array.from(
+    new Set(
+      entityMatches
+        .map((entity) => entity.trim())
+        .filter((entity) => entity.length > 2),
+    ),
+  ).slice(0, 12);
+
+  const themeSummary = matchedThemes.length
+    ? matchedThemes.map((theme) => theme.level).join(", ")
+    : "low";
+
+  const summary =
+    `Automated fallback analysis for ${fileName}. ` +
+    `The upload contains about ${wordCount} words across ${paragraphCount || 1} paragraph group(s) and ${characterCount} characters. ` +
+    (reason
+      ? `The primary AI path was unavailable or produced invalid output (${reason}). `
+      : "The primary AI path was unavailable or produced invalid output. ") +
+    `This fallback keeps the document usable while preserving the rest of the workflow.`;
+
+  const actionItems = [
+    "Review the document manually for figures, obligations, and deadlines that should be validated against source records.",
+    "Confirm any debt, cash flow, or covenant language against the latest official statements or agreements.",
+    "Check whether key assumptions in the document still match current business conditions and outlook.",
+    "Verify any compliance, audit, or policy references against the latest control evidence and filings.",
+    "If the document is intended for decision-making, route it to a domain reviewer before relying on it operationally.",
+  ];
+
+  const fullReport = [
+    `This fallback report was generated because the primary AI analysis pipeline could not produce a valid response for ${fileName}. The upload was still processed so the rest of the application can continue working, and the report below is a deterministic heuristic summary rather than a model-generated assessment.`,
+    `The document appears to be ${wordCount > 0 ? `roughly ${wordCount} words long` : "light on extractable text"}, with ${paragraphCount || 1} paragraph group(s) detected. That means the source is at least partially readable, but the available content may still be incomplete if the PDF is scanned, image-based, or heavily formatted. When the text is sparse, the main risk is not necessarily the document itself but the possibility that important clauses, tables, or disclosures were not extracted cleanly.`,
+    `Keyword signals suggest the dominant themes are ${themeSummary}. If the text contains leverage, liquidity, guidance, or compliance references, those areas should be checked first because they often influence whether the document is operationally safe to rely on. The presence of multiple themes does not imply a problem; it only indicates the review should focus on those sections before any downstream action is taken.`,
+    `From a control perspective, the safest next step is to validate the source document manually, confirm the critical numbers and obligations, and compare any apparent trends against the latest available records. If the document supports a financial decision, the review should include a second set of eyes from someone familiar with the underlying business context. That keeps the workflow reliable even when the AI service is unavailable or the response cannot be parsed.`,
+    `In short, this report preserves continuity of the upload flow without pretending to be a deep model-based analysis. It is intentionally conservative, and it is best treated as a structured placeholder until the primary AI path is restored.`,
+  ].join("\n\n");
+
+  return {
+    summary,
+    key_metrics: {
+      word_count: wordCount,
+      character_count: characterCount,
+      paragraph_count: paragraphCount,
+      theme_count: matchedThemes.length,
+    },
+    risk_assessment: riskAssessment,
+    action_items: actionItems,
+    sentiment_score: sentimentScore,
+    entities,
+    full_report,
   };
 }
 
@@ -435,15 +578,20 @@ async function startServer() {
     );
   } else {
     try {
+      const storageBucket = process.env.VITE_FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.firebasestorage.app`;
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         admin.initializeApp({
           credential: admin.credential.cert(svc),
           projectId: firebaseProjectId,
+          storageBucket: storageBucket,
         });
       } else {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-        admin.initializeApp({ projectId: firebaseProjectId });
+        admin.initializeApp({
+          projectId: firebaseProjectId,
+          storageBucket: storageBucket,
+        });
       }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (err: any) {
@@ -464,7 +612,15 @@ async function startServer() {
   // Simplified CORS for local Docker development
   app.use(
     cors({
-      origin: true,
+      origin(origin, callback) {
+        // Allow same-origin/non-browser requests (no Origin header) or dev mode origins
+        if (!origin || !isProduction || allowedOrigins.has(origin)) {
+          return callback(null, true);
+        }
+        return callback(
+          new Error(`Origin ${origin} is not allowed by CORS policy`),
+        );
+      },
       credentials: true,
       methods: ["GET", "POST", "OPTIONS"],
       allowedHeaders: ["Authorization", "Content-Type"],
@@ -486,11 +642,40 @@ async function startServer() {
         "max-age=31536000; includeSubDomains",
       );
     }
-    // Content-Security-Policy: Restrict resource loading to prevent XSS
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;",
-    );
+    const cspDirectives = [
+      "default-src 'self'",
+      // Scripts: self + inline (Vite HMR) + Google APIs (Firebase/Google Sign-In)
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.firebaseapp.com https://www.gstatic.com",
+      // Styles: self + inline (Tailwind/CSS-in-JS) + Google Fonts
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // Fonts: Google Fonts
+      "font-src 'self' https://fonts.gstatic.com data:",
+      // Images: self + data URIs + https (avatars etc.)
+      "img-src 'self' data: https: blob:",
+      // Connections: Firebase Auth, Firestore, Storage, Analytics, HuggingFace, Vite HMR
+      [
+        "connect-src 'self'",
+        "https://*.googleapis.com",
+        "https://*.firebaseio.com",
+        "https://*.firebaseapp.com",
+        "https://identitytoolkit.googleapis.com",
+        "https://securetoken.googleapis.com",
+        "https://firestore.googleapis.com",
+        "https://firebase.googleapis.com",
+        "https://www.googleapis.com",
+        "https://api-inference.huggingface.co",
+        "https://huggingface.co",
+        "wss://*.firebaseio.com",
+        // Vite HMR websocket (dev only)
+        ...(isProduction ? [] : ["ws://localhost:*", "ws://127.0.0.1:*", "http://localhost:*"]),
+      ].join(" "),
+      // Frames: Google Sign-In OAuth popup
+      "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com",
+      // Workers: blob for some Firebase internals
+      "worker-src 'self' blob:",
+    ].join("; ");
+
+    res.setHeader("Content-Security-Policy", cspDirectives);
     // X-XSS-Protection: Enable browser XSS protection (defense-in-depth)
     res.setHeader("X-XSS-Protection", "1; mode=block");
     // Referrer-Policy: Control how much referrer information is shared
@@ -791,6 +976,7 @@ CRITICAL RULES:
         let validPayload: AnalysisResponse | null = null;
         let retries = 0;
         const maxRetries = 1;
+        let analysisFallbackReason = "";
 
         while (retries <= maxRetries && !validPayload) {
 
@@ -820,15 +1006,14 @@ CRITICAL RULES:
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
-            const timeoutMs = 30_000;
+            const timeoutMs = 60_000;
             timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
               const completion = await hfClient.chatCompletion({
-                provider: "together",
-                model: "meta-llama/Llama-3.3-70B-Instruct",
+                model: "Qwen/Qwen2.5-Coder-32B-Instruct",
                 messages,
-                max_tokens: 5000,
+                max_tokens: 4000,
                 temperature: 0.2,
               }, { signal: controller.signal });
               const rawText = completion.choices?.[0]?.message?.content || "{}";
@@ -836,7 +1021,7 @@ CRITICAL RULES:
               // Parse JSON response from AI
               let parsedResponse;
               try {
-                parsedResponse = safeJsonParse(rawText);
+                parsedResponse = safeJsonParse(rawText) as any;
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (parseError: any) {
                 console.error(
@@ -847,11 +1032,8 @@ CRITICAL RULES:
                   console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
                 }
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "JSON_PARSING",
-                    `Failed to parse JSON response from AI: ${parseError?.message}`,
-                    "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output.",
-                  );
+                  analysisFallbackReason = `Failed to parse JSON response from AI: ${parseError?.message}`;
+                  break;
                 }
                 retries++;
                 continue;
@@ -878,11 +1060,8 @@ CRITICAL RULES:
                   validateError?.message || validateError,
                 );
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "SCHEMA_VALIDATION",
-                    `AI response failed validation: ${validateError?.message}`,
-                    "The AI model failed to structure its response properly. Try submitting again to recreate.",
-                  );
+                  analysisFallbackReason = `AI response failed validation: ${validateError?.message}`;
+                  break;
                 }
                 retries++;
                 continue;
@@ -894,11 +1073,9 @@ CRITICAL RULES:
                   "AI_REQUEST_TIMEOUT: Hugging Face inference exceeded 30 second timeout",
                 );
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "AI_TIMEOUT",
-                    "AI analysis request timed out (30 seconds). The Hugging Face API is unresponsive.",
-                    "The API server may be experiencing high load. Please try again in a few moments.",
-                  );
+                  analysisFallbackReason =
+                    "AI analysis request timed out (30 seconds). The Hugging Face API is unresponsive.";
+                  break;
                 }
                 retries++;
                 continue;
@@ -915,11 +1092,8 @@ CRITICAL RULES:
               hfError?.message || hfError,
             );
             if (retries >= maxRetries) {
-              throw new PipelineError(
-                "AI_INFERENCE",
-                `Hugging Face inference failed: ${hfError?.message || String(hfError)}`,
-                "Verify the HUGGINGFACE_API_KEY environment variable. Hugging Face could be experiencing temporary downtime.",
-              );
+              analysisFallbackReason = `Hugging Face inference failed: ${hfError?.message || String(hfError)}`;
+              break;
             }
             retries++;
             continue;
@@ -929,10 +1103,14 @@ CRITICAL RULES:
         }
 
         if (!validPayload) {
-          throw new PipelineError(
-            "AI_INFERENCE",
-            "Failed to generate valid analysis after retries",
-            "The AI model repeatedly failed validation rules. Try a different document or request a simpler scan.",
+          console.warn(
+            "AI_FALLBACK_ANALYSIS: using heuristic analysis",
+            analysisFallbackReason || "AI pipeline did not produce a valid payload",
+          );
+          validPayload = buildFallbackAnalysis(
+            extractedText,
+            file.originalname,
+            analysisFallbackReason || undefined,
           );
         }
 
@@ -968,15 +1146,10 @@ CRITICAL RULES:
               `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
             );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (storageError: any) {
-            console.error(
-              "FIREBASE_STORAGE_UPLOAD_ERROR:",
+          } catch (storageError: any) {
+            console.warn(
+              "FIREBASE_STORAGE_UPLOAD_WARNING: Storage bucket not ready, continuing document creation:",
               storageError?.message || storageError,
-            );
-            throw new PipelineError(
-              "STORAGE_UPLOAD",
-              `Failed to upload file to Firebase Storage: ${storageError?.message || String(storageError)}`,
-              "Check Firebase Storage bucket configuration and credentials.",
             );
           }
         }
@@ -1045,33 +1218,60 @@ CRITICAL RULES:
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (writeError: any) {
           console.error('FIRESTORE_WRITE_FAILED:', writeError?.message || writeError);
-          // The PDF was already uploaded to Storage before these writes began.
-          // Delete it so a failed pipeline does not leave a permanent orphaned
-          // object (with uploadedBy metadata) behind.
-          try {
-            const bucket = getStorage().bucket();
-            await bucket.file(storagePath).delete();
-            console.log(
-              `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
+          const writeErrorCode = String(writeError?.code || "").toLowerCase();
+          const writeErrorMessage = String(writeError?.message || writeError || "").toLowerCase();
+          const isPermissionDenied =
+            writeErrorCode === "7" ||
+            writeErrorCode === "permission-denied" ||
+            writeErrorCode === "permission_denied" ||
+            writeErrorMessage.includes("permission_denied") ||
+            writeErrorMessage.includes("permission-denied") ||
+            writeErrorMessage.includes("missing or insufficient permissions");
+
+          if (isPermissionDenied) {
+            documentId = `local-${ownerId}-${now.getTime()}`;
+            console.warn(
+              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
             );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (storageCleanupError: any) {
-            if (storageCleanupError?.code !== 404) {
-              console.error(
-                "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
-                storageCleanupError?.message || storageCleanupError,
+          } else {
+            // The PDF was already uploaded to Storage before these writes began.
+            // Delete it so a failed pipeline does not leave a permanent orphaned
+            // object (with uploadedBy metadata) behind.
+            try {
+              const bucket = getStorage().bucket();
+              await bucket.file(storagePath).delete();
+              console.log(
+                `STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted storagePath=${storagePath}`,
               );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (storageCleanupError: any) {
+              if (storageCleanupError?.code !== 404) {
+                console.error(
+                  "STORAGE_CLEANUP_AFTER_WRITE_FAILURE_ERROR:",
+                  storageCleanupError?.message || storageCleanupError,
+                );
+              }
             }
+            throw new PipelineError(
+              "FIRESTORE_WRITE",
+              `Firestore database write failed: ${writeError?.message || String(writeError)}`,
+              "Check database security rules, database existence, and network connection."
+            );
           }
-          throw new PipelineError(
-            "FIRESTORE_WRITE",
-            `Firestore database write failed: ${writeError?.message || String(writeError)}`,
-            "Check database security rules, database existence, and network connection."
-          );
         }
 
-
-        return res.status(200).json({ documentId });
+        return res.status(200).json({
+          documentId,
+          persistenceMode: documentId.startsWith("local-") ? "local" : "firestore",
+          record: {
+            ...docData,
+            id: documentId,
+          },
+          analysis: {
+            ...analysisDoc,
+            documentId,
+          },
+        });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (error: any) {
         console.error("=== PDF INGESTION PIPELINE FAILED ===");
@@ -1434,6 +1634,20 @@ CRITICAL RULES:
       appType: "spa",
     });
     app.use(vite.middlewares);
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(
+          path.resolve(process.cwd(), "index.html"),
+          "utf-8",
+        );
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
 

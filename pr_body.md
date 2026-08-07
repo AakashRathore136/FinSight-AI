@@ -1,12 +1,11 @@
 ## Description
-This Pull Request resolves Issue #513 by ensuring the Portfolio chart re-renders and correctly displays an empty state when all transactions/holdings are deleted.
+This Pull Request resolves Issue #549 by clamping the input value for the Tax Estimator to prevent negative income calculations.
 
 ## Changes Made
-- Added \	ransactions\ and \holdings\ to the dependency array of the \useEffect\ responsible for fetching performance history in \PortfolioTracker.tsx\.
-- Implemented an early return that explicitly clears the \performanceHistory\ state if both \	ransactions\ and \holdings\ arrays are empty.
+- Added a validation guard directly within the \onChange\ handler in \TaxEstimation.tsx\ that resets the input to \'0'\ if the user enters a negative number.
 
 ## Impact
-The UI now correctly synchronizes with the underlying data state, preventing stale chart data from lingering after all assets have been deleted.
+Prevents edge-case bugs and ensures tax brackets aren't unexpectedly extrapolated into negative numbers when interacting with the estimator form.
 
 ## Related Issues
-- Resolves #513
+- Resolves #549

@@ -78,6 +78,26 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
     const fetchDoc = async () => {
       setLoading(true);
 
+      const loadCachedLocalRecord = () => {
+        if (typeof window === "undefined") return false;
+        try {
+          const raw = window.sessionStorage.getItem(`fin_local_doc_${docId}`);
+          if (!raw) return false;
+          const cached = JSON.parse(raw) as AnyRecord;
+          if (cached?.record) {
+            setRecord(cached.record);
+          }
+          if (cached?.analysis) {
+            setAnalysis(cached.analysis);
+          }
+          setLoading(false);
+          return true;
+        } catch (error) {
+          console.error(`Failed to load cached local analysis for ${docId}`, error);
+          return false;
+        }
+      };
+
       let ownerIdFromDoc: string | null = null;
 
       try {
@@ -88,13 +108,22 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
           setRecord({ id: d.id, ...data });
         } else {
           setRecord(null);
+          if (loadCachedLocalRecord()) {
+            return;
+          }
         }
       } catch (error) {
         console.error("Failed to fetch document record", error);
+        if (loadCachedLocalRecord()) {
+          return;
+        }
       }
 
       const ownerId = user?.uid || ownerIdFromDoc;
       if (!ownerId) {
+        if (loadCachedLocalRecord()) {
+          return;
+        }
         setAnalysis(null);
         setLoading(false);
         return;

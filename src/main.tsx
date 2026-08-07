@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
-
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { ThemeProvider } from "./lib/themeContext.tsx";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import "./index.css";
 
 // Apply initial dark class before render to prevent flash
@@ -15,6 +15,10 @@ if (isDark) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

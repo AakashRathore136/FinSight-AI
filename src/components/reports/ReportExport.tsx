@@ -21,6 +21,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/src/components/ui/tabs";
+import { toast } from "sonner";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   FileText,
@@ -239,6 +240,7 @@ export function ReportExport() {
       }
     } catch (e) {
       console.error("Export failed:", e);
+      toast.error("Failed to export report. Please try again.");
     } finally {
       setExporting(false);
     }

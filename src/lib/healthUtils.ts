@@ -83,7 +83,7 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
   const discretionaryRatio = totalSpent > 0 ? discretionary / totalSpent : 0;
 
   const uniquePayees = new Set(expenses.map((t) => t.description?.toLowerCase().trim()).filter(Boolean)).size;
-  const concentration = uniquePayees <= expenses.length * 0.5 ? 1 : 0.9;
+  const concentration = uniquePayees <= expenses.length * 0.5 ? 0.9 : 1;
 
   let score = 100;
   if (avgTransactionSize > totalSpent * 0.3) score -= 15;
