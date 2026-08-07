@@ -134,7 +134,7 @@ async function generateShortLivedSignedUrl(
   }
 }
 
-function safeJsonParse(text: string): any {
+function safeJsonParse(text: string): unknown {
   const cleaned = (text || "").trim();
   if (!cleaned) {
     throw new Error("Empty model response");
@@ -846,7 +846,7 @@ CRITICAL RULES:
               // Parse JSON response from AI
               let parsedResponse;
               try {
-                parsedResponse = safeJsonParse(rawText);
+                parsedResponse = safeJsonParse(rawText) as any;
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (parseError: any) {
                 console.error(
