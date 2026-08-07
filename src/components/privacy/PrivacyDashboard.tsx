@@ -44,13 +44,20 @@ export function PrivacyDashboard({ user }: { user: any }) {
     loadPrivacyData();
   }, [user]);
 
+  useEffect(() => {
+    if (privacySettings && user) {
+      localStorage.setItem(`privacySettings_${user.uid}`, JSON.stringify(privacySettings));
+    }
+  }, [privacySettings, user]);
+
   async function loadPrivacyData() {
     if (!user) return;
     setLoading(true);
     try {
       const logs = await fetchActivityLog(user.uid);
       setActivityLog(logs);
-      setPrivacySettings({
+      const stored = localStorage.getItem(`privacySettings_${user.uid}`);
+      setPrivacySettings(stored ? JSON.parse(stored) : {
         userId: user.uid,
         dataRetentionEnabled: true,
         analyticsEnabled: true,
