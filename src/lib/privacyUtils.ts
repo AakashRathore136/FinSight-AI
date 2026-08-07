@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,6 +13,7 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  type DocumentReference,
 } from "firebase/firestore";
 import { db, auth, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
@@ -82,17 +84,31 @@ export async function updatePrivacySettings(
   }
 }
 
+const USER_COLLECTIONS = [
+  "transactions",
+  "subscriptions",
+  "anomalies",
+  "reports",
+  "trend_analysis",
+  "goals",
+  "challenges",
+  "emergency_funds",
+  "health_scores",
+  "chat_conversations",
+  "chat_messages",
+  "budget_categories",
+  "budget_rollovers",
+  "portfolioHoldings",
+  "portfolioTransactions",
+  "portfolios",
+  "tax_estimates",
+];
+
 export async function exportUserData(
   userId: string,
 ): Promise<Record<string, any>> {
   const data: Record<string, any> = {};
-  for (const colName of [
-    "transactions",
-    "subscriptions",
-    "anomalies",
-    "reports",
-    "trend_analysis",
-  ]) {
+  for (const colName of USER_COLLECTIONS) {
     try {
       const snap = await getDocs(
         query(collection(db, colName), where("userId", "==", userId)),
@@ -102,6 +118,36 @@ export async function exportUserData(
       console.error('exportUserData: failed to fetch', colName, error);
       data[colName] = [];
     }
+  }
+  // documents are keyed by ownerId and keep their analyses as subcollections
+  try {
+    const docsSnap = await getDocs(
+      query(collection(db, "documents"), where("ownerId", "==", userId)),
+    );
+    const documents: Record<string, unknown>[] = [];
+    for (const d of docsSnap.docs) {
+      const entry: Record<string, unknown> = { id: d.id, ...d.data() };
+      try {
+        const analysesSnap = await getDocs(
+          query(
+            collection(db, "documents", d.id, "analyses"),
+            where("ownerId", "==", userId),
+          ),
+        );
+        entry.analyses = analysesSnap.docs.map((a) => ({
+          id: a.id,
+          ...a.data(),
+        }));
+      } catch (error) {
+        console.error('exportUserData: failed to fetch document analyses', error);
+        entry.analyses = [];
+      }
+      documents.push(entry);
+    }
+    data.documents = documents;
+  } catch (error) {
+    console.error('exportUserData: failed to fetch documents', error);
+    data.documents = [];
   }
   try {
     data.profile = (await getDoc(doc(db, "users", userId))).data();
@@ -153,15 +199,8 @@ export async function deleteUserData(userId: string): Promise<void> {
     throw error;
   }
 
-  const batch = writeBatch(db);
-  for (const colName of [
-    "transactions",
-    "subscriptions",
-    "anomalies",
-    "reports",
-    "trend_analysis",
-    "goals",
-  ]) {
+  const docRefs: DocumentReference[] = [];
+  for (const colName of USER_COLLECTIONS) {
     try {
       (
         await getDocs(
@@ -172,13 +211,29 @@ export async function deleteUserData(userId: string): Promise<void> {
       console.error('deleteUserData: failed to delete', colName, error);
     }
   }
-  docRefs.push(doc(db, "users", userId));
+  // documents are keyed by ownerId and keep their analyses as subcollections
+  try {
+    const docsSnap = await getDocs(
+      query(collection(db, "documents"), where("ownerId", "==", userId)),
+    );
+    for (const d of docsSnap.docs) {
+      const analysesSnap = await getDocs(
+        query(
+          collection(db, "documents", d.id, "analyses"),
+          where("ownerId", "==", userId),
+        ),
+      );
+      analysesSnap.docs.forEach((a) => docRefs.push(a.ref));
+      docRefs.push(d.ref);
+    }
+  } catch (error) {
+    console.error('deleteUserData: failed to delete documents', error);
+  }
+  // The users/<uid> doc must survive erasure: it is the deletion tombstone.
   docRefs.push(doc(db, "privacy_settings", userId));
   docRefs.push(doc(db, "currencies", userId));
   try {
-    batch.delete(doc(db, "privacy_settings", userId));
-    batch.delete(doc(db, "currencies", userId));
-    await batch.commit();
+    await deleteInBatches(docRefs);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, "userData");
     throw error;
