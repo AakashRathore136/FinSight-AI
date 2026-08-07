@@ -9,13 +9,13 @@ import { getAnalytics } from "firebase/analytics";
 
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCLwFIQVnzSlx4DDycgJhugpty2hbGMCUk",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "finsightai-5ef59.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "finsightai-5ef59",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "finsightai-5ef59.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "641114527909",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:641114527909:web:d020fbfa262c5f4ba9554c",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-FLDV1FCY1G",
 };
 
 console.log("[Firebase] Config loaded:", {

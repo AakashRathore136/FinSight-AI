@@ -299,6 +299,135 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   };
 }
 
+function buildFallbackAnalysis(
+  documentText: string,
+  fileName: string,
+  reason?: string,
+): AnalysisResponse {
+  const normalizedText = String(documentText || "").trim();
+  const words = normalizedText.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const characterCount = normalizedText.length;
+  const paragraphCount = normalizedText
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+
+  const lowerText = normalizedText.toLowerCase();
+  const themeSignals = [
+    {
+      level: "high",
+      keywords: ["debt", "default", "breach", "covenant", "insolvency", "litigation"],
+      description:
+        "The document contains language associated with leverage, covenant pressure, or legal exposure, so balance-sheet resilience should be reviewed closely.",
+    },
+    {
+      level: "medium",
+      keywords: ["liquidity", "cash flow", "working capital", "runway", "refinancing"],
+      description:
+        "The text references liquidity or operating cash flow themes, which may indicate a need to monitor near-term funding coverage and payment timing.",
+    },
+    {
+      level: "medium",
+      keywords: ["forecast", "guidance", "assumption", "projection", "scenario"],
+      description:
+        "Forecasting language appears in the document, so the underlying assumptions and sensitivity to downside cases should be checked.",
+    },
+    {
+      level: "low",
+      keywords: ["compliance", "policy", "audit", "control", "regulation"],
+      description:
+        "The document mentions governance or compliance topics, which suggests a review of controls, disclosures, and procedural consistency.",
+    },
+  ];
+
+  const matchedThemes = themeSignals.filter((theme) =>
+    theme.keywords.some((keyword) => lowerText.includes(keyword)),
+  );
+
+  const riskAssessment = matchedThemes.length
+    ? matchedThemes.map((theme) => ({
+        level: theme.level,
+        description: theme.description,
+      }))
+    : [
+        {
+          level: "low",
+          description:
+            "No strong risk keywords were detected. The document should still be reviewed for numerical assumptions, obligations, and disclosures that may not be captured by keyword matching.",
+        },
+      ];
+
+  const positiveSignals = ["growth", "profit", "margin", "improve", "strong", "stable"];
+  const negativeSignals = ["loss", "decline", "risk", "weak", "pressure", "shortfall", "downgrade"];
+  const positiveHits = positiveSignals.reduce(
+    (count, keyword) => count + (lowerText.includes(keyword) ? 1 : 0),
+    0,
+  );
+  const negativeHits = negativeSignals.reduce(
+    (count, keyword) => count + (lowerText.includes(keyword) ? 1 : 0),
+    0,
+  );
+  const sentimentScore = Math.max(
+    -1,
+    Math.min(1, (positiveHits - negativeHits) / Math.max(positiveHits + negativeHits, 4)),
+  );
+
+  const entityMatches = normalizedText.match(
+    /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}|[A-Z]{2,}(?:\/[A-Z]{2,})?)\b/g,
+  ) || [];
+  const entities = Array.from(
+    new Set(
+      entityMatches
+        .map((entity) => entity.trim())
+        .filter((entity) => entity.length > 2),
+    ),
+  ).slice(0, 12);
+
+  const themeSummary = matchedThemes.length
+    ? matchedThemes.map((theme) => theme.level).join(", ")
+    : "low";
+
+  const summary =
+    `Automated fallback analysis for ${fileName}. ` +
+    `The upload contains about ${wordCount} words across ${paragraphCount || 1} paragraph group(s) and ${characterCount} characters. ` +
+    (reason
+      ? `The primary AI path was unavailable or produced invalid output (${reason}). `
+      : "The primary AI path was unavailable or produced invalid output. ") +
+    `This fallback keeps the document usable while preserving the rest of the workflow.`;
+
+  const actionItems = [
+    "Review the document manually for figures, obligations, and deadlines that should be validated against source records.",
+    "Confirm any debt, cash flow, or covenant language against the latest official statements or agreements.",
+    "Check whether key assumptions in the document still match current business conditions and outlook.",
+    "Verify any compliance, audit, or policy references against the latest control evidence and filings.",
+    "If the document is intended for decision-making, route it to a domain reviewer before relying on it operationally.",
+  ];
+
+  const fullReport = [
+    `This fallback report was generated because the primary AI analysis pipeline could not produce a valid response for ${fileName}. The upload was still processed so the rest of the application can continue working, and the report below is a deterministic heuristic summary rather than a model-generated assessment.`,
+    `The document appears to be ${wordCount > 0 ? `roughly ${wordCount} words long` : "light on extractable text"}, with ${paragraphCount || 1} paragraph group(s) detected. That means the source is at least partially readable, but the available content may still be incomplete if the PDF is scanned, image-based, or heavily formatted. When the text is sparse, the main risk is not necessarily the document itself but the possibility that important clauses, tables, or disclosures were not extracted cleanly.`,
+    `Keyword signals suggest the dominant themes are ${themeSummary}. If the text contains leverage, liquidity, guidance, or compliance references, those areas should be checked first because they often influence whether the document is operationally safe to rely on. The presence of multiple themes does not imply a problem; it only indicates the review should focus on those sections before any downstream action is taken.`,
+    `From a control perspective, the safest next step is to validate the source document manually, confirm the critical numbers and obligations, and compare any apparent trends against the latest available records. If the document supports a financial decision, the review should include a second set of eyes from someone familiar with the underlying business context. That keeps the workflow reliable even when the AI service is unavailable or the response cannot be parsed.`,
+    `In short, this report preserves continuity of the upload flow without pretending to be a deep model-based analysis. It is intentionally conservative, and it is best treated as a structured placeholder until the primary AI path is restored.`,
+  ].join("\n\n");
+
+  return {
+    summary,
+    key_metrics: {
+      word_count: wordCount,
+      character_count: characterCount,
+      paragraph_count: paragraphCount,
+      theme_count: matchedThemes.length,
+    },
+    risk_assessment: riskAssessment,
+    action_items: actionItems,
+    sentiment_score: sentimentScore,
+    entities,
+    full_report,
+  };
+}
+
 function sanitizeString(text: string): string {
   return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
@@ -849,6 +978,7 @@ CRITICAL RULES:
         let validPayload: AnalysisResponse | null = null;
         let retries = 0;
         const maxRetries = 1;
+        let analysisFallbackReason = "";
 
         while (retries <= maxRetries && !validPayload) {
 
@@ -904,11 +1034,8 @@ CRITICAL RULES:
                   console.error("AI_RAW_RESPONSE_SAMPLE:", rawText.slice(0, 500));
                 }
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "JSON_PARSING",
-                    `Failed to parse JSON response from AI: ${parseError?.message}`,
-                    "The AI model output could not be parsed as valid JSON. Retrying may yield clean JSON output.",
-                  );
+                  analysisFallbackReason = `Failed to parse JSON response from AI: ${parseError?.message}`;
+                  break;
                 }
                 retries++;
                 continue;
@@ -935,11 +1062,8 @@ CRITICAL RULES:
                   validateError?.message || validateError,
                 );
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "SCHEMA_VALIDATION",
-                    `AI response failed validation: ${validateError?.message}`,
-                    "The AI model failed to structure its response properly. Try submitting again to recreate.",
-                  );
+                  analysisFallbackReason = `AI response failed validation: ${validateError?.message}`;
+                  break;
                 }
                 retries++;
                 continue;
@@ -951,11 +1075,9 @@ CRITICAL RULES:
                   "AI_REQUEST_TIMEOUT: Hugging Face inference exceeded 30 second timeout",
                 );
                 if (retries >= maxRetries) {
-                  throw new PipelineError(
-                    "AI_TIMEOUT",
-                    "AI analysis request timed out (30 seconds). The Hugging Face API is unresponsive.",
-                    "The API server may be experiencing high load. Please try again in a few moments.",
-                  );
+                  analysisFallbackReason =
+                    "AI analysis request timed out (30 seconds). The Hugging Face API is unresponsive.";
+                  break;
                 }
                 retries++;
                 continue;
@@ -972,11 +1094,8 @@ CRITICAL RULES:
               hfError?.message || hfError,
             );
             if (retries >= maxRetries) {
-              throw new PipelineError(
-                "AI_INFERENCE",
-                `Hugging Face inference failed: ${hfError?.message || String(hfError)}`,
-                "Verify the HUGGINGFACE_API_KEY environment variable. Hugging Face could be experiencing temporary downtime.",
-              );
+              analysisFallbackReason = `Hugging Face inference failed: ${hfError?.message || String(hfError)}`;
+              break;
             }
             retries++;
             continue;
@@ -986,10 +1105,14 @@ CRITICAL RULES:
         }
 
         if (!validPayload) {
-          throw new PipelineError(
-            "AI_INFERENCE",
-            "Failed to generate valid analysis after retries",
-            "The AI model repeatedly failed validation rules. Try a different document or request a simpler scan.",
+          console.warn(
+            "AI_FALLBACK_ANALYSIS: using heuristic analysis",
+            analysisFallbackReason || "AI pipeline did not produce a valid payload",
+          );
+          validPayload = buildFallbackAnalysis(
+            extractedText,
+            file.originalname,
+            analysisFallbackReason || undefined,
           );
         }
 
