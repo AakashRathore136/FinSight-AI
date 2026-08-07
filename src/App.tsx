@@ -203,11 +203,8 @@ export default function App() {
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
-  type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
-
   // Email auth state
   const [isSignup, setIsSignup] = useState(false);
-  const [signupRole, setSignupRole] = useState<ViewRole>("junior_analyst");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -433,7 +430,7 @@ export default function App() {
           username: username,
           email: email,
           emailVerified: false,
-          role: signupRole,
+          role: "junior_analyst",
           createdAt: new Date().toISOString(),
         });
       } catch (profileError) {
@@ -799,23 +796,6 @@ export default function App() {
                       disabled={emailAuthLoading}
                       className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 h-12 rounded-2xl"
                     />
-                    <select
-                      value={signupRole}
-                      onChange={(e) =>
-                        setSignupRole(e.target.value as ViewRole)
-                      }
-                      disabled={emailAuthLoading}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-300 h-12 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-                    >
-                      <option value="junior_analyst">
-                        Junior Risk Analyst
-                      </option>
-                      <option value="senior_pm">
-                        Senior Portfolio Manager
-                      </option>
-                      <option value="cro">Chief Risk Officer</option>
-                      <option value="compliance">Compliance Officer</option>
-                    </select>
                   </>
                 )}
                 <Input
