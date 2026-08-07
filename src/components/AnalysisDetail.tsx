@@ -40,6 +40,7 @@ import {
 } from "@/src/components/ui/tabs";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
+import { getLocalDocumentById } from "@/src/lib/storageUtils";
 
 const XBrandIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -81,9 +82,8 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
       const loadCachedLocalRecord = () => {
         if (typeof window === "undefined") return false;
         try {
-          const raw = window.sessionStorage.getItem(`fin_local_doc_${docId}`);
-          if (!raw) return false;
-          const cached = JSON.parse(raw) as AnyRecord;
+          const cached = getLocalDocumentById(docId) as AnyRecord | null;
+          if (!cached) return false;
           if (cached?.record) {
             setRecord(cached.record);
           }

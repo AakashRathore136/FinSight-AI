@@ -424,7 +424,7 @@ function buildFallbackAnalysis(
     action_items: actionItems,
     sentiment_score: sentimentScore,
     entities,
-    full_report,
+    full_report: fullReport,
   };
 }
 
@@ -581,11 +581,21 @@ async function startServer() {
       const storageBucket = process.env.VITE_FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.firebasestorage.app`;
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        admin.initializeApp({
-          credential: admin.credential.cert(svc),
-          projectId: firebaseProjectId,
-          storageBucket: storageBucket,
-        });
+        if (svc.project_id && svc.project_id !== firebaseProjectId) {
+          console.warn(
+            `Service account project_id (${svc.project_id}) does not match FIREBASE_PROJECT_ID (${firebaseProjectId}). Skipping cert credential.`,
+          );
+          admin.initializeApp({
+            projectId: firebaseProjectId,
+            storageBucket: storageBucket,
+          });
+        } else {
+          admin.initializeApp({
+            credential: admin.credential.cert(svc),
+            projectId: firebaseProjectId,
+            storageBucket: storageBucket,
+          });
+        }
       } else {
         // Attempt application default credentials (GOOGLE_APPLICATION_CREDENTIALS)
         admin.initializeApp({

@@ -358,12 +358,30 @@ async function ensureAdminInitialized() {
 
   const storageBucket = process.env.VITE_FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.firebasestorage.app`;
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(svc),
-      projectId: firebaseProjectId,
-      storageBucket,
-    });
+    try {
+      const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      if (svc.project_id && svc.project_id !== firebaseProjectId) {
+        console.warn(
+          `Service account project_id (${svc.project_id}) does not match FIREBASE_PROJECT_ID (${firebaseProjectId}). Skipping service account cert.`,
+        );
+        admin.initializeApp({
+          projectId: firebaseProjectId,
+          storageBucket,
+        });
+      } else {
+        admin.initializeApp({
+          credential: admin.credential.cert(svc),
+          projectId: firebaseProjectId,
+          storageBucket,
+        });
+      }
+    } catch (parseErr) {
+      console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT JSON, initializing with project ID", parseErr);
+      admin.initializeApp({
+        projectId: firebaseProjectId,
+        storageBucket,
+      });
+    }
   } else {
     admin.initializeApp({
       projectId: firebaseProjectId,
@@ -579,11 +597,13 @@ Return ONLY valid JSON with keys summary, key_metrics, risk_assessment, action_i
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${file.originalname}`;
 
     let documentId = "";
+    const fileUrl = `https://finsight.local/storage/${encodeURIComponent(storagePath)}`;
     const docData: any = {
       ownerId,
       fileName: file.originalname,
       fileType: file.mimetype,
       fileSize: file.size,
+      fileUrl,
       storagePath,
       status: "completed",
       riskLevel,

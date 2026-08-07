@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { apiFetch } from "@/src/lib/api";
 import { safeJsonParse } from "@/src/lib/utils";
+import { saveLocalAnalysis } from "@/src/lib/storageUtils";
 
 export function FileUpload({ user, onComplete, onCancel }: any) {
   const [file, setFile] = useState<File | null>(null);
@@ -207,8 +208,42 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       if (!documentId)
         throw new Error("Server did not return documentId");
 
-      if (result?.persistenceMode === "local" || result?.analysis) {
-        cacheLocalAnalysis(result);
+      // Save locally in localStorage + sessionStorage
+      saveLocalAnalysis(result);
+
+      // If local persistence mode was used by server, attempt client-side Firestore write as well
+      if (result?.persistenceMode === "local" && user?.uid) {
+        try {
+          const { db } = await import("@/src/lib/firebase");
+          const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+          
+          if (result.record) {
+            const docRef = doc(db, "documents", documentId);
+            await setDoc(docRef, {
+              ...result.record,
+              ownerId: user.uid,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              latestAnalysis: result.analysis ? {
+                ...result.analysis,
+                ownerId: user.uid,
+                processedAt: new Date().toISOString(),
+              } : null,
+            });
+
+            if (result.analysis) {
+              const analysisRef = doc(db, `documents/${documentId}/analyses`, `${documentId}_analysis`);
+              await setDoc(analysisRef, {
+                ...result.analysis,
+                documentId,
+                ownerId: user.uid,
+                processedAt: serverTimestamp(),
+              });
+            }
+          }
+        } catch (clientWriteErr) {
+          console.warn("Client-side Firestore fallback write was skipped/failed:", clientWriteErr);
+        }
       }
 
       setStatus("done");
