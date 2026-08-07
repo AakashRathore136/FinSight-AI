@@ -517,7 +517,7 @@ function EmptyState() {
   return (
     <Card className="bg-slate-900 border-slate-800 border-dashed p-10">
       <div className="flex flex-col items-center justify-center text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300 mb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-500 dark:bg-indigo-500/15 dark:text-indigo-300 mb-4">
           <Sparkles size={30} />
         </div>
         <h3 className="text-lg font-bold text-white">
