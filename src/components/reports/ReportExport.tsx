@@ -223,6 +223,7 @@ export function ReportExport() {
       }
     } catch (e) {
       console.error("Export failed:", e);
+      toast.error("Failed to export report. Please try again.");
     } finally {
       setExporting(false);
     }
