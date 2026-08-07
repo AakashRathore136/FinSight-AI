@@ -281,7 +281,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
         setHistoricalScores((prev) =>
           prev.map((s) => (s.id === existing.id ? updatedScore : s))
         );
-        setCurrentScore(updatedScore);
+        setCurrentScore((prev) => prev ? { ...prev, ...updatedScore } : updatedScore);
         toast.success('Health score recalculated');
       } else {
         const created = await createHealthScore({
