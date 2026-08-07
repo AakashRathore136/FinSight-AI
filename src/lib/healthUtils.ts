@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -16,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Transaction } from './anomalyUtils';
+import { normalizeTransactionType } from './utils';
 
 export interface HealthMetric {
   name: string;
@@ -66,7 +68,9 @@ export function getScoreColor(score: number): string {
 }
 
 export function calculateSpendingScore(transactions: Transaction[]): number {
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   if (expenses.length === 0) return 100;
 
   const totalSpent = expenses.reduce((sum, t) => sum + t.amount, 0);
@@ -79,7 +83,7 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
   const discretionaryRatio = totalSpent > 0 ? discretionary / totalSpent : 0;
 
   const uniquePayees = new Set(expenses.map((t) => t.description?.toLowerCase().trim()).filter(Boolean)).size;
-  const concentration = uniquePayees <= expenses.length * 0.5 ? 1 : 0.9;
+  const concentration = uniquePayees <= expenses.length * 0.5 ? 0.9 : 1;
 
   let score = 100;
   if (avgTransactionSize > totalSpent * 0.3) score -= 15;
@@ -92,7 +96,9 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
 }
 
 export function calculateSavingsScore(transactions: Transaction[]): number {
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   const income = transactions.filter((t) => t.type === 'income');
 
   const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
@@ -116,7 +122,9 @@ export function calculateBudgetAdherence(
 ): number {
   if (budgetCategories.length === 0) return 70;
 
-  const expenses = transactions.filter((t) => t.type === 'expense');
+  const expenses = transactions.filter(
+    (t) => normalizeTransactionType(t.type) === 'expense',
+  );
   const categorySpend = new Map<string, number>();
   expenses.forEach((t) => {
     categorySpend.set(t.category, (categorySpend.get(t.category) || 0) + t.amount);

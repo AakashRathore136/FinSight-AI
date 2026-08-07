@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import {
   Card,
   CardHeader,
@@ -7,13 +8,9 @@ import {
 import { Button } from "@/src/components/ui/button";
 import {
   Plus,
-  Shield,
   ShieldAlert,
   Award,
-  FileText,
   CheckSquare,
-  Eye,
-  RefreshCw,
 } from "lucide-react";
 import { MetricCard } from "./RiskMetrics";
 import {

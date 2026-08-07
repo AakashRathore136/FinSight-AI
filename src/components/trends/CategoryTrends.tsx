@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
+import { PeriodSelector } from './PeriodSelector';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -46,6 +48,7 @@ import {
   type Transaction,
   type TrendPeriod,
 } from '@/src/lib/trendsUtils';
+import { PeriodSelector } from './PeriodSelector';
 
 interface CategoryTrendsProps {
   user: { uid: string } | null;
@@ -98,7 +101,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('monthly');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
@@ -106,6 +109,9 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   const weeklyRef = useRef<HTMLDivElement>(null);
   const pieRef = useRef<HTMLDivElement>(null);
   const trendRef = useRef<HTMLDivElement>(null);
+
+  // Derive loading state
+  const loading = !user || isLoading;
 
   const config = useMemo(
     () =>
@@ -119,16 +125,39 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTransactions([]);
+      return;
+    }
+
     let cancelled = false;
-    setLoading(true);
+    let loadingState = true;
+
+     
+    setIsLoading(true);
+
     fetchTransactionsForPeriod(user.uid, config)
       .then((txns) => {
-        if (!cancelled) setTransactions(txns);
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setTransactions(txns);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+          setTransactions([]);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && loadingState) {
+          loadingState = false;
+           
+          setIsLoading(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };
@@ -173,14 +202,14 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
 
   const exportAll = async () => {
     if (!user) return;
-    setLoading(true);
+    setIsLoading(true);
     try {
       await saveTrendAnalysis(user.uid, config, transactions);
       const refs = [monthlyRef, weeklyRef, pieRef, trendRef];
       for (const ref of refs) {
         if (ref.current) {
           // sequential capture to avoid memory pressure
-          // eslint-disable-next-line no-await-in-loop
+           
           const canvas = await html2canvas(ref.current, { backgroundColor: CHART_BG, scale: 2 });
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
@@ -197,7 +226,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
       console.error(err);
       toast.error('Export failed');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 

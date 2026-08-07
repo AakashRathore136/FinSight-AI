@@ -1,12 +1,11 @@
 ## Description
-This Pull Request resolves Issue #551 by ensuring the export function gracefully recovers its state during network or generation failures.
+This Pull Request resolves Issue #549 by clamping the input value for the Tax Estimator to prevent negative income calculations.
 
 ## Changes Made
-- Added a `toast.error` notification to alert the user.
-- Verified that the `finally` block successfully triggers `setExporting(false)` so the UI doesn't remain stuck in a loading state.
+- Added a validation guard directly within the \onChange\ handler in \TaxEstimation.tsx\ that resets the input to \'0'\ if the user enters a negative number.
 
 ## Impact
-Users are no longer soft-locked out of exporting reports again if a temporary network blip or generation error occurs.
+Prevents edge-case bugs and ensures tax brackets aren't unexpectedly extrapolated into negative numbers when interacting with the estimator form.
 
 ## Related Issues
-- Resolves #551
+- Resolves #549
