@@ -59,11 +59,11 @@ export function CurrencyConverter({
   
   const converted = (rates && isValidAmount)
     ? convertAmount(numericAmount, fromCurrency, toCurrency, rates.rates)
-    : 0;
+    : null;
 
   useEffect(() => {
     if (onConvert && rates) {
-      onConvert(numericAmount, fromCurrency, toCurrency, converted);
+      onConvert(numericAmount, fromCurrency, toCurrency, converted === null ? 0 : converted);
     }
   }, [numericAmount, fromCurrency, toCurrency, converted, onConvert, rates]);
 
@@ -140,7 +140,9 @@ export function CurrencyConverter({
                 Converted Amount
               </p>
               <p className="text-3xl font-black text-white tabular-nums">
-                {loading ? '---' : formatCurrencyDisplay(converted, toCurrency)}
+                {loading || converted === null
+                  ? '---'
+                  : formatCurrencyDisplay(converted, toCurrency)}
               </p>
             </div>
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 font-bold text-xs">

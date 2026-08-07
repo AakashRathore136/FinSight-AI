@@ -145,11 +145,15 @@ export function convertAmount(
   fromCurrency: string,
   toCurrency: string,
   rates: Record<string, number>
-): number {
+): number | null {
   if (fromCurrency === toCurrency) return amount;
-  const fromRate = rates[fromCurrency] || 1;
-  const toRate = rates[toCurrency] || 1;
-  if (fromRate <= 0 || toRate <= 0) return amount;
+  const fromRate = rates[fromCurrency];
+  const toRate = rates[toCurrency];
+  // Never silently assume a 1:1 rate: a currency missing from the rates table
+  // (or with a non-positive rate) cannot be converted and is reported as null
+  // so callers can skip or flag it instead of folding a wrong value in.
+  if (typeof fromRate !== "number" || typeof toRate !== "number") return null;
+  if (fromRate <= 0 || toRate <= 0) return null;
   const usdAmount = amount / fromRate;
   return usdAmount * toRate;
 }
@@ -164,6 +168,9 @@ export function aggregateMultiCurrencyTotals(
 
   for (const tx of transactions) {
     const converted = convertAmount(tx.amount, tx.currency, baseCurrency, rates);
+    // Skip currencies with no known rate instead of silently counting them at
+    // parity and corrupting the base-currency totals.
+    if (converted === null) continue;
     byCurrency[tx.currency] = (byCurrency[tx.currency] || 0) + converted;
     totalBase += converted;
   }

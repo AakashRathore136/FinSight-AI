@@ -688,7 +688,12 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                             </p>
                             {settings && rates && tx.currency !== settings.baseCurrency && (
                               <p className="text-[10px] text-slate-500">
-                                = {formatCurrencyDisplay(convertAmount(tx.amount, tx.currency, settings.baseCurrency, rates.rates), settings.baseCurrency)}
+                                {(() => {
+                                  const converted = convertAmount(tx.amount, tx.currency, settings.baseCurrency, rates.rates);
+                                  return converted === null
+                                    ? 'rate unavailable'
+                                    : `= ${formatCurrencyDisplay(converted, settings.baseCurrency)}`;
+                                })()}
                               </p>
                             )}
                           </div>
