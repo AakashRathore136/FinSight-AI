@@ -7,7 +7,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
-import { parse as parseUrl } from "url";
 
 dotenv.config({ quiet: true });
 
@@ -392,9 +391,8 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
     return;
   }
 
-  const pathname = parseUrl(req.url || "", true).pathname || "/api/analyze";
-  if (pathname !== "/api/analyze") {
-    res.status(404).json({ error: "Not found" });
+  if (method !== "POST") {
+    res.status(405).json({ error: "Method Not Allowed" });
     return;
   }
 
