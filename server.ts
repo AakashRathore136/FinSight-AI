@@ -524,7 +524,7 @@ async function enrichUserContext(req: any, res: any, next: any) {
       return next();
     }
 
-    const db = getFirestore();
+    const db = getFirestore(firestoreDatabaseId);
     const userDoc = await db.collection("users").doc(req.ownerId).get();
     req.userRole = userDoc.data()?.role || "free";
     next();
@@ -727,7 +727,7 @@ async function startServer() {
 
     // Check Firestore connectivity
     try {
-      const db = getFirestore();
+      const db = getFirestore(firestoreDatabaseId);
       await db.listCollections();
       checks.firestore = "ok";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
