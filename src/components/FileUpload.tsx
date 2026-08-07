@@ -268,9 +268,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           ? "Authentication failed — please sign in again"
           : kind === "quota"
             ? "Analysis quota exceeded — please wait a moment and try again"
-            : kind === "server"
-              ? "Server error — please try again in a few minutes"
-              : rawMsg || "Analysis failed — please try again";
+            : rawMsg || "Server error — please try again in a few minutes";
 
       setStatus("error");
       setUploading(false);
