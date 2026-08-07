@@ -1,12 +1,11 @@
 ## Description
-This Pull Request resolves Issue #547 by ensuring privacy preferences persist across page reloads using localStorage.
+This Pull Request resolves Issue #549 by clamping the input value for the Tax Estimator to prevent negative income calculations.
 
 ## Changes Made
-- Added a \useEffect\ hook in \PrivacyDashboard.tsx\ to sync \privacySettings\ to \localStorage\.
-- Updated the \loadPrivacyData\ initialization sequence to hydrate preferences from \localStorage\ before falling back to default values.
+- Added a validation guard directly within the \onChange\ handler in \TaxEstimation.tsx\ that resets the input to \'0'\ if the user enters a negative number.
 
 ## Impact
-Users no longer lose their privacy preference configurations when refreshing the page or navigating away.
+Prevents edge-case bugs and ensures tax brackets aren't unexpectedly extrapolated into negative numbers when interacting with the estimator form.
 
 ## Related Issues
-- Resolves #547
+- Resolves #549

@@ -129,7 +129,7 @@ export function BudgetRecommendations({
     );
   }
 
-  if (!suggestions || suggestions.length === 0) {
+  if (!localSuggestions || localSuggestions.length === 0) {
     return (
       <Card className="bg-slate-900 border-slate-800 rounded-2xl">
         <CardContent className="p-8 flex flex-col items-center justify-center min-h-[300px]">
