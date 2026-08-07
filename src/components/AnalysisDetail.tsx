@@ -185,9 +185,21 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
     analysisData?.summary || "No summary available for this analysis.";
   const fullReport = analysisData?.full_report || "";
   const keyMetrics = analysisData?.key_metrics || {};
-  const actionItems = analysisData?.action_items || [];
-  const entities = analysisData?.entities || [];
-  const riskItems = analysisData?.risk_assessment || [];
+  const actionItems: string[] = Array.isArray(analysisData?.action_items)
+    ? analysisData.action_items
+    : typeof analysisData?.action_items === "object" && analysisData?.action_items !== null
+      ? Object.values(analysisData.action_items)
+      : [];
+  const entities: string[] = Array.isArray(analysisData?.entities)
+    ? analysisData.entities
+    : typeof analysisData?.entities === "object" && analysisData?.entities !== null
+      ? Object.values(analysisData.entities)
+      : [];
+  const riskItems: any[] = Array.isArray(analysisData?.risk_assessment)
+    ? analysisData.risk_assessment
+    : typeof analysisData?.risk_assessment === "object" && analysisData?.risk_assessment !== null
+      ? Object.values(analysisData.risk_assessment)
+      : [];
   const rawReport = analysisData?.raw_report || null;
 
   const metricsEntries = Object.entries(keyMetrics);
