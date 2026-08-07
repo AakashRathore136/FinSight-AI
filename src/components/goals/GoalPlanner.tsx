@@ -561,7 +561,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                         'h-full transition-all',
                         goalDetail.progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'
                       )}
-                      style={{ width: `${goalDetail.progress}%` }}
+                      style={{ width: `${Math.min(100, goalDetail.progress)}%` }}
                     />
                   </ProgressTrack>
                 </Progress>
