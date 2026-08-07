@@ -213,6 +213,7 @@ export function ReportExport() {
         transactions,
         expenseSummary,
         incomeSummary,
+        baseCurrency,
       );
       setReportData(data);
 
