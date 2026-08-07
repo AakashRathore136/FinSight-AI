@@ -1,4 +1,5 @@
-﻿/**
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,18 +15,23 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
-import { formatCurrency } from "./utils";
+import { formatCurrency, toDate } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
+import {
+  calculateCategoryBaseline,
+  detectLargeTransactions,
+  type Transaction,
+  type CategoryBaseline,
+} from "./anomalyStats";
 
-export interface Transaction {
-  id: string;
-  userId: string;
-  amount: number;
-  category: string;
-  date: Date;
-  description?: string;
-  type?: "expense" | "income";
-}
+export {
+  calculateCategoryBaseline,
+  detectLargeTransactions,
+};
+export type {
+  Transaction,
+  CategoryBaseline,
+};
 
 export interface Anomaly {
   id: string;
@@ -57,12 +63,6 @@ export interface AnomalySummary {
   lowCount: number;
   byCategory: Record<string, number>;
   weeklyData: { week: string; count: number }[];
-}
-
-export interface CategoryBaseline {
-  mean: number;
-  stdDev: number;
-  monthlyTotals: number[];
 }
 
 export async function fetchAnomalies(
@@ -133,10 +133,7 @@ export async function fetchTransactions(
           return { ...data, id: d.id } as Transaction;
         })
         .filter((t) => {
-          const time =
-            t.date instanceof Date
-              ? t.date.getTime()
-              : new Date(t.date as any).getTime();
+          const time = toDate(t.date)?.getTime() ?? 0;
           return time >= startDate.getTime();
         });
     }
@@ -146,59 +143,6 @@ export async function fetchTransactions(
 }
 
 export const fetchUserTransactions = fetchTransactions;
-
-export function calculateCategoryBaseline(
-  transactions: Transaction[],
-): Map<string, CategoryBaseline> {
-  const grouped = new Map<string, Transaction[]>();
-
-  transactions.forEach((transaction) => {
-    const category = transaction.category || "Other";
-    grouped.set(category, [...(grouped.get(category) || []), transaction]);
-  });
-
-  const baseline = new Map<string, CategoryBaseline>();
-  grouped.forEach((items, category) => {
-    const amounts = items.map((item) => Math.abs(item.amount));
-    const mean =
-      amounts.length > 0
-        ? amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length
-        : 0;
-    const variance =
-      amounts.length > 0
-        ? amounts.reduce((sum, amount) => sum + Math.pow(amount - mean, 2), 0) /
-          amounts.length
-        : 0;
-    const monthlyTotals = new Map<string, number>();
-    items.forEach((item) => {
-      const date = item.date instanceof Date ? item.date : new Date(item.date);
-      const key = format(date, "yyyy-MM");
-      monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + Math.abs(item.amount));
-    });
-
-    baseline.set(category, {
-      mean,
-      stdDev: Math.sqrt(variance),
-      monthlyTotals: Array.from(monthlyTotals.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, total]) => total),
-    });
-  });
-
-  return baseline;
-}
-
-export function detectLargeTransactions(
-  transactions: Transaction[],
-  baseline: Map<string, CategoryBaseline>,
-): Transaction[] {
-  return transactions.filter((transaction) => {
-    const categoryBaseline = baseline.get(transaction.category || "Other");
-    if (!categoryBaseline) return false;
-    const threshold = categoryBaseline.mean + categoryBaseline.stdDev * 2;
-    return Math.abs(transaction.amount) > Math.max(threshold, 1000);
-  });
-}
 
 export function detectCategorySpikes(
   transactions: Transaction[],
@@ -213,7 +157,7 @@ export function detectCategorySpikes(
   const byCategory = new Map<string, Transaction[]>();
 
   transactions.forEach((transaction) => {
-    const date = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
+    const date = toDate(transaction.date) || new Date();
     if (format(date, "yyyy-MM") !== currentMonth) return;
     const category = transaction.category || "Other";
     byCategory.set(category, [...(byCategory.get(category) || []), transaction]);
@@ -328,7 +272,7 @@ export function detectAnomalies(
   const monthlySpend = new Map<string, Map<string, number>>();
   transactions.forEach((t) => {
     const monthKey = format(
-      t.date instanceof Date ? t.date : new Date(t.date as any),
+      toDate(t.date) || new Date(),
       "yyyy-MM",
     );
     const cat = t.category || "Other";

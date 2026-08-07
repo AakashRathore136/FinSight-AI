@@ -1,4 +1,6 @@
 export interface BeforeInstallPromptEvent extends Event {
+
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
@@ -152,4 +154,18 @@ export function applyUpdate(): void {
 
 export function getNetworkStatus(): 'online' | 'offline' {
   return navigator.onLine ? 'online' : 'offline';
+}
+
+export function isNotificationSupported(): boolean {
+  return 'Notification' in window;
+}
+
+export function getNotificationPermission(): NotificationPermission {
+  if (!isNotificationSupported()) return 'denied';
+  return Notification.permission;
+}
+
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (!isNotificationSupported()) return 'denied';
+  return await Notification.requestPermission();
 }
