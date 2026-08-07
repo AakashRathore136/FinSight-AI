@@ -94,10 +94,10 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
     };
   }, [user]);
 
-  const recommendedTarget = useMemo(
-    () => calculateRecommendedTarget(parseFloat(monthlyExpenses) || 0, targetMonths),
-    [monthlyExpenses, targetMonths]
-  );
+  const recommendedTarget = useMemo(() => {
+    const parsed = parseFloat(monthlyExpenses);
+    return calculateRecommendedTarget(isNaN(parsed) ? 0 : parsed, targetMonths);
+  }, [monthlyExpenses, targetMonths]);
 
   const monthlySuggestion = useMemo(() => {
     if (!fund) return 0;
@@ -306,7 +306,13 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     <Input
                       type="number"
                       value={monthlyExpenses}
-                      onChange={(e) => setMonthlyExpenses(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMonthlyExpenses(val === '' ? '' : val);
+                      }}
+                      onBlur={() => {
+                        if (!monthlyExpenses) setMonthlyExpenses('0');
+                      }}
                       placeholder="0.00"
                       className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-10 rounded-lg"
                       min="0"

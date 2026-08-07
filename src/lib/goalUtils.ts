@@ -66,11 +66,11 @@ export function generateContributionSuggestions(
     },
     {
       label: 'Conservative',
-      amount: Math.ceil(baseMonthly * (options.conservative ? 1.2 : 0.85)),
+      amount: Math.ceil(baseMonthly * (options.conservative ? 0.85 : 1.2)),
     },
     {
       label: 'Aggressive',
-      amount: Math.max(1, Math.floor(baseMonthly * (options.aggressive ? 0.85 : 1.2))),
+      amount: Math.max(1, Math.floor(baseMonthly * (options.aggressive ? 1.2 : 0.85))),
     },
   ];
 

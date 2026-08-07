@@ -1,11 +1,11 @@
 ## Description
-This Pull Request resolves Issue #548 by ensuring the progress bar width styling never exceeds 100%, even if a user's current savings exceed the target amount.
+This Pull Request resolves Issue #549 by clamping the input value for the Tax Estimator to prevent negative income calculations.
 
 ## Changes Made
-- Wrapped the inline width styling computation inside \GoalCard.tsx\ and \GoalPlanner.tsx\ with \Math.min(100, progress)\.
+- Added a validation guard directly within the \onChange\ handler in \TaxEstimation.tsx\ that resets the input to \'0'\ if the user enters a negative number.
 
 ## Impact
-The UI layout is preserved and no longer breaks or horizontally overflows its container when users surpass their financial goals.
+Prevents edge-case bugs and ensures tax brackets aren't unexpectedly extrapolated into negative numbers when interacting with the estimator form.
 
 ## Related Issues
-- Resolves #548
+- Resolves #549
