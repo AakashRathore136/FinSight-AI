@@ -166,7 +166,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   }, [docId, user?.uid]);
 
   const analysisData = analysis || record?.latestAnalysis || null;
-  const riskLevel = (analysisData?.risk_level || record?.riskLevel || "low")
+  const riskLevel = (
+    analysisData?.riskLevel ||
+    analysisData?.risk_level ||
+    record?.riskLevel ||
+    "low"
+  )
     .toString()
     .toLowerCase();
   const confidenceValue = normalizeConfidence(
