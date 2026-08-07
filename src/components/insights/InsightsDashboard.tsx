@@ -50,6 +50,7 @@ import {
   type InsightsBundle,
 } from "@/src/lib/insightsUtils";
 import { handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { useBaseCurrency } from "@/src/hooks/useBaseCurrency";
 import { InsightCard, CategoryDeltaRow } from "./InsightCard";
 
 const LINE_COLORS = ["#818cf8", "#34d399", "#fbbf24", "#f472b6", "#22d3ee"];
@@ -59,6 +60,7 @@ interface InsightsDashboardProps {
 }
 
 export function InsightsDashboard({ user }: InsightsDashboardProps) {
+  const baseCurrency = useBaseCurrency(user);
   const [bundle, setBundle] = useState<InsightsBundle | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -126,11 +128,11 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
       ) : (
         bundle && (
           <>
-            <WeeklySection bundle={bundle} />
-            <MonthlySection bundle={bundle} />
-            <TrendsSection bundle={bundle} />
-            <AnomaliesSection bundle={bundle} />
-            <OpportunitiesSection bundle={bundle} />
+            <WeeklySection bundle={bundle} baseCurrency={baseCurrency} />
+            <MonthlySection bundle={bundle} baseCurrency={baseCurrency} />
+            <TrendsSection bundle={bundle} baseCurrency={baseCurrency} />
+            <AnomaliesSection bundle={bundle} baseCurrency={baseCurrency} />
+            <OpportunitiesSection bundle={bundle} baseCurrency={baseCurrency} />
           </>
         )
       )}
@@ -187,7 +189,13 @@ function SectionHeading({
 // Weekly
 // ---------------------------------------------------------------------------
 
-function WeeklySection({ bundle }: { bundle: InsightsBundle }) {
+function WeeklySection({
+  bundle,
+  baseCurrency,
+}: {
+  bundle: InsightsBundle;
+  baseCurrency: string;
+}) {
   const { weeklySummary, weekly } = bundle;
   const summary = generatePlainSummary(weeklySummary);
   const topDeltas = weekly.slice(0, 6);
@@ -205,7 +213,7 @@ function WeeklySection({ bundle }: { bundle: InsightsBundle }) {
             This Week
           </span>
           <span className="mt-1 text-3xl font-black text-white tabular-nums">
-            {formatCurrency(weeklySummary.total)}
+            {formatCurrency(weeklySummary.total, baseCurrency)}
           </span>
           <ChangePill
             changePct={weeklySummary.changePct}
@@ -234,6 +242,7 @@ function WeeklySection({ bundle }: { bundle: InsightsBundle }) {
                   category={d.category}
                   current={d.current}
                   changePct={d.changePct}
+                  baseCurrency={baseCurrency}
                 />
               ))
             )}
@@ -248,7 +257,13 @@ function WeeklySection({ bundle }: { bundle: InsightsBundle }) {
 // Monthly
 // ---------------------------------------------------------------------------
 
-function MonthlySection({ bundle }: { bundle: InsightsBundle }) {
+function MonthlySection({
+  bundle,
+  baseCurrency,
+}: {
+  bundle: InsightsBundle;
+  baseCurrency: string;
+}) {
   const { monthlySummary } = bundle;
   const summary = generatePlainSummary(monthlySummary);
 
@@ -266,7 +281,7 @@ function MonthlySection({ bundle }: { bundle: InsightsBundle }) {
               Total Spent This Month
             </span>
             <span className="mt-1 block text-3xl font-black text-white tabular-nums">
-              {formatCurrency(monthlySummary.total)}
+              {formatCurrency(monthlySummary.total, baseCurrency)}
             </span>
             <ChangePill
               changePct={monthlySummary.changePct}
@@ -303,7 +318,7 @@ function MonthlySection({ bundle }: { bundle: InsightsBundle }) {
                         {cat.category}
                       </span>
                       <span className="text-sm font-semibold text-white tabular-nums">
-                        {formatCurrency(cat.total)}{" "}
+                        {formatCurrency(cat.total, baseCurrency)}{" "}
                         <span className="text-xs text-slate-500">
                           ({share}%)
                         </span>
@@ -334,7 +349,13 @@ function MonthlySection({ bundle }: { bundle: InsightsBundle }) {
 // Trends chart
 // ---------------------------------------------------------------------------
 
-function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
+function TrendsSection({
+  bundle,
+  baseCurrency,
+}: {
+  bundle: InsightsBundle;
+  baseCurrency: string;
+}) {
   const { trends, trendCategories } = bundle;
 
   const hasTrend = useMemo(
@@ -385,7 +406,7 @@ function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
                   tickLine={false}
                   axisLine={false}
                   width={70}
-                  tickFormatter={(v) => formatCurrency(Number(v))}
+                  tickFormatter={(v) => formatCurrency(Number(v), baseCurrency)}
                 />
                 <Tooltip
                   contentStyle={{
@@ -395,7 +416,7 @@ function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
                   }}
                   itemStyle={{ color: "#f8fafc" }}
                   labelStyle={{ color: "#94a3b8" }}
-                  formatter={(value) => formatCurrency(Number(value))}
+                  formatter={(value) => formatCurrency(Number(value), baseCurrency)}
                 />
                 <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />
                 {trendCategories.map((category, i) => (
@@ -422,7 +443,13 @@ function TrendsSection({ bundle }: { bundle: InsightsBundle }) {
 // Anomalies
 // ---------------------------------------------------------------------------
 
-function AnomaliesSection({ bundle }: { bundle: InsightsBundle }) {
+function AnomaliesSection({
+  bundle,
+  baseCurrency,
+}: {
+  bundle: InsightsBundle;
+  baseCurrency: string;
+}) {
   const anomalies = bundle.anomalies.slice(0, 6);
   return (
     <section>
@@ -436,7 +463,7 @@ function AnomaliesSection({ bundle }: { bundle: InsightsBundle }) {
       ) : (
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {anomalies.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} />
+            <InsightCard key={insight.id} insight={insight} baseCurrency={baseCurrency} />
           ))}
         </div>
       )}
@@ -448,7 +475,13 @@ function AnomaliesSection({ bundle }: { bundle: InsightsBundle }) {
 // Opportunities
 // ---------------------------------------------------------------------------
 
-function OpportunitiesSection({ bundle }: { bundle: InsightsBundle }) {
+function OpportunitiesSection({
+  bundle,
+  baseCurrency,
+}: {
+  bundle: InsightsBundle;
+  baseCurrency: string;
+}) {
   const opportunities = bundle.opportunities.slice(0, 6);
   return (
     <section>
@@ -462,7 +495,7 @@ function OpportunitiesSection({ bundle }: { bundle: InsightsBundle }) {
       ) : (
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {opportunities.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} />
+            <InsightCard key={insight.id} insight={insight} baseCurrency={baseCurrency} />
           ))}
         </div>
       )}
