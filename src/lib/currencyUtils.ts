@@ -27,7 +27,7 @@ export const FALLBACK_RATES: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.79,
-  INR: 83.12,
+  INR: 95,
   JPY: 149.45,
   CAD: 1.36,
   AUD: 1.52,
@@ -92,7 +92,7 @@ export async function fetchExchangeRates(
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(
-        `https://api.frankfurter.com/latest?from=${encodeURIComponent(base)}`,
+        `https://api.frankfurter.app/latest?from=${encodeURIComponent(base)}`,
         { signal: controller.signal },
       );
     } finally {
@@ -112,7 +112,7 @@ export async function fetchExchangeRates(
       return {
         base: data.base || base,
         date: data.date || new Date().toISOString().split('T')[0],
-        rates: data.rates || {},
+        rates: { [data.base || base]: 1, ...(data.rates || {}) },
       };
     } catch (error) {
       const isLastAttempt = attempt === maxRetries;
