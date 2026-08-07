@@ -266,6 +266,10 @@ export async function resetCategoryRollover(userId: string, categoryId: string):
   }
 }
 
+export function calculateUnusedBudget(monthlyLimit: number, priorMonthSpend: number): number {
+  return Math.max(0, monthlyLimit - priorMonthSpend);
+}
+
 export function calculateRolloverAmount(unusedBudget: number, percentage: number): number {
   if (unusedBudget <= 0) return 0;
   return Math.round(unusedBudget * (percentage / 100) * 100) / 100;
