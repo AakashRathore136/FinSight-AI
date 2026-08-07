@@ -21,6 +21,7 @@ import {
   addDays,
   startOfDay,
   differenceInDays,
+  isBefore,
   isAfter,
 } from "date-fns";
 
@@ -258,6 +259,21 @@ export function analyzeSubscriptionPattern(
   return { frequency: "monthly", confidence: 0.3 };
 }
 
+function advanceByFrequency(
+  date: Date,
+  frequency: "monthly" | "yearly" | "weekly",
+): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(date, 1);
+    case "yearly":
+      return addYears(date, 1);
+    case "monthly":
+    default:
+      return addMonths(date, 1);
+  }
+}
+
 export function predictNextRenewalDate(
   transactions: Transaction[],
   frequency: "monthly" | "yearly" | "weekly",
@@ -266,17 +282,18 @@ export function predictNextRenewalDate(
     (a, b) => b.date.getTime() - a.date.getTime(),
   );
   const lastDate = sorted[0]?.date || new Date();
+  const now = new Date();
 
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(startOfDay(lastDate), 1);
-    case "monthly":
-      return addMonths(startOfDay(lastDate), 1);
-    case "yearly":
-      return addYears(startOfDay(lastDate), 1);
-    default:
-      return addMonths(startOfDay(lastDate), 1);
-  }
+  // Advance forward from the last observed charge to the first future
+  // occurrence. A stale last charge (paused service, missed payment, long
+  // gap) must not produce a past renewal date that hides the subscription
+  // from upcoming-renewals and reminders.
+  let next = startOfDay(lastDate);
+  do {
+    next = advanceByFrequency(next, frequency);
+  } while (isBefore(next, now));
+
+  return next;
 }
 
 export function calculateSubscriptionCosts(subscriptions: Subscription[]): {
