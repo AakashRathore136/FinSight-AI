@@ -28,6 +28,8 @@ interface GoalCardProps {
   onViewDetails: (goal: Goal) => void;
   onStatusChange: (goalId: string, status: Goal['status']) => void;
   onDelete: (goalId: string) => void;
+  /** Base currency for displayed figures. Defaults to the app-wide default. */
+  baseCurrency?: string;
 }
 
 export function GoalCard({
@@ -36,6 +38,7 @@ export function GoalCard({
   onViewDetails,
   onStatusChange,
   onDelete,
+  baseCurrency,
 }: GoalCardProps) {
   const [amountInput, setAmountInput] = useState('');
   const [adding, setAdding] = useState(false);
@@ -114,7 +117,7 @@ export function GoalCard({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">
-              {formatCurrency(goal.currentAmount)} of {formatCurrency(goal.targetAmount)}
+              {formatCurrency(goal.currentAmount, baseCurrency)} of {formatCurrency(goal.targetAmount, baseCurrency)}
             </span>
             <span className="text-white font-semibold tabular-nums">{progress}%</span>
           </div>
@@ -150,7 +153,7 @@ export function GoalCard({
               <span>Monthly Target</span>
             </div>
             <p className="text-sm font-semibold text-white">
-              {formatCurrency(monthlyContribution)}
+              {formatCurrency(monthlyContribution, baseCurrency)}
             </p>
             <p className="text-[10px] text-slate-500 mt-0.5">
               per month to reach goal
