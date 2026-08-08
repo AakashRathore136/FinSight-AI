@@ -123,10 +123,4 @@ export function clearSharedDocId() {
   window.history.replaceState({}, "", url.toString());
 }
 
-export function safeJsonParse(value: string, fallback: any = null) {
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    return fallback;
-  }
-}
+
