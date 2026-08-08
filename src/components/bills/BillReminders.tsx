@@ -118,7 +118,7 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const overdueBills = useMemo(() => getOverdueBills(bills, today), [bills, today]);
   const upcomingBills = useMemo(() => getUpcomingBills(bills, today), [bills, today]);
-  const activeBills = useMemo(() => bills.filter((b) => !b.isPaid), [bills]);
+  const activeBills = useMemo(() => bills.filter((b) => !b.isPaid && !b.deleted), [bills]);
   const monthlyObligations = useMemo(() => calculateMonthlyObligations(bills), [bills]);
 
   const scheduleData = useMemo(() => {
