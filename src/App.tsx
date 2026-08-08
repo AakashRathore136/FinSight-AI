@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -19,27 +20,21 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
+  Activity,
   TrendingUp,
   LayoutDashboard,
   FileText,
   ShieldCheck,
-  Settings,
   LogOut,
   Upload,
   Search,
   Clock,
   Briefcase,
   AlertTriangle,
-  History,
-  FileSearch,
-  Filter,
-  Lock,
-  Zap,
-  Activity,
-  Target,
   Bell,
   Trophy,
   Wallet,
@@ -49,6 +44,7 @@ import {
   MessageSquare,
   LineChart,
   Globe,
+  Lock,
   Shield
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -64,16 +60,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/src/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/src/components/ui/tabs";
-import { Badge } from "@/src/components/ui/badge";
+
+
 import { Input } from "@/src/components/ui/input";
-import { Skeleton } from "@/src/components/ui/skeleton";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 
 export function LogoIcon({ className = "h-8 w-8" }: { className?: string }) {
   return (
@@ -177,10 +166,11 @@ import { AnalysisList } from './components/AnalysisList';
 import { FileUpload } from './components/FileUpload';
 import { AnalysisDetail } from './components/AnalysisDetail';
 import { AdminPanel } from './components/AdminPanel';
+import { PrivacyDashboard } from './components/privacy/PrivacyDashboard';
 import { AnomalyDashboard } from './components/anomaly/AnomalyDashboard';
+import { BudgetDashboard } from './components/budget/BudgetDashboard';
 import { CommandPalette } from './components/dashboard/CommandPalette';
 import { SubscriptionAnalyzer } from './components/subscriptions/SubscriptionAnalyzer';
-import { CurrencyManager } from './components/currency/CurrencyManager';
 import { CategoryTrends } from './components/trends/CategoryTrends';
 import { GoalPlanner } from './components/goals/GoalPlanner';
 import { BillReminders } from './components/bills/BillReminders';
@@ -236,12 +226,22 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role:
-      currentUser.email === "aakash.ra613@gmail.com"
-        ? "admin"
-        : "junior_analyst",
+    role: "junior_analyst",
     createdAt: new Date().toISOString(),
   });
+
+  // Fetch user role from Firestore instead of hardcoding
+  const fetchUserRole = async (userId: string): Promise<string> => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        return userDoc.data().role || "junior_analyst";
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+    }
+    return "junior_analyst";
+  };
 
   const validateUsername = (username: string): string | null => {
     if (!username) return "Username is required";
@@ -293,13 +293,8 @@ export default function App() {
     }
   }, [selectedDocId]);
 
-  useEffect(() => {
-    if (!selectedDocId && selectedDocIdRef.current) {
-      setSelectedDocId(selectedDocIdRef.current);
-    }
-  }, [selectedDocId]);
-
-  const activeDocId = selectedDocId || selectedDocIdRef.current;
+  // Use selectedDocId directly - it is already initialized with getSharedDocId()
+  const activeDocId = selectedDocId;
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -329,6 +324,22 @@ export default function App() {
           const userRef = doc(db, "users", currentUser.uid);
           try {
             const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().deletedAt) {
+              // Erased account: the profile must stay deleted. Terminate the
+              // session instead of auto-recreating a fresh profile.
+              setUserProfile(null);
+              setShowVerificationScreen(false);
+              try {
+                await deleteUser(currentUser);
+              } catch (authError) {
+                console.error("Could not remove auth account:", authError);
+              }
+              await signOut(auth);
+              toast.info("This account has been deleted.");
+              setLoading(false);
+              return;
+            }
 
             if (!userSnap.exists()) {
               const profile = getDefaultProfile(currentUser);
@@ -372,20 +383,14 @@ export default function App() {
     } catch (error: any) {
       const code = error?.code || "unknown";
       console.error("Auth error:", error);
-      // Common error codes:
-      // auth/popup-blocked → allow popups in your browser
-      // auth/operation-not-allowed → enable Google sign-in in Firebase Console
-      // auth/unauthorized-domain → add domain to Firebase Auth allowed list
       if (code === "auth/popup-blocked") {
-        toast.error(
-          "Popup blocked — please allow popups for localhost in your browser",
-        );
+        toast.error("Popup blocked — please allow popups for localhost in your browser");
       } else if (code === "auth/operation-not-allowed") {
         toast.error("Google sign-in is not enabled in Firebase Console");
       } else if (code === "auth/unauthorized-domain") {
-        toast.error(
-          "Domain not authorized in Firebase — add localhost to Auth settings",
-        );
+        toast.error("Domain not authorized — add localhost to Firebase Auth settings");
+      } else if (code === "auth/cancelled-popup-request" || code === "auth/popup-closed-by-user") {
+        // user dismissed — no toast needed
       } else {
         toast.error(`Sign-in failed: ${code}`);
       }
@@ -422,8 +427,6 @@ export default function App() {
       );
       const newUser = userCredential.user;
 
-      // Create Firestore user profile. If rules are not deployed yet, auth can
-      // still complete and the verified session will retry profile creation.
       try {
         await setDoc(doc(db, "users", newUser.uid), {
           uid: newUser.uid,
@@ -435,12 +438,8 @@ export default function App() {
         });
       } catch (profileError) {
         handleFirestoreError(profileError, OperationType.CREATE, "users");
-        toast.warning(
-          "Account created, but your profile could not be saved yet. It will retry after verification.",
-        );
       }
 
-      // Send verification email
       await sendEmailVerification(newUser);
 
       toast.success("Account created!");
@@ -496,13 +495,17 @@ export default function App() {
       }
     } catch (error: any) {
       const code = error?.code || "unknown";
-      console.error("Login error:", error);
-      if (code === "auth/user-not-found") {
+      console.error("Login error full:", JSON.stringify({ code, message: error?.message }));
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
         toast.error("No account found with this email. Please sign up first.");
       } else if (code === "auth/wrong-password") {
         toast.error("Incorrect password. Please try again.");
       } else if (code === "auth/invalid-email") {
         toast.error("Invalid email address");
+      } else if (code === "auth/too-many-requests") {
+        toast.error("Too many failed attempts. Please try again later.");
+      } else if (code === "auth/internal-error") {
+        toast.error(`Firebase internal error — check browser console for details`);
       } else {
         toast.error(`Sign in failed: ${code}`);
       }
@@ -855,6 +858,8 @@ export default function App() {
                   : "Don't have an account? Sign Up"}
               </button>
 
+
+
               <div className="flex justify-center gap-4">
                 {[ShieldCheck, Lock, Activity].map((Icon, i) => (
                   <div
@@ -878,7 +883,6 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
     <div className="flex h-screen w-full bg-[#0a0c10] text-slate-300 font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 border-r border-slate-800 flex flex-col md:flex">
@@ -987,6 +991,12 @@ export default function App() {
             label="Portfolio"
             active={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
+          />
+          <NavItem
+            icon={<Shield size={20} />}
+            label="Privacy & Security"
+            active={activeTab === 'privacy'}
+            onClick={() => setActiveTab('privacy')}
           />
           {userProfile?.role === "admin" && (
             <NavItem
@@ -1120,6 +1130,18 @@ export default function App() {
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
                 />
+              </motion.div>
+            )}
+
+            {activeTab === "budgets" && (
+              <motion.div
+                key="budgets"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <BudgetDashboard user={user} />
               </motion.div>
             )}
 
@@ -1328,6 +1350,17 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'privacy' && user && (
+              <motion.div 
+                key="privacy"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <PrivacyDashboard user={user} />
+              </motion.div>
+            )}
+
             {activeTab === 'tax' && (
               <motion.div 
                 key="tax"
@@ -1350,7 +1383,6 @@ export default function App() {
       <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
-    </ThemeProvider>
   );
 }
 

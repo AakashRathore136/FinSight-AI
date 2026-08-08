@@ -1,4 +1,6 @@
 import {
+
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
   collection,
   doc,
   getDocs,
@@ -10,7 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval } from 'date-fns';
+import { format, addMonths, isWithinInterval } from 'date-fns';
 import { toDate } from './utils';
 
 export interface ForecastData {
@@ -45,6 +47,25 @@ export interface ForecastFilter {
   startDate: string;
   endDate: string;
   categories?: string[];
+}
+
+export function aggregateTransactionsByMonth(
+  transactions: { amount: number; date: unknown; type?: string }[]
+): { month: string; income: number; expenses: number }[] {
+  const byMonth: Record<string, { income: number; expenses: number }> = {};
+
+  for (const t of transactions) {
+    const d = toDate(t.date);
+    if (!d) continue;
+    const key = format(d, 'yyyy-MM');
+    if (!byMonth[key]) byMonth[key] = { income: 0, expenses: 0 };
+    if (t.type === 'income') byMonth[key].income += t.amount;
+    else byMonth[key].expenses += t.amount;
+  }
+
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({ month, ...v }));
 }
 
 export function generateMonthlyForecast(

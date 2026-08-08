@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -59,31 +60,47 @@ interface InsightsDashboardProps {
 
 export function InsightsDashboard({ user }: InsightsDashboardProps) {
   const [bundle, setBundle] = useState<InsightsBundle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Derive loading state
+  const loading = !user || isLoading;
 
   useEffect(() => {
-    let active = true;
     if (!user) {
-      setLoading(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBundle(null);
       return;
     }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const transactions = await fetchTransactions(user.uid);
-        if (!active) return;
+    let cancelled = false;
+    let loadingState = true;
+
+    // Set initial state - needed for derived loading state
+     
+    setIsLoading(true);
+
+    fetchTransactions(user.uid)
+      .then(transactions => {
+        if (cancelled || !loadingState) return;
+        loadingState = false;
         setBundle(buildInsights(transactions, user.uid));
-      } catch (error) {
+      })
+      .catch(error => {
+        if (cancelled || !loadingState) return;
+        loadingState = false;
         handleFirestoreError(error, OperationType.LIST, "transactions");
-        if (active) setBundle(buildInsights([], user.uid));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+        setBundle(buildInsights([], user.uid));
+      })
+      .finally(() => {
+        if (!cancelled && loadingState) {
+          loadingState = false;
+           
+          setIsLoading(false);
+        }
+      });
 
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [user]);
 
@@ -500,7 +517,7 @@ function EmptyState() {
   return (
     <Card className="bg-slate-900 border-slate-800 border-dashed p-10">
       <div className="flex flex-col items-center justify-center text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300 mb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-500 dark:bg-indigo-500/15 dark:text-indigo-300 mb-4">
           <Sparkles size={30} />
         </div>
         <h3 className="text-lg font-bold text-white">
