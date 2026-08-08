@@ -55,7 +55,11 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
+      // A user can only create their own profile with the default
+      // non-privileged role. Privileged roles (senior_pm, cro, compliance,
+      // admin) must be granted server-side (Admin SDK) and can never be
+      // self-assigned at account creation.
+      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role == 'junior_analyst';
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
