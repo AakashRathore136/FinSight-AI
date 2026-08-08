@@ -33,6 +33,29 @@ function getFirestoreDatabaseId(): string {
   );
 }
 
+// Strip path separators and traversal segments from client-supplied filenames
+// before they become part of a Storage object path. Without this, a raw
+// filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
+// path that the download guard will refuse to sign, making the file
+// permanently un-downloadable.
+function sanitizeStorageFilename(filename: string): string {
+  let name =
+    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
+    "document.pdf";
+  name = name
+    .replace(/\.\./g, "_")
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .trim();
+  if (!name || name === "." || name === "..") name = "document.pdf";
+  if (name.length > 120) {
+    const extMatch = name.match(/\.[a-zA-Z0-9]{1,10}$/);
+    const ext = extMatch ? extMatch[0] : "";
+    name = name.slice(0, 120 - ext.length) + ext;
+  }
+  return name;
+}
+
 type AnalysisResponse = {
   summary: string;
   key_metrics: Record<string, unknown>;
@@ -425,21 +448,58 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     await ensureAdminInitialized();
 
     const authHeader = String(req.headers.authorization || "");
-    let uid = "";
-
-    if (authHeader.startsWith("Bearer ")) {
-      const idToken = authHeader.slice(7);
-      if (admin.apps.length) {
-        try {
-          const decoded = await admin.auth().verifyIdToken(idToken);
-          uid = decoded.uid;
-        } catch (authErr: any) {
-          console.warn("[analyze] verifyIdToken failed:", authErr?.message);
-        }
-      }
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Missing or invalid Authorization token",
+          recommendation:
+            "You are not authorized. Please sign in and try again.",
+        },
+      });
+      return;
     }
 
-    const ownerId = uid || "anonymous_user";
+    if (!admin.apps.length) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Authentication could not be verified",
+          recommendation:
+            "Server configuration error. Please try again later.",
+        },
+      });
+      return;
+    }
+
+    const idToken = authHeader.slice(7);
+    let ownerId = "";
+    try {
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      if (decoded.email_verified !== true) {
+        res.status(403).json({
+          error: {
+            stage: "AUTH_VERIFICATION",
+            reason: "Email address is not verified",
+            recommendation:
+              "Verify your email address to access this feature, then sign in again.",
+          },
+        });
+        return;
+      }
+      ownerId = decoded.uid;
+    } catch (authErr: any) {
+      console.warn("[analyze] verifyIdToken failed:", authErr?.message);
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: `Invalid ID token: ${authErr?.message || String(authErr)}`,
+          recommendation:
+            "Your session token has expired or is invalid. Please sign out and sign in again.",
+        },
+      });
+      return;
+    }
 
     const contentType = String(req.headers["content-type"] || "");
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
@@ -540,7 +600,8 @@ full_report MUST be at least 300 words.`;
         : "low";
     const riskLevel = normalizeRiskLevel(rawRisk);
     const now = new Date();
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${filename}`;
+    const safeFilename = sanitizeStorageFilename(filename);
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
     const fileUrl = `https://finsight.local/storage/${encodeURIComponent(storagePath)}`;
 
     const docData: any = {
