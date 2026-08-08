@@ -122,3 +122,6 @@ export function clearSharedDocId() {
   url.searchParams.delete("docId");
   window.history.replaceState({}, "", url.toString());
 }
+
+
+
