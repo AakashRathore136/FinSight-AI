@@ -20,17 +20,14 @@ import { db, auth, handleFirestoreError, OperationType } from "./firebase";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
-  dataCollection: boolean;
-  shareAnalytics: boolean;
-  personalizedAds: boolean;
-  thirdPartySharing: boolean;
-  retentionPeriod: "6months" | "1year" | "2years" | "indefinite";
-  exportFormat: "json" | "csv";
-  lastUpdated: string;
+  userId?: string;
   dataRetentionEnabled: boolean;
   analyticsEnabled: boolean;
   sharingEnabled: boolean;
-  mfaEnabled: boolean;
+  exportRequestedAt: string;
+  deletionRequestedAt: string;
+  updatedAt: string;
+  lastUpdated?: string;
 }
 
 export interface ActivityLogEntry {
@@ -42,17 +39,12 @@ export interface ActivityLogEntry {
 }
 
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
-  dataCollection: true,
-  shareAnalytics: true,
-  personalizedAds: false,
-  thirdPartySharing: false,
-  retentionPeriod: "1year",
-  exportFormat: "json",
-  lastUpdated: new Date().toISOString(),
   dataRetentionEnabled: false,
   analyticsEnabled: false,
   sharingEnabled: false,
-  mfaEnabled: false,
+  exportRequestedAt: "",
+  deletionRequestedAt: "",
+  updatedAt: new Date().toISOString(),
 };
 
 export async function getPrivacySettings(
