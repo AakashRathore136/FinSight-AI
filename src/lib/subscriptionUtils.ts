@@ -270,6 +270,17 @@ function advanceByFrequency(
       return addYears(date, 1);
     case "monthly":
     default:
+      // Keep month-end dates at month-end. date-fns addMonths clamps Jan 31
+      // -> Feb 28, and advancing from that clamped date yields Mar 28,
+      // Apr 28, ... a permanent drift. A date on the last day of its month
+      // advances to the last day of the target month instead (Jan 31 ->
+      // Feb 28 -> Mar 31).
+      if (
+        date.getDate() ===
+        new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+      ) {
+        return new Date(date.getFullYear(), date.getMonth() + 2, 0);
+      }
       return addMonths(date, 1);
   }
 }

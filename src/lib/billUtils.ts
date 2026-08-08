@@ -60,7 +60,17 @@ export function isRecurringFrequency(frequency: BillFrequency): boolean {
 
 function advanceByFrequency(date: Date, frequency: BillFrequency): Date {
   if (frequency === 'weekly') return addWeeks(date, 1);
-  if (frequency === 'monthly') return addMonths(date, 1);
+  if (frequency === 'monthly') {
+    // Keep month-end dates at month-end. date-fns addMonths clamps Jan 31 ->
+    // Feb 28, and advancing from that clamped date yields Mar 28, Apr 28,
+    // ... a permanent drift. A date on the last day of its month advances to
+    // the last day of the target month instead (Jan 31 -> Feb 28 -> Mar 31).
+    const lastOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    if (date.getDate() === lastOfMonth) {
+      return new Date(date.getFullYear(), date.getMonth() + 2, 0);
+    }
+    return addMonths(date, 1);
+  }
   if (frequency === 'yearly') return addYears(date, 1);
   return date;
 }
