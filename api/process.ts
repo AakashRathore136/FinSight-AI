@@ -39,6 +39,29 @@ function getFirestoreDatabaseId(): string {
   );
 }
 
+// Strip path separators and traversal segments from client-supplied filenames
+// before they become part of a Storage object path. Without this, a raw
+// filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
+// path that the download guard will refuse to sign, making the file
+// permanently un-downloadable.
+function sanitizeStorageFilename(filename: string): string {
+  let name =
+    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
+    "document.pdf";
+  name = name
+    .replace(/\.\./g, "_")
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .trim();
+  if (!name || name === "." || name === "..") name = "document.pdf";
+  if (name.length > 120) {
+    const extMatch = name.match(/\.[a-zA-Z0-9]{1,10}$/);
+    const ext = extMatch ? extMatch[0] : "";
+    name = name.slice(0, 120 - ext.length) + ext;
+  }
+  return name;
+}
+
 // ---------------------------------------------------------------------------
 // Pure-JS multipart parser — no native deps, works on Vercel
 // ---------------------------------------------------------------------------
@@ -483,7 +506,8 @@ export default async function handler(req: any, res: any) {
       : String(riskRaw || "low").toLowerCase().includes("medium") ? "medium"
       : "low";
 
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${filename}`;
+    const safeFilename = sanitizeStorageFilename(filename);
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
     const fileUrl = `https://storage.finsight.ai/${encodeURIComponent(storagePath)}`;
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
