@@ -71,16 +71,18 @@ interface InsightCardProps {
   /** Optional override icon. */
   icon?: ReactNode;
   className?: string;
+  /** Base currency for the rendered figure. Defaults to the app-wide default. */
+  baseCurrency?: string;
 }
 
-export function InsightCard({ insight, icon, className }: InsightCardProps) {
+export function InsightCard({ insight, icon, className, baseCurrency }: InsightCardProps) {
   const styles = SEVERITY_STYLES[insight.severity] ?? SEVERITY_STYLES.low;
   const typeIcon = icon ?? TYPE_ICON[insight.type] ?? <Sparkles size={18} />;
 
   const amountLabel =
     insight.type === "opportunity"
-      ? `${formatCurrency(insight.amount)}/yr potential`
-      : formatCurrency(insight.amount);
+      ? `${formatCurrency(insight.amount, baseCurrency)}/yr potential`
+      : formatCurrency(insight.amount, baseCurrency);
 
   return (
     <Card
@@ -154,10 +156,12 @@ export function CategoryDeltaRow({
   category,
   current,
   changePct,
+  baseCurrency,
 }: {
   category: string;
   current: number;
   changePct: number | null;
+  baseCurrency?: string;
 }) {
   const up = (changePct ?? 0) >= 0;
   const hasBaseline = changePct !== null;
@@ -168,7 +172,7 @@ export function CategoryDeltaRow({
       </span>
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-white tabular-nums">
-          {formatCurrency(current)}
+          {formatCurrency(current, baseCurrency)}
         </span>
         {hasBaseline ? (
           <span
