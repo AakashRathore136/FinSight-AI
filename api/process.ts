@@ -39,6 +39,29 @@ function getFirestoreDatabaseId(): string {
   );
 }
 
+// Strip path separators and traversal segments from client-supplied filenames
+// before they become part of a Storage object path. Without this, a raw
+// filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
+// path that the download guard will refuse to sign, making the file
+// permanently un-downloadable.
+function sanitizeStorageFilename(filename: string): string {
+  let name =
+    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
+    "document.pdf";
+  name = name
+    .replace(/\.\./g, "_")
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .trim();
+  if (!name || name === "." || name === "..") name = "document.pdf";
+  if (name.length > 120) {
+    const extMatch = name.match(/\.[a-zA-Z0-9]{1,10}$/);
+    const ext = extMatch ? extMatch[0] : "";
+    name = name.slice(0, 120 - ext.length) + ext;
+  }
+  return name;
+}
+
 // ---------------------------------------------------------------------------
 // Pure-JS multipart parser — no native deps, works on Vercel
 // ---------------------------------------------------------------------------
@@ -373,7 +396,10 @@ async function getAdminApp(): Promise<any | null> {
       }
     }
 
-    _adminApp = { admin, getFirestore: () => admin.firestore() };
+    _adminApp = {
+      admin,
+      getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
+    };
     return _adminApp;
   } catch (err: any) {
     console.warn("[process] Firebase Admin init failed:", err?.message);
@@ -395,24 +421,62 @@ export default async function handler(req: any, res: any) {
   if (req.method !== "POST") { res.status(405).json({ error: "Method Not Allowed" }); return; }
 
   const startTime = Date.now();
-  let ownerId = "anonymous";
 
   try {
     // ------------------------------------------------------------------
     // Step 1: Verify Firebase Auth token
     // ------------------------------------------------------------------
     const authHeader = String(req.headers?.authorization ?? "");
-    if (authHeader.startsWith("Bearer ")) {
-      const token = authHeader.slice(7);
-      const appCtx = await getAdminApp();
-      if (appCtx) {
-        try {
-          const decoded = await appCtx.admin.auth().verifyIdToken(token);
-          ownerId = decoded.uid;
-        } catch (authErr: any) {
-          console.warn("[process] token verify failed:", authErr?.message);
-        }
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Missing or invalid Authorization token",
+          recommendation: "You are not authorized. Please sign in and try again.",
+        },
+      });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const appCtx = await getAdminApp();
+    if (!appCtx) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Authentication could not be verified",
+          recommendation: "Server configuration error. Please try again later.",
+        },
+      });
+      return;
+    }
+
+    let ownerId = "";
+    try {
+      const decoded = await appCtx.admin.auth().verifyIdToken(token);
+      if (decoded.email_verified !== true) {
+        res.status(403).json({
+          error: {
+            stage: "AUTH_VERIFICATION",
+            reason: "Email address is not verified",
+            recommendation:
+              "Verify your email address to access this feature, then sign in again.",
+          },
+        });
+        return;
       }
+      ownerId = decoded.uid;
+    } catch (authErr: any) {
+      console.warn("[process] token verify failed:", authErr?.message);
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: `Invalid ID token: ${authErr?.message || String(authErr)}`,
+          recommendation:
+            "Your session token has expired or is invalid. Please sign out and sign in again.",
+        },
+      });
+      return;
     }
 
     // ------------------------------------------------------------------
@@ -480,7 +544,8 @@ export default async function handler(req: any, res: any) {
       : String(riskRaw || "low").toLowerCase().includes("medium") ? "medium"
       : "low";
 
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${filename}`;
+    const safeFilename = sanitizeStorageFilename(filename);
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
 
     const appCtx = await getAdminApp();
 

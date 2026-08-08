@@ -1,4 +1,5 @@
 import { format, differenceInDays, addMonths } from 'date-fns';
+import { getDefaultCurrency } from '@/src/lib/utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 
@@ -105,10 +106,10 @@ export function getProgressPercentage(currentAmount: number, targetAmount: numbe
   return Math.min(100, Math.round((currentAmount / targetAmount) * 100));
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency?: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency || getDefaultCurrency(),
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

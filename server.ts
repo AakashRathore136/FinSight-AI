@@ -40,6 +40,30 @@ const upload = multer({
   },
 });
 
+// Strip path separators and traversal segments from client-supplied filenames
+// before they become part of a Storage object path. The download guard
+// (POST /api/document-download-url) rejects object paths containing `..` or
+// extra path segments, so a raw filename such as "team/Q3.pdf" or
+// "report_.._final.pdf" would otherwise be stored but permanently
+// un-downloadable.
+function sanitizeStorageFilename(filename: string): string {
+  let name =
+    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
+    "document.pdf";
+  name = name
+    .replace(/\.\./g, "_")
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .trim();
+  if (!name || name === "." || name === "..") name = "document.pdf";
+  if (name.length > 120) {
+    const extMatch = name.match(/\.[a-zA-Z0-9]{1,10}$/);
+    const ext = extMatch ? extMatch[0] : "";
+    name = name.slice(0, 120 - ext.length) + ext;
+  }
+  return name;
+}
+
 type AnalysisResponse = {
   summary: string;
   key_metrics: Record<string, any>;
@@ -524,7 +548,7 @@ async function enrichUserContext(req: any, res: any, next: any) {
       return next();
     }
 
-    const db = getFirestore();
+    const db = getFirestore(firestoreDatabaseId);
     const userDoc = await db.collection("users").doc(req.ownerId).get();
     req.userRole = userDoc.data()?.role || "free";
     next();
@@ -727,7 +751,7 @@ async function startServer() {
 
     // Check Firestore connectivity
     try {
-      const db = getFirestore();
+      const db = getFirestore(firestoreDatabaseId);
       await db.listCollections();
       checks.firestore = "ok";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1136,7 +1160,8 @@ CRITICAL RULES:
 
         // SECURITY: For security, store only the storage path, not a permanent download URL
         // Signed URLs will be generated on-demand with short expiration (15 minutes)
-        const storagePath = `analyses/${ownerId}/${now.getTime()}_${file.originalname}`;
+        const safeFilename = sanitizeStorageFilename(file.originalname);
+        const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
 
         // Upload file to Firebase Storage before writing document metadata
         if (admin.apps.length) {
@@ -1238,15 +1263,11 @@ CRITICAL RULES:
             writeErrorMessage.includes("permission-denied") ||
             writeErrorMessage.includes("missing or insufficient permissions");
 
-          if (isPermissionDenied) {
-            documentId = `local-${ownerId}-${now.getTime()}`;
-            console.warn(
-              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
-            );
-          } else {
-            // The PDF was already uploaded to Storage before these writes began.
-            // Delete it so a failed pipeline does not leave a permanent orphaned
-            // object (with uploadedBy metadata) behind.
+          // The PDF was already uploaded to Storage before these writes began.
+          // Delete it on ANY Firestore write failure so a failed pipeline never
+          // leaves a permanent orphaned object (with uploadedBy metadata) that
+          // cannot be downloaded (no owning Firestore record) or swept later.
+          const cleanupUploadedPdf = async () => {
             try {
               const bucket = getStorage().bucket();
               await bucket.file(storagePath).delete();
@@ -1262,6 +1283,16 @@ CRITICAL RULES:
                 );
               }
             }
+          };
+
+          if (isPermissionDenied) {
+            await cleanupUploadedPdf();
+            documentId = `local-${ownerId}-${now.getTime()}`;
+            console.warn(
+              "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
+            );
+          } else {
+            await cleanupUploadedPdf();
             throw new PipelineError(
               "FIRESTORE_WRITE",
               `Firestore database write failed: ${writeError?.message || String(writeError)}`,
