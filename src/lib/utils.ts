@@ -22,6 +22,14 @@ export function isSafeExternalUrl(value: unknown): boolean {
 // Default currency - should be updated based on user preferences
 let defaultCurrency = 'USD';
 
+export function safeJsonParse<T = unknown>(text: string, fallback: T): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export function setDefaultCurrency(currency: string): void {
   defaultCurrency = currency;
 }
