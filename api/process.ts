@@ -421,24 +421,62 @@ export default async function handler(req: any, res: any) {
   if (req.method !== "POST") { res.status(405).json({ error: "Method Not Allowed" }); return; }
 
   const startTime = Date.now();
-  let ownerId = "anonymous";
 
   try {
     // ------------------------------------------------------------------
     // Step 1: Verify Firebase Auth token
     // ------------------------------------------------------------------
     const authHeader = String(req.headers?.authorization ?? "");
-    if (authHeader.startsWith("Bearer ")) {
-      const token = authHeader.slice(7);
-      const appCtx = await getAdminApp();
-      if (appCtx) {
-        try {
-          const decoded = await appCtx.admin.auth().verifyIdToken(token);
-          ownerId = decoded.uid;
-        } catch (authErr: any) {
-          console.warn("[process] token verify failed:", authErr?.message);
-        }
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Missing or invalid Authorization token",
+          recommendation: "You are not authorized. Please sign in and try again.",
+        },
+      });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const appCtx = await getAdminApp();
+    if (!appCtx) {
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: "Authentication could not be verified",
+          recommendation: "Server configuration error. Please try again later.",
+        },
+      });
+      return;
+    }
+
+    let ownerId = "";
+    try {
+      const decoded = await appCtx.admin.auth().verifyIdToken(token);
+      if (decoded.email_verified !== true) {
+        res.status(403).json({
+          error: {
+            stage: "AUTH_VERIFICATION",
+            reason: "Email address is not verified",
+            recommendation:
+              "Verify your email address to access this feature, then sign in again.",
+          },
+        });
+        return;
       }
+      ownerId = decoded.uid;
+    } catch (authErr: any) {
+      console.warn("[process] token verify failed:", authErr?.message);
+      res.status(401).json({
+        error: {
+          stage: "AUTH_VERIFICATION",
+          reason: `Invalid ID token: ${authErr?.message || String(authErr)}`,
+          recommendation:
+            "Your session token has expired or is invalid. Please sign out and sign in again.",
+        },
+      });
+      return;
     }
 
     // ------------------------------------------------------------------
@@ -513,7 +551,6 @@ export default async function handler(req: any, res: any) {
     let documentId = `local-${ownerId}-${now.getTime()}`;
     let persistenceMode = "local";
 
-    const appCtx = await getAdminApp();
     if (appCtx) {
       try {
         const db = appCtx.getFirestore();
