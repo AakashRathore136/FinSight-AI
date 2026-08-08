@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import {
   doc,
   setDoc,
@@ -63,6 +64,7 @@ type GoalCategory = 'Savings' | 'Investment' | 'Debt' | 'Retirement' | 'Emergenc
 const CATEGORIES: GoalCategory[] = ['Savings', 'Investment', 'Debt', 'Retirement', 'Emergency', 'Other'];
 
 export function GoalPlanner({ user }: GoalPlannerProps) {
+  const baseCurrency = useBaseCurrency(user);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -137,7 +139,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
         notifiedGoalIds.current.add(goal.id);
         updatingGoalIds.current.add(goal.id);
         toast.success(`Goal reached: ${goal.name}!`, {
-          description: `You've reached ${formatCurrency(goal.targetAmount)}.`,
+          description: `You've reached ${formatCurrency(goal.targetAmount, baseCurrency)}.`,
           duration: 5000,
         });
         updateGoalStatus(goal.id, 'completed', goal.currentAmount).finally(() => {
@@ -227,7 +229,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
       await updateDoc(doc(db, 'goals', goalId), {
         currentAmount: increment(addedAmount),
       });
-      toast.success(`Added ${formatCurrency(addedAmount)} to ${goal.name}`);
+      toast.success(`Added ${formatCurrency(addedAmount, baseCurrency)} to ${goal.name}`);
     } catch (error) {
       console.error('Error updating goal:', error);
       handleFirestoreError(error, OperationType.UPDATE, `goals/${goalId}`);
@@ -462,6 +464,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                     >
                       <GoalCard
                         goal={goal}
+                        baseCurrency={baseCurrency}
                         onUpdateAmount={updateGoalAmount}
                         onViewDetails={setSelectedGoal}
                         onStatusChange={(id, status) => updateGoalStatus(id, status)}
@@ -495,6 +498,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                     >
                       <GoalCard
                         goal={goal}
+                        baseCurrency={baseCurrency}
                         onUpdateAmount={updateGoalAmount}
                         onViewDetails={setSelectedGoal}
                         onStatusChange={(id, status) => updateGoalStatus(id, status)}
@@ -526,6 +530,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                   >
                     <GoalCard
                       goal={goal}
+                      baseCurrency={baseCurrency}
                       onUpdateAmount={updateGoalAmount}
                       onViewDetails={setSelectedGoal}
                       onStatusChange={(id, status) => updateGoalStatus(id, status)}
@@ -580,16 +585,16 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4 text-center">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Target</p>
-                  <p className="text-white font-semibold text-sm">{formatCurrency(goalDetail.targetAmount)}</p>
+                  <p className="text-white font-semibold text-sm">{formatCurrency(goalDetail.targetAmount, baseCurrency)}</p>
                 </div>
                 <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4 text-center">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Current</p>
-                  <p className="text-white font-semibold text-sm">{formatCurrency(goalDetail.currentAmount)}</p>
+                  <p className="text-white font-semibold text-sm">{formatCurrency(goalDetail.currentAmount, baseCurrency)}</p>
                 </div>
                 <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4 text-center">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Remaining</p>
                   <p className="text-white font-semibold text-sm">
-                    {formatCurrency(goalDetail.targetAmount - goalDetail.currentAmount)}
+                    {formatCurrency(goalDetail.targetAmount - goalDetail.currentAmount, baseCurrency)}
                   </p>
                 </div>
               </div>
@@ -635,7 +640,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                       <YAxis
                         stroke="#475569"
                         tick={{ fill: '#94a3b8', fontSize: 10 }}
-                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                        tickFormatter={(value) => formatCurrency(value, baseCurrency)}
                       />
                       <Tooltip
                         contentStyle={{
@@ -645,7 +650,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                           fontSize: '12px',
                         }}
                         labelStyle={{ color: '#94a3b8' }}
-                        formatter={(value: number) => [formatCurrency(value), 'Projected']}
+                        formatter={(value: number) => [formatCurrency(value, baseCurrency), 'Projected']}
                       />
                       <Area
                         type="monotone"
@@ -674,7 +679,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                         {suggestion.label}
                       </p>
                       <p className="text-white font-semibold text-sm">
-                        {formatCurrency(suggestion.amount)}
+                        {formatCurrency(suggestion.amount, baseCurrency)}
                       </p>
                       <p className="text-[10px] text-slate-500">/month</p>
                     </div>
