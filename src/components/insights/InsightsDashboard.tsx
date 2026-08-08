@@ -73,30 +73,20 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
     }
 
     let cancelled = false;
-    let loadingState = true;
 
-    // Set initial state - needed for derived loading state
-     
     setIsLoading(true);
 
     fetchTransactions(user.uid)
       .then(transactions => {
-        if (cancelled || !loadingState) return;
-        loadingState = false;
+        if (cancelled) return;
         setBundle(buildInsights(transactions, user.uid));
+        setIsLoading(false);
       })
       .catch(error => {
-        if (cancelled || !loadingState) return;
-        loadingState = false;
+        if (cancelled) return;
         handleFirestoreError(error, OperationType.LIST, "transactions");
         setBundle(buildInsights([], user.uid));
-      })
-      .finally(() => {
-        if (!cancelled && loadingState) {
-          loadingState = false;
-           
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       });
 
     return () => {
