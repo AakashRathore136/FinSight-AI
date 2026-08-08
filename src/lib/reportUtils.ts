@@ -239,7 +239,7 @@ export async function generatePDF(
   pdf.text("Summary", margin, y);
   y += 6;
 
-  const currency = reportData.currency || "INR";
+  const currency = reportData.currency || "USD";
 
   pdf.setFontSize(10);
   pdf.setTextColor(51, 65, 85);
@@ -343,7 +343,7 @@ export function buildReportData(
   transactions: ReportTransaction[],
   expenseSummary: ExpenseSummaryItem[],
   incomeSummary: IncomeSummaryItem[],
-  currency: string = "INR",
+  currency: string = "USD",
 ): ReportData {
   const totalIncome = incomeSummary.reduce((sum, item) => sum + item.total, 0);
   const totalExpenses = expenseSummary.reduce(
@@ -384,7 +384,7 @@ export async function saveReportToFirestore(
       },
       totalIncome: reportData.totalIncome,
       totalExpenses: reportData.totalExpenses,
-      currency: reportData.currency || "INR",
+      currency: reportData.currency || "USD",
       createdAt: new Date().toISOString(),
     };
     await setDoc(newDocRef, payload);

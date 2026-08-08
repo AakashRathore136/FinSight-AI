@@ -27,7 +27,7 @@ import {
   differenceInDays,
 } from "date-fns";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { normalizeTransactionType, toDate } from "@/src/lib/utils";
+import { getDefaultCurrency, normalizeTransactionType, toDate } from "@/src/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -121,10 +121,10 @@ export function normalizeAmount(value: any): number {
   return Math.abs(n);
 }
 
-export function formatCurrency(value: number): string {
+export function formatCurrency(value: number, currency?: string): string {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: "USD",
+    currency: currency || getDefaultCurrency(),
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value || 0);
 }
