@@ -48,7 +48,6 @@ import {
   type Transaction,
   type TrendPeriod,
 } from '@/src/lib/trendsUtils';
-import { PeriodSelector } from './PeriodSelector';
 
 interface CategoryTrendsProps {
   user: { uid: string } | null;

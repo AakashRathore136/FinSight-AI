@@ -24,9 +24,10 @@ import {
   subMonths,
   eachMonthOfInterval,
   format,
+  differenceInDays,
 } from "date-fns";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { toDate } from "@/src/lib/utils";
+import { getDefaultCurrency, toDate } from "@/src/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -119,10 +120,10 @@ export function normalizeAmount(value: any): number {
   return Math.abs(n);
 }
 
-export function formatCurrency(value: number): string {
+export function formatCurrency(value: number, currency?: string): string {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: "USD",
+    currency: currency || getDefaultCurrency(),
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value || 0);
 }
@@ -318,7 +319,33 @@ export function identifyOpportunities(
     if (!matchesHint && !recurring) continue;
 
     const monthly = total(list) / Math.max(1, list.length);
-    const annualized = monthly * 12;
+
+    // Detect the real cadence from the intervals between charges before
+    // annualizing. Every recurring merchant used to be treated as monthly,
+    // which inflated weekly savings ~4x and deflated quarterly savings ~3x.
+    const sorted = [...list].sort((a, b) => {
+      const da = toDate(a.date)?.getTime() ?? 0;
+      const db = toDate(b.date)?.getTime() ?? 0;
+      return da - db;
+    });
+    let avgInterval = 0;
+    if (sorted.length >= 2) {
+      let intervalTotal = 0;
+      let intervalCount = 0;
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = toDate(sorted[i - 1].date);
+        const cur = toDate(sorted[i].date);
+        if (!prev || !cur) continue;
+        intervalTotal += differenceInDays(cur, prev);
+        intervalCount += 1;
+      }
+      avgInterval = intervalCount > 0 ? intervalTotal / intervalCount : 0;
+    }
+    // Weekly cadence ≈ 52 charges/year, monthly ≈ 12, quarterly ≈ 4. Charges
+    // bunched closer than a week are capped at the weekly rate rather than
+    // inflating the annual figure.
+    const chargesPerYear = avgInterval >= 1 ? Math.min(52, 365 / avgInterval) : 12;
+    const annualized = monthly * chargesPerYear;
     const display = list[0].merchant || list[0].description || key;
     opportunities.push({
       id: uid(),

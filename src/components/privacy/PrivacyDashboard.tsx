@@ -18,10 +18,12 @@ import {
   deleteUserData,
   getPrivacySettings,
   updatePrivacySettings,
+  DEFAULT_PRIVACY_SETTINGS,
   PrivacySettings,
 } from "@/src/lib/privacyUtils";
 import { toast } from "sonner";
 import { auth } from "@/src/lib/firebase";
+import { safeJsonParse } from "@/src/lib/utils";
 import { deleteUser, signOut } from "firebase/auth";
 
 export function PrivacyDashboard({ user }: { user: any }) {
@@ -44,21 +46,19 @@ export function PrivacyDashboard({ user }: { user: any }) {
     if (!user) return;
      
     setIsLoading(true);
+    const cached = localStorage.getItem(`privacySettings_${user.uid}`);
+    const cachedSettings = cached
+      ? (safeJsonParse(cached, null as Partial<PrivacySettings> | null))
+      : null;
     try {
-      const logs = await fetchActivityLog(user.uid);
-      setActivityLog(logs);
-      const stored = localStorage.getItem(`privacySettings_${user.uid}`);
-      setPrivacySettings(stored ? JSON.parse(stored) : {
-        userId: user.uid,
-        dataRetentionEnabled: true,
-        analyticsEnabled: true,
-        sharingEnabled: false,
-        exportRequestedAt: "",
-        deletionRequestedAt: "",
-        updatedAt: new Date().toISOString(),
-      });
+      // Firestore is the single source of truth. localStorage is only an
+      // offline cache so saved choices survive neither cache clears nor
+      // cross-device switches.
+      const remote = await getPrivacySettings(user.uid);
+      setPrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, ...remote });
     } catch (error) {
       console.error("Failed to load privacy data:", error);
+      setPrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, ...cachedSettings });
     } finally {
        
       setIsLoading(false);

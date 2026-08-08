@@ -203,11 +203,8 @@ export default function App() {
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
-  type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
-
   // Email auth state
   const [isSignup, setIsSignup] = useState(false);
-  const [signupRole, setSignupRole] = useState<ViewRole>("junior_analyst");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -383,20 +380,14 @@ export default function App() {
     } catch (error: any) {
       const code = error?.code || "unknown";
       console.error("Auth error:", error);
-      // Common error codes:
-      // auth/popup-blocked → allow popups in your browser
-      // auth/operation-not-allowed → enable Google sign-in in Firebase Console
-      // auth/unauthorized-domain → add domain to Firebase Auth allowed list
       if (code === "auth/popup-blocked") {
-        toast.error(
-          "Popup blocked — please allow popups for localhost in your browser",
-        );
+        toast.error("Popup blocked — please allow popups for localhost in your browser");
       } else if (code === "auth/operation-not-allowed") {
         toast.error("Google sign-in is not enabled in Firebase Console");
       } else if (code === "auth/unauthorized-domain") {
-        toast.error(
-          "Domain not authorized in Firebase — add localhost to Auth settings",
-        );
+        toast.error("Domain not authorized — add localhost to Firebase Auth settings");
+      } else if (code === "auth/cancelled-popup-request" || code === "auth/popup-closed-by-user") {
+        // user dismissed — no toast needed
       } else {
         toast.error(`Sign-in failed: ${code}`);
       }
@@ -433,25 +424,19 @@ export default function App() {
       );
       const newUser = userCredential.user;
 
-      // Create Firestore user profile. If rules are not deployed yet, auth can
-      // still complete and the verified session will retry profile creation.
       try {
         await setDoc(doc(db, "users", newUser.uid), {
           uid: newUser.uid,
           username: username,
           email: email,
           emailVerified: false,
-          role: signupRole,
+          role: "junior_analyst",
           createdAt: new Date().toISOString(),
         });
       } catch (profileError) {
         handleFirestoreError(profileError, OperationType.CREATE, "users");
-        toast.warning(
-          "Account created, but your profile could not be saved yet. It will retry after verification.",
-        );
       }
 
-      // Send verification email
       await sendEmailVerification(newUser);
 
       toast.success("Account created!");
@@ -507,13 +492,17 @@ export default function App() {
       }
     } catch (error: any) {
       const code = error?.code || "unknown";
-      console.error("Login error:", error);
-      if (code === "auth/user-not-found") {
+      console.error("Login error full:", JSON.stringify({ code, message: error?.message }));
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
         toast.error("No account found with this email. Please sign up first.");
       } else if (code === "auth/wrong-password") {
         toast.error("Incorrect password. Please try again.");
       } else if (code === "auth/invalid-email") {
         toast.error("Invalid email address");
+      } else if (code === "auth/too-many-requests") {
+        toast.error("Too many failed attempts. Please try again later.");
+      } else if (code === "auth/internal-error") {
+        toast.error(`Firebase internal error — check browser console for details`);
       } else {
         toast.error(`Sign in failed: ${code}`);
       }
@@ -807,23 +796,6 @@ export default function App() {
                       disabled={emailAuthLoading}
                       className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 h-12 rounded-2xl"
                     />
-                    <select
-                      value={signupRole}
-                      onChange={(e) =>
-                        setSignupRole(e.target.value as ViewRole)
-                      }
-                      disabled={emailAuthLoading}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-300 h-12 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-                    >
-                      <option value="junior_analyst">
-                        Junior Risk Analyst
-                      </option>
-                      <option value="senior_pm">
-                        Senior Portfolio Manager
-                      </option>
-                      <option value="cro">Chief Risk Officer</option>
-                      <option value="compliance">Compliance Officer</option>
-                    </select>
                   </>
                 )}
                 <Input
@@ -866,6 +838,8 @@ export default function App() {
                   : "Don't have an account? Sign Up"}
               </button>
 
+
+
               <div className="flex justify-center gap-4">
                 {[ShieldCheck, Lock, Activity].map((Icon, i) => (
                   <div
@@ -889,7 +863,6 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
     <div className="flex h-screen w-full bg-[#0a0c10] text-slate-300 font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 border-r border-slate-800 flex flex-col md:flex">
@@ -1390,7 +1363,6 @@ export default function App() {
       <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
-    </ThemeProvider>
   );
 }
 

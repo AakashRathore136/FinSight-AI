@@ -13,7 +13,7 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
+  writeBatch,
   orderBy,
 } from 'firebase/firestore';
 import {
@@ -41,6 +41,7 @@ export interface Bill {
   lastPaidDate?: string | null;
   createdAt: string;
   nextDueDate?: string | null;
+  deleted?: boolean;
 }
 
 export interface BillInput {
@@ -76,6 +77,7 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
     const bills: Bill[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      if (data.deleted === true) return;
       bills.push({
         id: docSnap.id,
         userId: data.userId || '',
@@ -88,6 +90,7 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
         lastPaidDate: data.lastPaidDate || null,
         createdAt: data.createdAt || '',
         nextDueDate: data.nextDueDate || null,
+        deleted: data.deleted === true,
       });
     });
     return bills;
@@ -212,14 +215,14 @@ export function applyBillPayment(
 }
 
 export function isOverdue(bill: Bill, reference: Date = new Date()): boolean {
-  if (bill.isPaid) return false;
+  if (bill.deleted || bill.isPaid) return false;
   const due = toDate(bill.nextDueDate || bill.dueDate);
   if (!due) return false;
   return isBefore(startOfDay(due), startOfDay(reference));
 }
 
 export function isUpcoming(bill: Bill, reference: Date = new Date()): boolean {
-  if (bill.isPaid || isOverdue(bill, reference)) return false;
+  if (bill.deleted || bill.isPaid || isOverdue(bill, reference)) return false;
   const due = toDate(bill.nextDueDate || bill.dueDate);
   if (!due) return false;
   const days = differenceInCalendarDays(startOfDay(due), startOfDay(reference));
@@ -258,7 +261,7 @@ export function getDaysUntilDue(bill: Bill, reference: Date = new Date()): numbe
 
 export function calculateMonthlyObligations(bills: Bill[]): number {
   return bills.reduce((total, bill) => {
-    if (bill.isPaid) return total;
+    if (bill.deleted || bill.isPaid) return total;
     switch (bill.frequency) {
       case 'weekly':
         return total + bill.amount * 52 / 12;
@@ -276,11 +279,10 @@ export async function markBillAsPaid(
   bill: Bill,
   userId: string
 ): Promise<Bill | null> {
+  if (bill.deleted) return null;
   try {
     const paidDate = new Date();
     const payment = applyBillPayment(bill, paidDate);
-
-    await updateDoc(doc(db, 'bills', bill.id), payment);
 
     const transactionData = {
       userId,
@@ -292,7 +294,14 @@ export async function markBillAsPaid(
       billId: bill.id,
       createdAt: serverTimestamp(),
     };
-    await addDoc(collection(db, 'transactions'), transactionData);
+
+    // The bill update and its expense transaction commit atomically: either
+    // both persist or neither does, so a failed write can never advance the
+    // bill without a matching expense record (or double-charge on retry).
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'bills', bill.id), payment);
+    batch.set(doc(collection(db, 'transactions')), transactionData);
+    await batch.commit();
 
     return { ...bill, ...payment };
   } catch (error) {

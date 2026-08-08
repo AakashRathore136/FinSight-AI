@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { apiFetch } from "@/src/lib/api";
 import { safeJsonParse } from "@/src/lib/utils";
+import { saveLocalAnalysis } from "@/src/lib/storageUtils";
 
 export function FileUpload({ user, onComplete, onCancel }: any) {
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +71,57 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
     setTimeout(() => startAnalysis(), 0);
   };
 
+  const extractApiError = (errorBody: any, statusCode: number) => {
+    const errorPayload = errorBody?.error;
+    if (typeof errorPayload === "string") {
+      return errorPayload;
+    }
+
+    if (errorPayload && typeof errorPayload === "object") {
+      const stage = String(errorPayload.stage || "").trim();
+      const reason = String(errorPayload.reason || errorPayload.message || "").trim();
+      const recommendation = String(errorPayload.recommendation || "").trim();
+      const stack = String(errorPayload.stack || "").trim();
+
+      return [
+        stage ? `[${stage}]` : "",
+        reason || `Analysis failed with status ${statusCode}`,
+        recommendation ? `Recommendation: ${recommendation}` : "",
+        stack && process.env.NODE_ENV !== "production" ? `Stack: ${stack}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    if (errorBody && typeof errorBody === "object") {
+      const message = String(errorBody.message || errorBody.reason || "").trim();
+      if (message) return message;
+    }
+
+    return `Analysis failed with status ${statusCode}`;
+  };
+
+  const cacheLocalAnalysis = (payload: any) => {
+    if (typeof window === "undefined") return;
+    if (!payload?.documentId) return;
+
+    const cached = {
+      record: payload.record || null,
+      analysis: payload.analysis || null,
+      persistenceMode: payload.persistenceMode || "local",
+      storedAt: new Date().toISOString(),
+    };
+
+    try {
+      window.sessionStorage.setItem(
+        `fin_local_doc_${payload.documentId}`,
+        JSON.stringify(cached),
+      );
+    } catch (error) {
+      console.warn("Could not cache local analysis result", error);
+    }
+  };
+
   const startAnalysis = async () => {
     if (!file || !user) return;
 
@@ -91,7 +143,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       }
 
       const analysisRes = await apiFetch(
-        "/api/analyze",
+        "/api/process",
         {
           method: "POST",
           body: formData,
@@ -104,9 +156,10 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
 
       if (!analysisRes.ok) {
         let errorText = "";
+        let errorBody: any = null;
         try {
-          const errorBody = await analysisRes.json();
-          errorText = String(errorBody?.error || "");
+          errorBody = await analysisRes.json();
+          errorText = extractApiError(errorBody, analysisRes.status);
         } catch {
           errorText = await analysisRes.text().catch(() => "");
         }
@@ -114,6 +167,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           "AI endpoint returned error",
           analysisRes.status,
           errorText,
+          errorBody,
         );
 
         const statusCode = analysisRes.status;
@@ -137,7 +191,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           statusCode === 503
         ) {
           throw Object.assign(
-            new Error("Server error — please try again in a few minutes"),
+            new Error(errorText || "Server error — please try again in a few minutes"),
             { kind: "server" },
           );
         }
@@ -151,8 +205,49 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
 
       const result = await analysisRes.json();
       const documentId = result?.documentId;
-      if (!documentId)
-        throw new Error("Server did not return documentId");
+      // Ensure record & analysis carry user.uid
+      if (user?.uid) {
+        if (result.record) result.record.ownerId = user.uid;
+        if (result.analysis) result.analysis.ownerId = user.uid;
+      }
+
+      // Save locally in localStorage + sessionStorage
+      saveLocalAnalysis(result);
+
+      // If local persistence mode was used by server, attempt client-side Firestore write as well
+      if (result?.persistenceMode === "local" && user?.uid) {
+        try {
+          const { db } = await import("@/src/lib/firebase");
+          const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+          
+          if (result.record) {
+            const docRef = doc(db, "documents", documentId);
+            await setDoc(docRef, {
+              ...result.record,
+              ownerId: user.uid,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              latestAnalysis: result.analysis ? {
+                ...result.analysis,
+                ownerId: user.uid,
+                processedAt: new Date().toISOString(),
+              } : null,
+            });
+
+            if (result.analysis) {
+              const analysisRef = doc(db, `documents/${documentId}/analyses`, `${documentId}_analysis`);
+              await setDoc(analysisRef, {
+                ...result.analysis,
+                documentId,
+                ownerId: user.uid,
+                processedAt: serverTimestamp(),
+              });
+            }
+          }
+        } catch (clientWriteErr) {
+          console.warn("Client-side Firestore fallback write was skipped/failed:", clientWriteErr);
+        }
+      }
 
       setStatus("done");
       setUploading(false);
@@ -164,11 +259,11 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       const kind: string = err?.kind || "";
       const rawMsg: string = err?.message || "";
       const isNetworkError =
-        rawMsg.includes("timed out") ||
-        rawMsg.includes("timeout") ||
-        rawMsg.includes("Failed to fetch") ||
-        rawMsg.includes("NetworkError") ||
-        rawMsg.includes("network");
+        kind !== "server" &&
+        (rawMsg.includes("timed out") ||
+          rawMsg.includes("timeout") ||
+          rawMsg.includes("Failed to fetch") ||
+          rawMsg.includes("NetworkError"));
 
       const userMsg = isNetworkError
         ? "Network error — check your connection and try again"
@@ -176,9 +271,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
           ? "Authentication failed — please sign in again"
           : kind === "quota"
             ? "Analysis quota exceeded — please wait a moment and try again"
-            : kind === "server"
-              ? "Server error — please try again in a few minutes"
-              : rawMsg || "Analysis failed — please try again";
+            : rawMsg || "Server error — please try again in a few minutes";
 
       setStatus("error");
       setUploading(false);
@@ -354,7 +447,7 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
               </div>
             </div>
             {(() => {
-                const diag = safeJsonParse(errorMessage, {} as Record<string, unknown>);
+                const diag = safeJsonParse(errorMessage, {} as Record<string, any>);
                 if (typeof diag !== 'object' || diag === null) {
                   return <p className="text-slate-300 font-medium">{errorMessage}</p>;
                 }

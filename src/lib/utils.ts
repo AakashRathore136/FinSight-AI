@@ -30,6 +30,7 @@ export function safeJsonParse<T = unknown>(text: string, fallback: T): T {
   }
 }
 
+
 export function setDefaultCurrency(currency: string): void {
   defaultCurrency = currency;
 }
@@ -121,3 +122,5 @@ export function clearSharedDocId() {
   url.searchParams.delete("docId");
   window.history.replaceState({}, "", url.toString());
 }
+
+
