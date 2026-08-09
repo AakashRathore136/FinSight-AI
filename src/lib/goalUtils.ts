@@ -46,11 +46,7 @@ export function calculateDaysRemaining(deadline: string): number {
 export function generateContributionSuggestions(
   targetAmount: number,
   currentAmount: number,
-  deadline: string,
-  options: {
-    conservative?: boolean;
-    aggressive?: boolean;
-  } = {}
+  deadline: string
 ): { label: string; amount: number }[] {
   const remaining = targetAmount - currentAmount;
   if (remaining <= 0) return [{ label: 'Goal reached', amount: 0 }];
@@ -67,11 +63,11 @@ export function generateContributionSuggestions(
     },
     {
       label: 'Conservative',
-      amount: Math.ceil(baseMonthly * (options.conservative ? 0.85 : 1.2)),
+      amount: Math.ceil(baseMonthly * 0.85),
     },
     {
       label: 'Aggressive',
-      amount: Math.max(1, Math.floor(baseMonthly * (options.aggressive ? 1.2 : 0.85))),
+      amount: Math.max(1, Math.floor(baseMonthly * 1.2)),
     },
   ];
 
