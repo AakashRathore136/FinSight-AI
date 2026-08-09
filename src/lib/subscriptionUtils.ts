@@ -262,6 +262,7 @@ export function analyzeSubscriptionPattern(
 function advanceByFrequency(
   date: Date,
   frequency: "monthly" | "yearly" | "weekly",
+  originalDay?: number,
 ): Date {
   switch (frequency) {
     case "weekly":
@@ -269,8 +270,13 @@ function advanceByFrequency(
     case "yearly":
       return addYears(date, 1);
     case "monthly":
-    default:
-      return addMonths(date, 1);
+    default: {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 1);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
   }
 }
 
@@ -288,9 +294,10 @@ export function predictNextRenewalDate(
   // occurrence. A stale last charge (paused service, missed payment, long
   // gap) must not produce a past renewal date that hides the subscription
   // from upcoming-renewals and reminders.
+  const originalDay = lastDate.getDate();
   let next = startOfDay(lastDate);
   do {
-    next = advanceByFrequency(next, frequency);
+    next = advanceByFrequency(next, frequency, originalDay);
   } while (isBefore(next, now));
 
   return next;
