@@ -18,6 +18,7 @@ import {
   updateSubscription,
   deleteSubscription,
 } from "@/src/lib/subscriptionUtils";
+import { formatCurrency } from "@/src/lib/utils";
 
 interface SubscriptionCardProps {
   subscription: Subscription;
@@ -128,7 +129,7 @@ export function SubscriptionCard({
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span className="font-medium">{frequencyLabel}</span>
                 <span className="text-slate-600">|</span>
-                <span>${subscription.amount.toFixed(2)}</span>
+                <span>{formatCurrency(subscription.amount)}</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -181,15 +182,14 @@ export function SubscriptionCard({
                   Annual Cost
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
-                  $
-                  {(
+                  {formatCurrency(
                     subscription.amount *
-                    (subscription.frequency === "monthly"
-                      ? 12
-                      : subscription.frequency === "yearly"
-                        ? 1
-                        : 52)
-                  ).toFixed(2)}
+                      (subscription.frequency === "monthly"
+                        ? 12
+                        : subscription.frequency === "yearly"
+                          ? 1
+                          : 52),
+                  )}
                 </span>
               </div>
               <Progress
