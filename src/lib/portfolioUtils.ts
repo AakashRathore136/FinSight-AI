@@ -214,7 +214,7 @@ export function generatePortfolioSummary(holdings: Holding[], transactions: Tran
 
 export async function addTransaction(userId: string, input: TransactionInput): Promise<Transaction | null> {
   try {
-    const id = doc(collection(db, 'portfolios')).id;
+    const id = doc(collection(db, 'portfolioTransactions')).id;
     const transaction: Omit<Transaction, 'id'> = {
       userId,
       holdingId: input.holdingId,
@@ -298,18 +298,19 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     }
 
     if (input.type === 'buy') {
-      await addDoc(collection(db, 'portfolioTransactions'), {
+      const ref = await addDoc(collection(db, 'portfolioTransactions'), {
         ...transaction,
         createdAt: serverTimestamp(),
       });
-    } else {
-      await setDoc(doc(db, 'portfolioTransactions', id), {
-        ...transaction,
-        createdAt: serverTimestamp(),
-      });
+      return { ...transaction, id: ref.id };
     }
 
-    return { ...transaction, id: id || '' };
+    await setDoc(doc(db, 'portfolioTransactions', id), {
+      ...transaction,
+      createdAt: serverTimestamp(),
+    });
+
+    return { ...transaction, id };
   } catch (error) {
     console.error('Error adding transaction:', error);
     handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
