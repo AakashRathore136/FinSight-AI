@@ -240,7 +240,7 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
 
       let created = 0;
       for (const data of newChallenges) {
-        await createChallenge(user.uid, { ...data, difficulty });
+        await createChallenge(user.uid, data);
         created++;
       }
       if (created > 0) {
