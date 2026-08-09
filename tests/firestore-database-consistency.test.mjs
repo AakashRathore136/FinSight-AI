@@ -4,7 +4,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const serverTs = readFileSync(path.join(repoRoot, "server.ts"), "utf8").replace(
   /\r\n/g,
   "\n",
@@ -29,7 +32,8 @@ test("server.ts has no bare getFirestore() call sites", () => {
 });
 
 test("server.ts routes Firestore calls through firestoreDatabaseId", () => {
-  const namedCalls = serverTs.match(/getFirestore\(firestoreDatabaseId\)/g) || [];
+  const namedCalls =
+    serverTs.match(/getFirestore\(firestoreDatabaseId\)/g) || [];
   assert.ok(
     namedCalls.length >= 4,
     "expected getFirestore(firestoreDatabaseId) in enrichUserContext, " +
@@ -39,7 +43,7 @@ test("server.ts routes Firestore calls through firestoreDatabaseId", () => {
 
 test("serverless handlers persist to the configured Firestore database", () => {
   assert.ok(
-    processApi.includes("admin.firestore(getFirestoreDatabaseId())"),
+    processApi.includes("getFirestore(getFirestoreDatabaseId())"),
     "api/process.ts must resolve Firestore with getFirestoreDatabaseId()",
   );
   assert.ok(
