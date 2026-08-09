@@ -35,6 +35,8 @@ import { Download, Loader2, TrendingUp, Filter, AlertTriangle } from 'lucide-rea
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { subMonths, subWeeks, startOfMonth } from 'date-fns';
+import { toDate } from '@/src/lib/utils';
 import {
   buildPeriodConfig,
   calculateCategoryDistribution,
@@ -123,6 +125,25 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
     [period, customStart, customEnd],
   );
 
+  // Chart windows follow the user's selected period instead of wall-clock
+  // "today". Month/week views extend one period back so the comparison charts
+  // have real data for the previous period instead of an always-empty column.
+  const comparisonStart = useMemo(() => {
+    if (period === 'month') return startOfMonth(subMonths(config.startDate, 1));
+    return config.startDate;
+  }, [period, config.startDate]);
+
+  const weeklyStart = useMemo(() => {
+    if (period === 'week') return subWeeks(config.endDate, 3);
+    return config.startDate;
+  }, [period, config.startDate, config.endDate]);
+
+  const fetchStart = useMemo(() => {
+    if (period === 'month') return comparisonStart;
+    if (period === 'week') return weeklyStart;
+    return config.startDate;
+  }, [period, comparisonStart, weeklyStart, config.startDate]);
+
   useEffect(() => {
     if (!user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -136,7 +157,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
      
     setIsLoading(true);
 
-    fetchTransactionsForPeriod(user.uid, config)
+    fetchTransactionsForPeriod(user.uid, { ...config, startDate: fetchStart })
       .then((txns) => {
         if (!cancelled && loadingState) {
           loadingState = false;
@@ -160,19 +181,51 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
     return () => {
       cancelled = true;
     };
-  }, [user, config]);
+  }, [user, config, fetchStart]);
 
-  const categories = useMemo(() => getUniqueCategories(transactions), [transactions]);
+  // Charts that aggregate within the exact selected period (distribution,
+  // category counts, totals) must exclude the comparison window's extra
+  // fetched data (the previous month/week fetched for comparisons).
+  const periodTransactions = useMemo(
+    () =>
+      transactions.filter((t) => {
+        const d = toDate(t.date);
+        return (
+          !!d &&
+          d.getTime() >= config.startDate.getTime() &&
+          d.getTime() <= config.endDate.getTime()
+        );
+      }),
+    [transactions, config.startDate, config.endDate],
+  );
 
-  const monthlyData = useMemo(() => generateMonthlyComparison(transactions, 2), [transactions]);
-  const weeklyData = useMemo(() => generateWeeklyComparison(transactions, 4), [transactions]);
+  const categories = useMemo(() => getUniqueCategories(periodTransactions), [periodTransactions]);
+
+  const monthlyData = useMemo(
+    () => generateMonthlyComparison(transactions, comparisonStart, config.endDate),
+    [transactions, comparisonStart, config.endDate],
+  );
+  const weeklyData = useMemo(
+    () => generateWeeklyComparison(transactions, weeklyStart, config.endDate),
+    [transactions, weeklyStart, config.endDate],
+  );
   const pieData = useMemo(
-    () => calculateCategoryDistribution(transactions, categoryFilter === 'all' ? undefined : categoryFilter),
-    [transactions, categoryFilter],
+    () =>
+      calculateCategoryDistribution(
+        periodTransactions,
+        categoryFilter === 'all' ? undefined : categoryFilter,
+      ),
+    [periodTransactions, categoryFilter],
   );
   const trendData = useMemo(
-    () => generateTrendLines(transactions, 6, new Date(), categoryFilter === 'all' ? undefined : categoryFilter),
-    [transactions, categoryFilter],
+    () =>
+      generateTrendLines(
+        transactions,
+        comparisonStart,
+        config.endDate,
+        categoryFilter === 'all' ? undefined : categoryFilter,
+      ),
+    [transactions, comparisonStart, config.endDate, categoryFilter],
   );
 
   const totalSpent = useMemo(
@@ -246,7 +299,7 @@ export function CategoryTrends({ user }: CategoryTrendsProps) {
             Expense Category Trends
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            {config.label} · {transactions.length} transactions · ₹{totalSpent.toLocaleString()}
+            {config.label} · {periodTransactions.length} transactions · ₹{totalSpent.toLocaleString()}
           </p>
         </div>
 
