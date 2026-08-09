@@ -210,16 +210,20 @@ export function filterByPeriod(
 
 /**
  * Flag individual transactions whose amount is more than `threshold`x the
- * average spend for their category. Categories need a minimum sample size to
- * avoid flagging noise. Returns anomaly `Insight` objects.
+ * average spend for their category. The baseline for each transaction excludes
+ * the transaction itself (leave-one-out) so a large charge cannot inflate its
+ * own threshold. Categories need a minimum sample size to avoid flagging
+ * noise. Returns anomaly `Insight` objects.
  */
 export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
+  ignoredTransactionIds?: Set<string>,
 ): Insight[] {
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
+    if (ignoredTransactionIds?.has(tx.id)) continue;
     const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
@@ -229,11 +233,14 @@ export function detectAnomalies(
   const anomalies: Insight[] = [];
   for (const [category, list] of byCategory.entries()) {
     if (list.length < 3) continue; // need a meaningful baseline
-    const avg = total(list) / list.length;
-    if (avg <= 0) continue;
 
     for (const tx of list) {
       const amount = normalizeAmount(tx.amount);
+      // Leave-one-out baseline: the candidate transaction is excluded from the
+      // average it is compared against, so a dominant expense is not judged
+      // against a baseline it inflated itself.
+      const avg = (total(list) - amount) / (list.length - 1);
+      if (avg <= 0) continue;
       const ratio = amount / avg;
       if (ratio >= threshold) {
         const severity: Severity =
@@ -603,6 +610,7 @@ export function summaryToInsight(
 export function buildInsights(
   transactions: Transaction[],
   userId?: string,
+  ignoredTransactionIds?: Set<string>,
 ): InsightsBundle {
   const now = new Date();
 
@@ -635,7 +643,7 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(transactions, userId),
+    anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
     trendCategories: categories,
