@@ -31,7 +31,7 @@ export interface PrivacySettings {
   dataRetentionEnabled: boolean;
   analyticsEnabled: boolean;
   sharingEnabled: boolean;
-  mfaEnabled: boolean;
+  mfaEnabled?: boolean;
   exportRequestedAt: string;
   deletionRequestedAt: string;
   updatedAt: string;
