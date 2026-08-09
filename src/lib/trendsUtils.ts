@@ -25,7 +25,6 @@ import {
   startOfMonth,
   endOfMonth,
   subMonths,
-  subWeeks,
   eachWeekOfInterval,
   eachMonthOfInterval,
 } from 'date-fns';
@@ -192,10 +191,12 @@ export function groupByCategoryAndPeriod(
 
 export function generateMonthlyComparison(
   transactions: Transaction[],
-  months: number = 2,
-  end: Date = new Date(),
+  start: Date,
+  end: Date,
 ): { data: CategoryPeriodDatum[]; periods: { key: string; label: string }[] } {
-  const start = startOfMonth(subMonths(end, months - 1));
+  // Bucket into the caller-provided window (the user's selected period)
+  // instead of a wall-clock "last N months from today". This keeps the
+  // comparison aligned with the period the transactions were fetched for.
   const periods = eachMonthOfInterval({ start, end }).map((d) => ({
     key: formatMonthKey(d),
     label: format(d, 'MMM yyyy'),
@@ -223,11 +224,10 @@ export function generateMonthlyComparison(
 
 export function generateWeeklyComparison(
   transactions: Transaction[],
-  weeks: number = 4,
-  end: Date = new Date(),
+  start: Date,
+  end: Date,
 ): { data: CategoryPeriodDatum[]; periods: { key: string; label: string }[] } {
-  const startRange = subWeeks(end, weeks);
-  const periods = eachWeekOfInterval({ start: startRange, end: end }).map((d) => ({
+  const periods = eachWeekOfInterval({ start, end }).map((d) => ({
     key: formatWeekKey(d),
     label: format(d, "'W'II MMM"),
   }));
@@ -275,11 +275,13 @@ export function calculateCategoryDistribution(
 
 export function generateTrendLines(
   transactions: Transaction[],
-  months: number = 6,
-  end: Date = new Date(),
+  start: Date,
+  end: Date,
   filterCategory?: string,
 ): TrendLinePoint[] {
-  const start = startOfMonth(subMonths(end, months - 1));
+  // Bucket into the selected period so quarter/custom selections no longer
+  // drop their earlier months (the old today-anchored window discarded every
+  // transaction outside the trailing months).
   const periods = eachMonthOfInterval({ start, end }).map((d) => ({
     key: formatMonthKey(d),
     label: format(d, 'MMM yyyy'),
