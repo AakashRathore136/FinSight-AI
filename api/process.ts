@@ -32,14 +32,6 @@ function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
-function getFirestoreDatabaseId(): string {
-  return (
-    getEnv("FIREBASE_FIRESTORE_DATABASE_ID") ||
-    getEnv("VITE_FIREBASE_FIRESTORE_DATABASE_ID") ||
-    "(default)"
-  );
-}
-
 // Strip path separators and traversal segments from client-supplied filenames
 // before they become part of a Storage object path. Without this, a raw
 // filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
@@ -506,7 +498,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => getFirestore(getFirestoreDatabaseId()),
+      getFirestore: () => admin.firestore(),
     };
     return _adminApp;
   } catch (err: any) {
@@ -681,7 +673,40 @@ export default async function handler(req: any, res: any) {
 
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
-    const fileUrl = `https://storage.finsight.ai/${encodeURIComponent(storagePath)}`;
+
+    const appCtx = await getAdminApp();
+
+    // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
+    // then derive fileUrl from the real object URL instead of a placeholder domain.
+    let fileUrl = "";
+    if (appCtx) {
+      try {
+        const bucket = appCtx.admin.storage().bucket();
+        const storageFile = bucket.file(storagePath);
+        await storageFile.save(fileBuffer, {
+          metadata: {
+            contentType: "application/pdf",
+            metadata: {
+              uploadedBy: ownerId,
+              uploadedAt: now.toISOString(),
+            },
+          },
+        });
+        const bucketName =
+          bucket.name ||
+          getEnv("VITE_FIREBASE_STORAGE_BUCKET") ||
+          `${getFirebaseProjectId()}.firebasestorage.app`;
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+        console.log(
+          `[process] Storage upload OK: ${storagePath} (${fileBuffer.length} bytes)`,
+        );
+      } catch (storageError: any) {
+        console.warn(
+          "[process] Storage upload failed:",
+          storageError?.message || storageError,
+        );
+      }
+    }
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
     let persistenceMode = "local";
