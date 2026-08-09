@@ -62,7 +62,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner (SARIF report)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: sarif
@@ -79,7 +79,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (table summary)
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: table
@@ -91,14 +91,16 @@ jobs:
       - name: Publish scan results to job summary
         if: always()
         run: |
-          echo "## Container Vulnerability Scan Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Image scanned: \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Fail threshold: **${SEVERITY_THRESHOLD}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat trivy-results.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Container Vulnerability Scan Results"
+            echo ""
+            echo "Image scanned: \`${IMAGE_NAME}:${IMAGE_TAG}\`"
+            echo "Fail threshold: **${SEVERITY_THRESHOLD}**"
+            echo ""
+            echo '```'
+            cat trivy-results.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload scan artifacts
         if: always()
@@ -115,7 +117,7 @@ jobs:
       # is found. It runs after the report steps above so that the
       # summary and SARIF upload always happen, even on failure.
       - name: Enforce severity threshold
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: table
