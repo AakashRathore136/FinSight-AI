@@ -15,29 +15,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+      - name: Setup Node.js project
+        uses: ./.github/actions/setup-node-project
         with:
           node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
+          package-manager: npm
+          install-dependencies: 'true'
+          install-retries: '3'
+          cache: 'true'
 
       - name: TypeScript type check
         run: npx tsc --noEmit
 
       - name: Lint
         run: npm run lint
-        # If no lint script exists yet, this step will fail gracefully
-        # and remind maintainers to add it — see notes in PR
 
       - name: Build
         run: npm run build
         env:
-          # These secrets must be added in GitHub → Settings → Secrets → Actions
-          # For PRs from forks, build runs without real keys (Vite still builds
-          # as long as env vars are defined, even if empty)
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
