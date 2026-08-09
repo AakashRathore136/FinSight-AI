@@ -384,6 +384,22 @@ export function getUpcomingRenewals(
     .sort((a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime());
 }
 
+export function estimateMonthlyIncome(
+  transactions: Transaction[],
+  windowMonths: number = 6,
+): number {
+  const incomeByMonth = new Map<string, number>();
+  transactions.forEach((t) => {
+    if (t.type !== "income") return;
+    const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+    incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+  });
+  const monthCount = incomeByMonth.size;
+  if (monthCount === 0) return 0;
+  const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
+  return total / Math.min(monthCount, windowMonths);
+}
+
 export function calculateSubscriptionBurden(
   monthlyCost: number,
   estimatedMonthlyIncome?: number,
