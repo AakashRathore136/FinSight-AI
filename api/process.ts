@@ -31,14 +31,6 @@ function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
-function getFirestoreDatabaseId(): string {
-  return (
-    getEnv("FIREBASE_FIRESTORE_DATABASE_ID") ||
-    getEnv("VITE_FIREBASE_FIRESTORE_DATABASE_ID") ||
-    "(default)"
-  );
-}
-
 // Strip path separators and traversal segments from client-supplied filenames
 // before they become part of a Storage object path. Without this, a raw
 // filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
@@ -398,7 +390,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
+      getFirestore: () => admin.firestore(),
     };
     return _adminApp;
   } catch (err: any) {
