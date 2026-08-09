@@ -28,6 +28,7 @@ import {
   fetchUserSubscriptions,
   detectAndSaveSubscriptions,
   generateSubscriptionSummary,
+  estimateMonthlyIncome,
   Subscription,
 } from "@/src/lib/subscriptionUtils";
 
@@ -40,6 +41,7 @@ const FREQUENCY_FILTERS = [
 
 export function SubscriptionAnalyzer({ user }: { user: any }) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [estimatedMonthlyIncome, setEstimatedMonthlyIncome] = useState(0);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -48,6 +50,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   useEffect(() => {
     if (user?.uid) {
       loadSubscriptions();
+      loadIncome();
     }
   }, [user?.uid]);
 
@@ -61,6 +64,15 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
       toast.error("Failed to load subscriptions");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadIncome = async () => {
+    try {
+      const transactions = await fetchUserTransactions(user.uid, 183);
+      setEstimatedMonthlyIncome(estimateMonthlyIncome(transactions));
+    } catch (error) {
+      console.error("Error loading income:", error);
     }
   };
 
@@ -92,8 +104,8 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   };
 
   const summary = useMemo(() => {
-    return generateSubscriptionSummary(subscriptions);
-  }, [subscriptions]);
+    return generateSubscriptionSummary(subscriptions, estimatedMonthlyIncome);
+  }, [subscriptions, estimatedMonthlyIncome]);
 
   const filteredSubscriptions = useMemo(() => {
     let result = subscriptions;
