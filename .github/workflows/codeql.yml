@@ -3,10 +3,27 @@ name: CodeQL Security Analysis
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - '.github/workflows/codeql.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - '.github/workflows/codeql.yml'
   schedule:
-    # Runs every Monday at 03:00 UTC
     - cron: '0 3 * * 1'
   workflow_dispatch: {}
 
@@ -28,11 +45,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+      - name: Setup Node.js project
+        uses: ./.github/actions/setup-node-project
         with:
           node-version: '18'
-          cache: 'npm'
+          package-manager: npm
+          install-dependencies: 'false'
+          cache: 'true'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
