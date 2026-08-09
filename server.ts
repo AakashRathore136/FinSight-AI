@@ -857,11 +857,14 @@ async function startServer() {
   // `concurrentAnalyzeLimiter` must run BEFORE `analyzeRateLimiter`: the rate
   // limiter counts every request that reaches it, so a request rejected at the
   // concurrency gate (429 CONCURRENT_LIMIT) must never consume daily quota.
+  // `upload.single` runs before `analyzeRateLimiter` so multer-rejected
+  // uploads (400 bad MIME, 413 LIMIT_FILE_SIZE) don't burn a daily analysis
+  // slot either — only valid files count toward the quota.
   app.post(
     "/api/analyze",
     concurrentAnalyzeLimiter,
-    analyzeRateLimiter,
     upload.single("file"),
+    analyzeRateLimiter,
     async (req: any, res) => {
       try {
 
