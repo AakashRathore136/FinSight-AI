@@ -1,0 +1,124 @@
+name: Container Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'api/**'
+      - '.github/workflows/container-security.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'api/**'
+      - '.github/workflows/container-security.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  IMAGE_NAME: finsight-ai
+  IMAGE_TAG: ci-scan
+  # Trivy will fail the workflow if vulnerabilities at or above this
+  # severity are found. Adjust as the project's security posture matures.
+  SEVERITY_THRESHOLD: CRITICAL
+
+jobs:
+  build-and-scan:
+    name: Build image and scan for vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Image is built locally only. It is never pushed to a registry.
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner (SARIF report)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
+
+      - name: Upload SARIF report to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Run Trivy vulnerability scanner (table summary)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: table
+          output: trivy-results.txt
+          severity: LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
+
+      - name: Publish scan results to job summary
+        if: always()
+        run: |
+          echo "## Container Vulnerability Scan Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image scanned: \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fail threshold: **${SEVERITY_THRESHOLD}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat trivy-results.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: |
+            trivy-results.sarif
+            trivy-results.txt
+          retention-days: 30
+
+      # This step actually enforces the security gate: it fails the
+      # workflow if any vulnerability at or above SEVERITY_THRESHOLD
+      # is found. It runs after the report steps above so that the
+      # summary and SARIF upload always happen, even on failure.
+      - name: Enforce severity threshold
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: table
+          severity: ${{ env.SEVERITY_THRESHOLD }}
+          ignore-unfixed: false
+          exit-code: '1'
