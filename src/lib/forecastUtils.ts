@@ -213,8 +213,10 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
 
 export function calculateTrend(data: { month: string; value: number }[]): 'up' | 'down' | 'stable' {
   if (data.length < 2) return 'stable';
-  const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / Math.min(3, data.length);
-  const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / Math.max(1, data.length - 3);
+  // Need at least 4 data points to split into two meaningful windows
+  if (data.length < 4) return 'stable';
+  const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / 3;
+  const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / (data.length - 3);
   const diff = recent - older;
   if (Math.abs(diff) < older * 0.05) return 'stable';
   return diff > 0 ? 'up' : 'down';

@@ -481,6 +481,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
             </CardContent>
           </Card>
 
+          {confidence > 0 && (
           <Card className="bg-slate-900 border-slate-800 rounded-2xl">
             <CardHeader className="p-5 border-b border-slate-800">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">
@@ -528,6 +529,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>
