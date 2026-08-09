@@ -58,18 +58,18 @@ export function isRecurringFrequency(frequency: BillFrequency): boolean {
   return frequency === 'weekly' || frequency === 'monthly' || frequency === 'yearly';
 }
 
-function advanceByFrequency(date: Date, frequency: BillFrequency): Date {
+function advanceByFrequency(
+  date: Date,
+  frequency: BillFrequency,
+  originalDueDay?: number
+): Date {
   if (frequency === 'weekly') return addWeeks(date, 1);
   if (frequency === 'monthly') {
-    // Keep month-end dates at month-end. date-fns addMonths clamps Jan 31 ->
-    // Feb 28, and advancing from that clamped date yields Mar 28, Apr 28,
-    // ... a permanent drift. A date on the last day of its month advances to
-    // the last day of the target month instead (Jan 31 -> Feb 28 -> Mar 31).
-    const lastOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    if (date.getDate() === lastOfMonth) {
-      return new Date(date.getFullYear(), date.getMonth() + 2, 0);
-    }
-    return addMonths(date, 1);
+    const day = originalDueDay ?? date.getDate();
+    const next = addMonths(date, 1);
+    const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(day, lastDayOfNextMonth));
+    return next;
   }
   if (frequency === 'yearly') return addYears(date, 1);
   return date;
@@ -190,10 +190,11 @@ export function advanceDueDateAfterPayment(
   if (!base) return null;
 
   const reference = startOfDay(paidDate);
+  const originalDay = base.getDate();
   let next = startOfDay(base);
 
   do {
-    next = advanceByFrequency(next, frequency);
+    next = advanceByFrequency(next, frequency, originalDay);
   } while (next.getTime() <= reference.getTime());
 
   return next.toISOString();
@@ -331,11 +332,13 @@ export function generateRecurringSchedule(
   }
 
   const schedule: string[] = [];
-  let next = toDate(bill.nextDueDate || bill.dueDate) || startOfDay(reference);
+  const start = toDate(bill.nextDueDate || bill.dueDate) || startOfDay(reference);
+  const originalDay = start.getDate();
+  let next = startOfDay(start);
   for (let i = 0; i < occurrences; i++) {
     schedule.push(next.toISOString());
     if (!isRecurringFrequency(bill.frequency)) break;
-    next = advanceByFrequency(next, bill.frequency);
+    next = advanceByFrequency(next, bill.frequency, originalDay);
   }
   return schedule;
 }
