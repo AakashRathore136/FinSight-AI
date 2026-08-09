@@ -43,7 +43,9 @@ function sanitizeStorageFilename(filename: string): string {
     "document.pdf";
   name = name
     .replace(/\.\./g, "_")
+    // eslint-disable-next-line no-useless-escape
     .replace(/[\/\\]/g, "_")
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .trim();
   if (!name || name === "." || name === "..") name = "document.pdf";
@@ -102,7 +104,9 @@ function safeJsonParse(text: string): unknown {
 
   try {
     return JSON.parse(extracted);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const e = err as any;
     const repaired = extracted
       .replace(/,\s*([}\]])/g, "$1")
       .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (_m, p1) => {
@@ -132,15 +136,18 @@ function safeJsonParse(text: string): unknown {
       while (openBraces > 0) { repairStr += "}"; openBraces--; }
       try {
         return JSON.parse(repairStr);
-      } catch (err3: any) {
+      } catch (err3: unknown) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const err3e = err3 as any;
         throw new Error(
-          `JSON parsing failed after all repairs: ${err.message} / ${err3.message}`,
+          `JSON parsing failed after all repairs: ${e.message} / ${err3e.message}`,
         );
       }
     }
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateAnalysisPayload(payload: any): AnalysisResponse {
   const required = [
     "summary",
@@ -166,7 +173,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         ? payload.key_metrics
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
-      ? payload.risk_assessment.map((item: any) =>
+      ? payload.risk_assessment.map((item: unknown) =>
           typeof item === "object" && item
             ? {
                 level: sanitizeString(String(item.level || "")),
@@ -309,7 +316,7 @@ async function ensureAdminInitialized(): Promise<boolean> {
   const rawServiceAccount = getEnv("FIREBASE_SERVICE_ACCOUNT");
   if (rawServiceAccount) {
     try {
-      let svc =
+      const svc =
         typeof rawServiceAccount === "string"
           ? JSON.parse(rawServiceAccount)
           : rawServiceAccount;
@@ -596,7 +603,38 @@ full_report MUST be at least 300 words.`;
     const now = new Date();
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
-    const fileUrl = `https://finsight.local/storage/${encodeURIComponent(storagePath)}`;
+
+    // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
+    // then derive fileUrl from the real object URL instead of a placeholder domain.
+    let fileUrl = "";
+    if (admin.apps.length) {
+      try {
+        const bucket = admin.storage().bucket();
+        const storageFile = bucket.file(storagePath);
+        await storageFile.save(fileBuffer, {
+          metadata: {
+            contentType: "application/pdf",
+            metadata: {
+              uploadedBy: ownerId,
+              uploadedAt: now.toISOString(),
+            },
+          },
+        });
+        const bucketName =
+          bucket.name ||
+          getEnv("VITE_FIREBASE_STORAGE_BUCKET") ||
+          `${getFirebaseProjectId()}.firebasestorage.app`;
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+        console.log(
+          `[analyze] Storage upload OK: ${storagePath} (${fileBuffer.length} bytes)`,
+        );
+      } catch (storageError: any) {
+        console.warn(
+          "[analyze] Storage upload failed:",
+          storageError?.message || storageError,
+        );
+      }
+    }
 
     const docData: any = {
       ownerId,

@@ -3,8 +3,30 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - 'eslint.config.*'
+      - '.eslintrc*'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - 'eslint.config.*'
+      - '.eslintrc*'
+      - '.github/workflows/ci.yml'
 
 jobs:
   quality:
@@ -15,14 +37,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+      - name: Setup Node.js project
+        uses: ./.github/actions/setup-node-project
         with:
           node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
+          package-manager: npm
+          install-dependencies: 'true'
+          install-retries: '3'
+          cache: 'true'
 
       - name: TypeScript type check
         run: npx tsc --noEmit

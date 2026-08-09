@@ -29,7 +29,14 @@ service cloud.firestore {
              // Only allow https fileUrl so a stored link can never render as
              // a javascript:/data: URL or a link-injection vector.
              data.fileUrl is string && data.fileUrl.size() <= 2048 && data.fileUrl.startsWith('https://') &&
-             data.status in ['pending', 'processing', 'completed', 'failed'];
+             data.status in ['pending', 'processing', 'completed', 'failed'] &&
+             // If a storagePath is stored on the record, it must live inside
+             // the caller's own namespace. Otherwise a client could create a
+             // document whose storagePath points at another user's object and
+             // abuse the server-side purge/delete endpoints that trust it.
+             (!data.keys().has('storagePath') ||
+              (data.storagePath is string &&
+               data.storagePath.startsWith('analyses/' + request.auth.uid + '/')));
     }
 
     function isValidAnalysis(data) {
@@ -113,28 +120,8 @@ service cloud.firestore {
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
 
-    match /anomalies/{anomalyId} {
-      // SECURITY: Per-user RLS for the anomalies collection
-      // Prevents cross-user access to anomaly detection data
-      allow get: if isOwner(existing().userId);
-      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if isOwner(existing().userId) || isAdmin();
-      allow delete: if isOwner(existing().userId) || isAdmin();
-    }
-
     match /subscriptions/{subId} {
       allow read: if isOwner(existing().userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if isOwner(existing().userId) || isAdmin();
-      allow delete: if isOwner(existing().userId) || isAdmin();
-    }
-
-    match /transactions/{txnId} {
-      // SECURITY: Per-user RLS for the transactions collection
-      // Prevents cross-user access to financial transaction data
-      allow get: if isOwner(existing().userId);
-      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if isOwner(existing().userId) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
