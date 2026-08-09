@@ -17,7 +17,13 @@ import {
   type DocumentReference,
 } from "firebase/firestore";
 import { deleteObject, listAll, ref } from "firebase/storage";
-import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
+import {
+  db,
+  auth,
+  storage,
+  handleFirestoreError,
+  OperationType,
+} from "./firebase";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -25,6 +31,7 @@ export interface PrivacySettings {
   dataRetentionEnabled: boolean;
   analyticsEnabled: boolean;
   sharingEnabled: boolean;
+  mfaEnabled: boolean;
   exportRequestedAt: string;
   deletionRequestedAt: string;
   updatedAt: string;
@@ -43,6 +50,7 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   dataRetentionEnabled: false,
   analyticsEnabled: false,
   sharingEnabled: false,
+  mfaEnabled: false,
   exportRequestedAt: "",
   deletionRequestedAt: "",
   updatedAt: new Date().toISOString(),
@@ -64,7 +72,10 @@ export async function getPrivacySettings(
   } catch (err) {
     // Re-throw so callers can fall back to their offline cache instead of
     // silently presenting defaults that overwrite the user's saved choices.
-    console.error("getPrivacySettings: failed to retrieve privacy settings", err);
+    console.error(
+      "getPrivacySettings: failed to retrieve privacy settings",
+      err,
+    );
     throw err;
   }
 }
@@ -89,7 +100,11 @@ export async function fetchActivityLog(
 ): Promise<ActivityLogEntry[]> {
   try {
     const logRef = collection(db, "activity_log");
-    const q = query(logRef, where("userId", "==", userId), orderBy("timestamp", "desc"));
+    const q = query(
+      logRef,
+      where("userId", "==", userId),
+      orderBy("timestamp", "desc"),
+    );
     const snapshot = await getDocs(q);
     const entries: ActivityLogEntry[] = [];
     snapshot.forEach((docSnap) => {
@@ -141,7 +156,7 @@ export async function exportUserData(
       );
       data[colName] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (error) {
-      console.error('exportUserData: failed to fetch', colName, error);
+      console.error("exportUserData: failed to fetch", colName, error);
       data[colName] = [];
     }
   }
@@ -165,14 +180,17 @@ export async function exportUserData(
           ...a.data(),
         }));
       } catch (error) {
-        console.error('exportUserData: failed to fetch document analyses', error);
+        console.error(
+          "exportUserData: failed to fetch document analyses",
+          error,
+        );
         entry.analyses = [];
       }
       documents.push(entry);
     }
     data.documents = documents;
   } catch (error) {
-    console.error('exportUserData: failed to fetch documents', error);
+    console.error("exportUserData: failed to fetch documents", error);
     data.documents = [];
   }
   // The top-level analyses collection is keyed by ownerId (e.g. failed
@@ -183,13 +201,13 @@ export async function exportUserData(
     );
     data.analyses = analysesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (error) {
-    console.error('exportUserData: failed to fetch analyses', error);
+    console.error("exportUserData: failed to fetch analyses", error);
     data.analyses = [];
   }
   try {
     data.profile = (await getDoc(doc(db, "users", userId))).data();
   } catch (error) {
-    console.error('exportUserData: failed to fetch user profile', error);
+    console.error("exportUserData: failed to fetch user profile", error);
   }
   return data;
 }
@@ -231,9 +249,15 @@ async function collectStoragePaths(
 async function deleteUserStorageFiles(userId: string): Promise<void> {
   const pathsToDelete = new Set<string>();
   try {
-    await collectStoragePaths(ref(storage, `analyses/${userId}`), pathsToDelete);
+    await collectStoragePaths(
+      ref(storage, `analyses/${userId}`),
+      pathsToDelete,
+    );
   } catch (error) {
-    console.error("deleteUserStorageFiles: failed to list storage prefix", error);
+    console.error(
+      "deleteUserStorageFiles: failed to list storage prefix",
+      error,
+    );
   }
   try {
     const docsSnap = await getDocs(
@@ -244,7 +268,10 @@ async function deleteUserStorageFiles(userId: string): Promise<void> {
       if (storagePath) pathsToDelete.add(storagePath);
     }
   } catch (error) {
-    console.error("deleteUserStorageFiles: failed to enumerate documents", error);
+    console.error(
+      "deleteUserStorageFiles: failed to enumerate documents",
+      error,
+    );
   }
   for (const path of pathsToDelete) {
     try {
@@ -296,7 +323,7 @@ export async function deleteUserData(userId: string): Promise<void> {
         )
       ).docs.forEach((d) => docRefs.push(d.ref));
     } catch (error) {
-      console.error('deleteUserData: failed to delete', colName, error);
+      console.error("deleteUserData: failed to delete", colName, error);
     }
   }
   // The top-level analyses collection is keyed by ownerId, so it is handled
@@ -308,7 +335,7 @@ export async function deleteUserData(userId: string): Promise<void> {
       )
     ).docs.forEach((d) => docRefs.push(d.ref));
   } catch (error) {
-    console.error('deleteUserData: failed to delete analyses', error);
+    console.error("deleteUserData: failed to delete analyses", error);
   }
   // documents are keyed by ownerId and keep their analyses as subcollections
   try {
@@ -326,7 +353,7 @@ export async function deleteUserData(userId: string): Promise<void> {
       docRefs.push(d.ref);
     }
   } catch (error) {
-    console.error('deleteUserData: failed to delete documents', error);
+    console.error("deleteUserData: failed to delete documents", error);
   }
   // The users/<uid> doc must survive erasure: it is the deletion tombstone.
   docRefs.push(doc(db, "privacy_settings", userId));
