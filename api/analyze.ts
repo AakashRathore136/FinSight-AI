@@ -20,9 +20,7 @@ function getEnv(key: string, fallback = ""): string {
 }
 
 function getFirebaseProjectId(): string {
-  return (
-    getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID")
-  );
+  return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
 function getFirestoreDatabaseId(): string {
@@ -40,12 +38,18 @@ function getFirestoreDatabaseId(): string {
 // permanently un-downloadable.
 function sanitizeStorageFilename(filename: string): string {
   let name =
-    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
-    "document.pdf";
+    String(filename || "document.pdf")
+      .replace(/\\/g, "/")
+      .split("/")
+      .pop() || "document.pdf";
+  const controlCharsPattern = new RegExp(
+    `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
+    "g",
+  );
   name = name
     .replace(/\.\./g, "_")
-    .replace(/[\/\\]/g, "_")
-    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .replace(/[/\\]/g, "_")
+    .replace(controlCharsPattern, "_")
     .trim();
   if (!name || name === "." || name === "..") name = "document.pdf";
   if (name.length > 120) {
@@ -118,9 +122,18 @@ function safeJsonParse(text: string): unknown {
       let escape = false;
       let repairStr = repaired;
       for (const char of repairStr) {
-        if (escape) { escape = false; continue; }
-        if (char === "\\") { escape = true; continue; }
-        if (char === '"') { inString = !inString; continue; }
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (char === "\\") {
+          escape = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
         if (!inString) {
           if (char === "{") openBraces++;
           else if (char === "}") openBraces--;
@@ -129,8 +142,14 @@ function safeJsonParse(text: string): unknown {
         }
       }
       if (inString) repairStr += '"';
-      while (openBrackets > 0) { repairStr += "]"; openBrackets--; }
-      while (openBraces > 0) { repairStr += "}"; openBraces--; }
+      while (openBrackets > 0) {
+        repairStr += "]";
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repairStr += "}";
+        openBraces--;
+      }
       try {
         return JSON.parse(repairStr);
       } catch (err3: any) {
@@ -205,18 +224,37 @@ function buildFallbackAnalysis(
   const themeSignals = [
     {
       level: "high",
-      keywords: ["debt", "default", "breach", "covenant", "insolvency", "litigation"],
+      keywords: [
+        "debt",
+        "default",
+        "breach",
+        "covenant",
+        "insolvency",
+        "litigation",
+      ],
       description:
         "The document contains language associated with leverage, covenant pressure, or legal exposure.",
     },
     {
       level: "medium",
-      keywords: ["liquidity", "cash flow", "working capital", "runway", "refinancing"],
+      keywords: [
+        "liquidity",
+        "cash flow",
+        "working capital",
+        "runway",
+        "refinancing",
+      ],
       description: "The text references liquidity or cash flow themes.",
     },
     {
       level: "medium",
-      keywords: ["forecast", "guidance", "assumption", "projection", "scenario"],
+      keywords: [
+        "forecast",
+        "guidance",
+        "assumption",
+        "projection",
+        "scenario",
+      ],
       description: "Forecasting language appears in the document.",
     },
     {
@@ -232,10 +270,31 @@ function buildFallbackAnalysis(
     ? matchedThemes.map((t) => ({ level: t.level, description: t.description }))
     : [{ level: "low", description: "No strong risk keywords detected." }];
 
-  const positiveSignals = ["growth", "profit", "margin", "improve", "strong", "stable"];
-  const negativeSignals = ["loss", "decline", "risk", "weak", "pressure", "shortfall", "downgrade"];
-  const pos = positiveSignals.reduce((c, k) => c + (lowerText.includes(k) ? 1 : 0), 0);
-  const neg = negativeSignals.reduce((c, k) => c + (lowerText.includes(k) ? 1 : 0), 0);
+  const positiveSignals = [
+    "growth",
+    "profit",
+    "margin",
+    "improve",
+    "strong",
+    "stable",
+  ];
+  const negativeSignals = [
+    "loss",
+    "decline",
+    "risk",
+    "weak",
+    "pressure",
+    "shortfall",
+    "downgrade",
+  ];
+  const pos = positiveSignals.reduce(
+    (c, k) => c + (lowerText.includes(k) ? 1 : 0),
+    0,
+  );
+  const neg = negativeSignals.reduce(
+    (c, k) => c + (lowerText.includes(k) ? 1 : 0),
+    0,
+  );
   const sentimentScore = Math.max(
     -1,
     Math.min(1, (pos - neg) / Math.max(pos + neg, 4)),
@@ -257,9 +316,7 @@ function buildFallbackAnalysis(
     summary:
       `Automated analysis for ${fileName}. ` +
       `The upload contains about ${wordCount} words across ${paragraphCount || 1} paragraph group(s) and ${characterCount} characters. ` +
-      (reason
-        ? `The AI pipeline noted: (${reason}). `
-        : "") +
+      (reason ? `The AI pipeline noted: (${reason}). ` : "") +
       `This report provides a structured overview of the document findings.`,
     key_metrics: {
       word_count: wordCount,
@@ -346,7 +403,11 @@ type VercelRes = ServerResponse & {
 async function getRawBody(req: VercelReq): Promise<Buffer> {
   if (Buffer.isBuffer(req.body)) return req.body;
   if (typeof req.body === "string") return Buffer.from(req.body, "binary");
-  if (req.body && typeof req.body === "object" && Buffer.isBuffer((req.body as any).raw)) {
+  if (
+    req.body &&
+    typeof req.body === "object" &&
+    Buffer.isBuffer((req.body as any).raw)
+  ) {
     return (req.body as any).raw;
   }
   return await new Promise<Buffer>((resolve, reject) => {
@@ -385,7 +446,11 @@ function parseMultipart(
     if (sepIndex !== -1) {
       const headerBuf = part.slice(0, sepIndex);
       let dataBuf = part.slice(sepIndex + sepLength);
-      if (dataBuf.length >= 2 && dataBuf[dataBuf.length - 2] === 0x0d && dataBuf[dataBuf.length - 1] === 0x0a) {
+      if (
+        dataBuf.length >= 2 &&
+        dataBuf[dataBuf.length - 2] === 0x0d &&
+        dataBuf[dataBuf.length - 1] === 0x0a
+      ) {
         dataBuf = dataBuf.slice(0, dataBuf.length - 2);
       } else if (dataBuf.length >= 1 && dataBuf[dataBuf.length - 1] === 0x0a) {
         dataBuf = dataBuf.slice(0, dataBuf.length - 1);
@@ -403,7 +468,10 @@ function parseMultipart(
 
     for (const line of lines) {
       const lc = line.toLowerCase();
-      if (lc.startsWith("content-disposition:") && (lc.includes("filename=") || lc.includes("name="))) {
+      if (
+        lc.startsWith("content-disposition:") &&
+        (lc.includes("filename=") || lc.includes("name="))
+      ) {
         isFile = true;
         const match = line.match(/filename="?([^";\r\n]+)"?/i);
         if (match) filename = match[1];
@@ -414,14 +482,22 @@ function parseMultipart(
     }
 
     if (isFile && part.data.length > 0) {
-      return { buffer: part.data, filename: filename || "document.pdf", mimetype };
+      return {
+        buffer: part.data,
+        filename: filename || "document.pdf",
+        mimetype,
+      };
     }
   }
 
   if (parts.length > 0) {
     for (const part of parts) {
       if (part.data.length > 100) {
-        return { buffer: part.data, filename: "document.pdf", mimetype: "application/pdf" };
+        return {
+          buffer: part.data,
+          filename: "document.pdf",
+          mimetype: "application/pdf",
+        };
       }
     }
   }
@@ -465,8 +541,7 @@ export default async function handler(req: VercelReq, res: VercelRes) {
         error: {
           stage: "AUTH_VERIFICATION",
           reason: "Authentication could not be verified",
-          recommendation:
-            "Server configuration error. Please try again later.",
+          recommendation: "Server configuration error. Please try again later.",
         },
       });
       return;
@@ -502,8 +577,12 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     }
 
     const contentType = String(req.headers["content-type"] || "");
-    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
-    const boundary = boundaryMatch ? boundaryMatch[1] || boundaryMatch[2] : null;
+    const boundaryMatch = contentType.match(
+      /boundary=(?:"([^"]+)"|([^\s;]+))/i,
+    );
+    const boundary = boundaryMatch
+      ? boundaryMatch[1] || boundaryMatch[2]
+      : null;
 
     const bodyBuffer = await getRawBody(req);
     let fileBuffer: Buffer = Buffer.alloc(0);
@@ -535,8 +614,14 @@ export default async function handler(req: VercelReq, res: VercelRes) {
         await parser.destroy();
       }
     } catch (pdfErr: any) {
-      console.warn("[analyze] pdfParse failed, using text fallback:", pdfErr?.message);
-      extractedText = fileBuffer.toString("utf8").replace(/[^\x20-\x7E\n\r\t]/g, " ").trim();
+      console.warn(
+        "[analyze] pdfParse failed, using text fallback:",
+        pdfErr?.message,
+      );
+      extractedText = fileBuffer
+        .toString("utf8")
+        .replace(/[^\x20-\x7E\n\r\t]/g, " ")
+        .trim();
     }
 
     if (!extractedText || extractedText.length < 20) {
@@ -570,7 +655,11 @@ full_report MUST be at least 300 words.`;
             temperature: 0.2,
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Hugging Face API request timed out (15s)")), 15000),
+            setTimeout(
+              () =>
+                reject(new Error("Hugging Face API request timed out (15s)")),
+              15000,
+            ),
           ),
         ]);
 
@@ -578,7 +667,10 @@ full_report MUST be at least 300 words.`;
         const parsed = safeJsonParse(rawText);
         validPayload = validateAnalysisPayload(parsed);
       } catch (hfErr: any) {
-        console.warn("[analyze] Hugging Face inference skipped/failed:", hfErr?.message);
+        console.warn(
+          "[analyze] Hugging Face inference skipped/failed:",
+          hfErr?.message,
+        );
         fallbackReason = hfErr?.message || "Hugging Face model unavailable";
       }
     } else {
@@ -652,7 +744,10 @@ full_report MUST be at least 300 words.`;
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (writeErr: any) {
-        console.warn("[analyze] Firestore server write skipped:", writeErr?.message);
+        console.warn(
+          "[analyze] Firestore server write skipped:",
+          writeErr?.message,
+        );
         documentId = `local-${ownerId}-${now.getTime()}`;
       }
     }
@@ -677,8 +772,7 @@ full_report MUST be at least 300 words.`;
         stage,
         reason,
         recommendation,
-        stack:
-          process.env.NODE_ENV !== "production" ? error?.stack : undefined,
+        stack: process.env.NODE_ENV !== "production" ? error?.stack : undefined,
       },
     });
   }
