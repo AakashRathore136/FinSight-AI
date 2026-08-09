@@ -27,7 +27,6 @@ import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   type Challenge,
   type SpendingPattern,
-  type Difficulty,
   type BadgeTier,
   BADGE_META,
   DIFFICULTY_REWARDS,
@@ -35,7 +34,6 @@ import {
   generateWeeklyChallenges,
   generateMonthlyChallenges,
   generateRecommendations,
-  calculateDifficulty,
   awardBadge,
   getProgressPercentage,
   createChallenge,
@@ -226,7 +224,6 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
     }
     setGenerating(true);
     try {
-      const difficulty: Difficulty = calculateDifficulty(spending);
       const weekly = generateWeeklyChallenges(spending);
       const monthly = generateMonthlyChallenges(spending);
       const all = [...weekly, ...monthly];
@@ -244,7 +241,7 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
         created++;
       }
       if (created > 0) {
-        toast.success(`Generated ${created} personalized challenges (${difficulty} difficulty)`);
+        toast.success(`Generated ${created} personalized challenges`);
       } else {
         toast.info('You already have these challenges');
       }
