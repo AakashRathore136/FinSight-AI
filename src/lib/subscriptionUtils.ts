@@ -262,6 +262,7 @@ export function analyzeSubscriptionPattern(
 function advanceByFrequency(
   date: Date,
   frequency: "monthly" | "yearly" | "weekly",
+  originalDay?: number,
 ): Date {
   switch (frequency) {
     case "weekly":
@@ -269,8 +270,13 @@ function advanceByFrequency(
     case "yearly":
       return addYears(date, 1);
     case "monthly":
-    default:
-      return addMonths(date, 1);
+    default: {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 1);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
   }
 }
 
@@ -288,9 +294,10 @@ export function predictNextRenewalDate(
   // occurrence. A stale last charge (paused service, missed payment, long
   // gap) must not produce a past renewal date that hides the subscription
   // from upcoming-renewals and reminders.
+  const originalDay = lastDate.getDate();
   let next = startOfDay(lastDate);
   do {
-    next = advanceByFrequency(next, frequency);
+    next = advanceByFrequency(next, frequency, originalDay);
   } while (isBefore(next, now));
 
   return next;
@@ -382,6 +389,22 @@ export function getUpcomingRenewals(
         !isAfter(sub.nextRenewalDate, cutoff),
     )
     .sort((a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime());
+}
+
+export function estimateMonthlyIncome(
+  transactions: Transaction[],
+  windowMonths: number = 6,
+): number {
+  const incomeByMonth = new Map<string, number>();
+  transactions.forEach((t) => {
+    if (t.type !== "income") return;
+    const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+    incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+  });
+  const monthCount = incomeByMonth.size;
+  if (monthCount === 0) return 0;
+  const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
+  return total / Math.min(monthCount, windowMonths);
 }
 
 export function calculateSubscriptionBurden(

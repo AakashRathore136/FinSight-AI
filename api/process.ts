@@ -32,73 +32,6 @@ function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
-function getFirestoreDatabaseId(): string {
-  return (
-    getEnv("FIREBASE_FIRESTORE_DATABASE_ID") ||
-    getEnv("VITE_FIREBASE_FIRESTORE_DATABASE_ID") ||
-    "(default)"
-  );
-}
-
-
-function getAllowedOrigins(): Set<string> {
-  const isProduction = process.env.NODE_ENV === "production";
-  const origins = [
-    process.env.APP_URL,
-    process.env.FRONTEND_URL,
-    ...(isProduction
-      ? []
-      : [
-          "http://localhost:3000",
-          "http://127.0.0.1:3000",
-          "http://localhost:3001",
-          "http://127.0.0.1:3001",
-          "http://localhost:5173",
-          "http://127.0.0.1:5173",
-        ]),
-  ].filter((origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL");
-  return new Set(origins);
-}
-
-function applyCors(req: any, res: any): void {
-  const origin = String(req.headers?.origin ?? "");
-  const allowed = getAllowedOrigins();
-  if (origin && allowed.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-  } else if (!origin && !process.env.NODE_ENV?.includes("production")) {
-    // Non-browser / same-origin tooling in development
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  }
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
-  const mimeOk = !mimetype || mimetype === "application/pdf" || mimetype === "application/x-pdf";
-  const magicOk =
-    buffer.length >= 4 &&
-    buffer[0] === 0x25 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x44 &&
-    buffer[3] === 0x46; // %PDF
-  return Boolean(magicOk && mimeOk);
-}
-
-const processRateBuckets = new Map<string, number[]>();
-
-function acceptProcessRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
-  const now = Date.now();
-  const recent = (processRateBuckets.get(ip) || []).filter((ts) => now - ts < windowMs);
-  if (recent.length >= limit) {
-    processRateBuckets.set(ip, recent);
-    return false;
-  }
-  recent.push(now);
-  processRateBuckets.set(ip, recent);
-  return true;
-}
-
 // Strip path separators and traversal segments from client-supplied filenames
 // before they become part of a Storage object path. Without this, a raw
 // filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
@@ -561,7 +494,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => getFirestore(getFirestoreDatabaseId()),
+      getFirestore: () => admin.firestore(),
     };
     return _adminApp;
   } catch (err: any) {
@@ -760,7 +693,40 @@ export default async function handler(req: any, res: any) {
 
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
-    const fileUrl = `https://storage.finsight.ai/${encodeURIComponent(storagePath)}`;
+
+    const appCtx = await getAdminApp();
+
+    // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
+    // then derive fileUrl from the real object URL instead of a placeholder domain.
+    let fileUrl = "";
+    if (appCtx) {
+      try {
+        const bucket = appCtx.admin.storage().bucket();
+        const storageFile = bucket.file(storagePath);
+        await storageFile.save(fileBuffer, {
+          metadata: {
+            contentType: "application/pdf",
+            metadata: {
+              uploadedBy: ownerId,
+              uploadedAt: now.toISOString(),
+            },
+          },
+        });
+        const bucketName =
+          bucket.name ||
+          getEnv("VITE_FIREBASE_STORAGE_BUCKET") ||
+          `${getFirebaseProjectId()}.firebasestorage.app`;
+        fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+        console.log(
+          `[process] Storage upload OK: ${storagePath} (${fileBuffer.length} bytes)`,
+        );
+      } catch (storageError: any) {
+        console.warn(
+          "[process] Storage upload failed:",
+          storageError?.message || storageError,
+        );
+      }
+    }
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
     let persistenceMode = "local";
