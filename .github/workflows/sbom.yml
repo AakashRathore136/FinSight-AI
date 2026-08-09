@@ -2,20 +2,32 @@ name: SBOM & Build Provenance
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - '**/package.json'
-      - '**/package-lock.json'
-      - '**/yarn.lock'
-      - '**/pnpm-lock.yaml'
-      - '**/requirements*.txt'
-      - '**/pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
       - '**/poetry.lock'
       - '.github/workflows/sbom.yml'
+
+  pull_request:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - '**/poetry.lock'
+      - '.github/workflows/sbom.yml'
+
   release:
-    types: [ published ]
+    types: [published]
+
   workflow_dispatch: {}
 
 permissions:
@@ -80,12 +92,15 @@ jobs:
 
       - name: Summarize run
         run: |
-          echo "### SBOM & Provenance Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- SBOM formats: CycloneDX JSON, SPDX JSON" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "### SBOM & Provenance Summary"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- SBOM formats: CycloneDX JSON, SPDX JSON"
+
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)"
+            else
+              echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
