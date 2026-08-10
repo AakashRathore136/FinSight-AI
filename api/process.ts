@@ -539,14 +539,14 @@ export default async function handler(req: any, res: any) {
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
 
-    const appCtx = await getAdminApp();
+    const processAppCtx = await getAdminApp();
 
     // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
     // then derive fileUrl from the real object URL instead of a placeholder domain.
     let fileUrl = "";
-    if (appCtx) {
+    if (processAppCtx) {
       try {
-        const bucket = appCtx.admin.storage().bucket();
+        const bucket = processAppCtx.admin.storage().bucket();
         const storageFile = bucket.file(storagePath);
         await storageFile.save(fileBuffer, {
           metadata: {

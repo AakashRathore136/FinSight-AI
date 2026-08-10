@@ -173,7 +173,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         ? payload.key_metrics
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
-      ? payload.risk_assessment.map((item: unknown) =>
+      ? payload.risk_assessment.map((item: any) =>
           typeof item === "object" && item
             ? {
                 level: sanitizeString(String(item.level || "")),
