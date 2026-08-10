@@ -875,7 +875,7 @@ export default function App() {
           </span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
+        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
           <NavItem
             icon={<LayoutDashboard size={20} />}
             label="Dashboard"
