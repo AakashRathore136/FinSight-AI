@@ -97,7 +97,6 @@ jobs:
             echo "- Commit: \`${{ github.sha }}\`"
             echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo "- SBOM formats: CycloneDX JSON, SPDX JSON"
-
             if [ "${{ github.event_name }}" != "pull_request" ]; then
               echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)"
             else
