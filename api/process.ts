@@ -383,7 +383,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => admin.firestore(),
+      getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
     };
     return _adminApp;
   } catch (err: any) {
