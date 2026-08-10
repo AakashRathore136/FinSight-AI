@@ -126,6 +126,7 @@ export function calculateMonthlyForecast(
   transactions: Transaction[],
   windowMonths: number = 6,
 ): ForecastData[] {
+  if (windowMonths <= 0) return [];
   const months = getNextMonths(windowMonths);
   const incomeByMonth: Record<string, number> = {};
   const expenseByMonth: Record<string, Record<string, number>> = {};
@@ -224,7 +225,7 @@ export function identifyRecurringTransactions(
       const variance =
         data.amounts.reduce((sum, amt) => sum + Math.abs(amt - avg), 0) /
         data.amounts.length;
-      if (variance / avg < 0.3) {
+      if (avg === 0 || variance / avg < 0.3) {
         recurring.push({
           category,
           type: data.type,
