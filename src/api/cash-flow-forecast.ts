@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import logger from "../lib/logger.js";
 
 // Mocking the result of an ARIMA or Prophet time-series model
