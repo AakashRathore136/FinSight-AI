@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { deleteObject, listAll, ref } from "firebase/storage";
 import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
+import { DEFAULT_ROLE } from "./roleConstants";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -267,13 +268,13 @@ export async function deleteUserData(userId: string): Promise<void> {
     const existing = await getDoc(userRef);
     const profile = existing.exists() ? existing.data() : {};
     await deleteDoc(userRef);
+    // Tombstone recreate must use DEFAULT_ROLE — Firestore create rules
+    // reject any privileged role, and deleted accounts must not retain
+    // elevated clearance. (See #505 / firestore.rules users create)
     await setDoc(userRef, {
       uid: userId,
       email: profile.email ?? auth.currentUser?.email ?? "",
-      role:
-        profile.role && profile.role !== "admin"
-          ? profile.role
-          : "junior_analyst",
+      role: DEFAULT_ROLE,
       username: profile.username ?? "",
       deletedAt: new Date().toISOString(),
       deleted: true,
