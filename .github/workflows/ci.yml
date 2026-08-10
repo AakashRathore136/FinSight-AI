@@ -60,10 +60,6 @@ jobs:
 
           echo "npm ci failed after 3 attempts."
           exit 1
-          package-manager: npm
-          install-dependencies: 'true'
-          install-retries: '3'
-          cache: 'true'
 
       - name: TypeScript type check
         run: npx tsc --noEmit
