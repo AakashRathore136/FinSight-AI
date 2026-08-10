@@ -1,0 +1,76 @@
+name: Setup Node.js Project
+description: Reusable setup for Node.js projects with dependency caching and installation
+
+inputs:
+  node-version:
+    description: Node.js version to use
+    required: false
+    default: '18'
+
+  package-manager:
+    description: Package manager to use
+    required: false
+    default: npm
+
+  install-dependencies:
+    description: Whether to install project dependencies
+    required: false
+    default: 'true'
+
+  install-retries:
+    description: Number of dependency installation attempts
+    required: false
+    default: '1'
+
+  cache:
+    description: Whether to enable dependency caching
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.cache == 'true' && inputs.package-manager || '' }}
+
+    - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      run: |
+        for attempt in $(seq 1 ${{ inputs.install-retries }}); do
+          echo "${{ inputs.package-manager }} install attempt ${attempt}/${{ inputs.install-retries }}"
+
+          case "${{ inputs.package-manager }}" in
+            npm)
+              if npm ci; then
+                exit 0
+              fi
+              ;;
+            yarn)
+              if yarn install --frozen-lockfile; then
+                exit 0
+              fi
+              ;;
+            pnpm)
+              corepack enable
+              if pnpm install --frozen-lockfile; then
+                exit 0
+              fi
+              ;;
+            *)
+              echo "Unsupported package manager: ${{ inputs.package-manager }}"
+              exit 1
+              ;;
+          esac
+
+          if [ "$attempt" -lt "${{ inputs.install-retries }}" ]; then
+            echo "Installation failed; retrying in 10 seconds..."
+            sleep 10
+          fi
+        done
+
+        echo "Dependency installation failed after ${{ inputs.install-retries }} attempts."
+        exit 1
