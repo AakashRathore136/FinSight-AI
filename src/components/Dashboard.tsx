@@ -18,6 +18,7 @@ import {
 } from "./dashboard/RoleLayouts";
 
 import { getLocalDocuments } from "@/src/lib/storageUtils";
+import { DEFAULT_ROLE, VALID_ROLES } from "@/src/lib/roleConstants";
 
 type DashboardDocument = {
   id: string;
@@ -35,10 +36,13 @@ function normalizeConfidence(value: any) {
 }
 
 export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
-  let viewRole = userProfile?.role || "junior_analyst";
-  const validRoles = ["junior_analyst", "senior_pm", "cro", "compliance"];
-  if (!validRoles.includes(viewRole)) {
-    viewRole = "junior_analyst";
+  let viewRole = userProfile?.role || DEFAULT_ROLE;
+  // admin is not a dashboard layout role — fall back to the default view
+  const layoutRoles = (VALID_ROLES as readonly string[]).filter(
+    (r) => r !== "admin",
+  );
+  if (!layoutRoles.includes(viewRole)) {
+    viewRole = DEFAULT_ROLE;
   }
 
   const [stats, setStats] = useState({
