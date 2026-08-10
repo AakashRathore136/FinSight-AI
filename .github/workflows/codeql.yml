@@ -26,16 +26,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 
 
       - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -44,7 +44,7 @@ jobs:
       # env vars to succeed (Vite build-time checks), replace this step
       # with the manual install+build block commented below.
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 
 
       # --- Manual build alternative (use if Autobuild fails) ---
       # - name: Install dependencies
@@ -61,6 +61,6 @@ jobs:
       #     VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 
         with:
           category: '/language:${{ matrix.language }}'
