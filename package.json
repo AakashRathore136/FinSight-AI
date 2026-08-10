@@ -28,7 +28,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "express": "^4.22.2",
-    "express-rate-limit": "^7.2.0",
+    "express-rate-limit": "^8.6.2",
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",
     "html2canvas": "^1.4.1",
