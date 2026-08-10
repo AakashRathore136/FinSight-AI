@@ -17,6 +17,7 @@ import {
   orderBy,
   deleteDoc,
   runTransaction,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -643,6 +644,7 @@ export async function fetchPortfolioHistory(
       where('userId', '==', userId),
       where('portfolioId', '==', portfolioId),
       orderBy('snapshotDate', 'desc'),
+      limit(limitCount),
     );
     const snapshot = await getDocs(q);
     const snapshots: PortfolioSnapshot[] = [];
@@ -660,7 +662,7 @@ export async function fetchPortfolioHistory(
         createdAt: data.createdAt || '',
       });
     });
-    return snapshots.slice(0, limitCount);
+    return snapshots;
   } catch (error) {
     console.error('Error fetching portfolio history:', error);
     handleFirestoreError(error, OperationType.LIST, 'portfolioSnapshots');
