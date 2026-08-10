@@ -4,7 +4,7 @@
  * Uses the Notification API with Firebase Cloud Messaging support
  */
 
-import { formatCurrency } from "@/src/lib/utils";
+import { formatCurrency } from './utils';
 
 export interface NotificationPermission {
   granted: boolean;

@@ -23,6 +23,7 @@ import {
   deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { DEFAULT_ROLE } from "@/src/lib/roleConstants";
 import {
   Activity,
   TrendingUp,
@@ -223,7 +224,7 @@ export default function App() {
     username: currentUser.displayName || "",
     email: currentUser.email,
     emailVerified: currentUser.emailVerified,
-    role: "junior_analyst",
+    role: DEFAULT_ROLE,
     createdAt: new Date().toISOString(),
   });
 
@@ -232,12 +233,12 @@ export default function App() {
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
-        return userDoc.data().role || "junior_analyst";
+        return userDoc.data().role || DEFAULT_ROLE;
       }
     } catch (error) {
       console.error("Error fetching user role:", error);
     }
-    return "junior_analyst";
+    return DEFAULT_ROLE;
   };
 
   const validateUsername = (username: string): string | null => {
@@ -425,12 +426,17 @@ export default function App() {
       const newUser = userCredential.user;
 
       try {
+        // SECURITY: Always assign DEFAULT_ROLE ("junior_analyst") at signup.
+        // Privileged roles (senior_pm, cro, compliance, admin) must only be
+        // granted server-side via the Firebase Admin SDK. Firestore rules on
+        // /users/{userId} enforce incoming().role == 'junior_analyst' as a
+        // second layer. Never use user-controlled input for role. (Fixes #505)
         await setDoc(doc(db, "users", newUser.uid), {
           uid: newUser.uid,
           username: username,
           email: email,
           emailVerified: false,
-          role: "junior_analyst",
+          role: DEFAULT_ROLE,
           createdAt: new Date().toISOString(),
         });
       } catch (profileError) {
