@@ -125,9 +125,12 @@ const USER_COLLECTIONS = [
   "chat_messages",
   "budget_categories",
   "budget_rollovers",
+  "budgets",
   "portfolioHoldings",
   "portfolioTransactions",
   "portfolios",
+  "portfolioSnapshots",
+  "forecasts",
   "tax_estimates",
   "bills",
 ];
