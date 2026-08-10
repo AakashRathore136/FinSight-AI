@@ -19,7 +19,6 @@ import {
   updateSubscription,
   deleteSubscription,
 } from "@/src/lib/subscriptionUtils";
-import { formatCurrency } from "@/src/lib/utils";
 
 interface SubscriptionCardProps {
   subscription: Subscription;
