@@ -78,7 +78,7 @@ export function SubscriptionCard({
             icon: "/vite.svg",
           });
         },
-        differenceInDays(reminderDate, new Date()) * 24 * 60 * 60 * 1000,
+        Math.max(0, differenceInDays(reminderDate, new Date())) * 24 * 60 * 60 * 1000,
       );
       toast.success("Reminder set for renewal");
     } else if (
