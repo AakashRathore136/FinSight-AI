@@ -188,6 +188,7 @@ import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
 import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
+import { clearAllLocalData } from '@/src/lib/storageUtils';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -520,8 +521,10 @@ export default function App() {
   const handleLogout = () => {
     signOut(auth);
     // Drop every cached API response (may include session-bound data or
-    // signed URLs) before the next user signs in on this device.
+    // signed URLs) and the local analysis mirror before the next user signs
+    // in on this device.
     void purgeApiCaches();
+    clearAllLocalData();
     setActiveTab("dashboard");
     setShowVerificationScreen(false);
     setUsername("");

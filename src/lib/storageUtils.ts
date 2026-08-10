@@ -147,3 +147,39 @@ export function deleteLocalDocument(documentId: string): void {
     console.error("Error removing local document", err);
   }
 }
+
+/**
+ * Clears every locally-cached analysis payload — the localStorage documents
+ * map and all sessionStorage fin_local_doc_* entries. Called from account
+ * erasure (and logout) so deleted or abandoned financial data never survives
+ * on the device.
+ */
+export function clearAllLocalData(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(LOCAL_DOCS_KEY);
+  } catch {
+    // ignore
+  }
+
+  try {
+    const session = window.sessionStorage;
+    const doomed: string[] = [];
+    for (let i = 0; i < session.length; i++) {
+      const key = session.key(i);
+      if (key && key.startsWith("fin_local_doc_")) doomed.push(key);
+    }
+    doomed.forEach((key) => session.removeItem(key));
+  } catch {
+    // ignore
+  }
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent("fin_local_docs_changed", { detail: { cleared: true } }),
+    );
+  } catch {
+    // ignore
+  }
+}
