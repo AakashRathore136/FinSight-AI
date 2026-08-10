@@ -35,7 +35,7 @@
     "isomorphic-dompurify": "^2.11.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
+    "motion": "^13.0.0",
     "multer": "^2.1.1",
     "pdf-parse": "^1.1.1",
     "react": "^19.0.1",
