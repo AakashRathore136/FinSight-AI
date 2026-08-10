@@ -231,21 +231,14 @@ function buildFallbackAnalysis(
   };
 }
 
-// ---------------------------------------------------------------------------
-// HuggingFace AI Analysis (identical to server.ts, dynamic import)
-// ---------------------------------------------------------------------------
+import { repairTruncatedJSON } from "../src/lib/jsonRepairEngine.js";
 
 function safeJsonParse(text: string): unknown {
-  const c = (text || "").trim();
-  if (!c) throw new Error("Empty response");
-  let extracted = c;
-  const fo = c.indexOf("{"), lo = c.lastIndexOf("}");
-  const fa = c.indexOf("["), la = c.lastIndexOf("]");
-  if (fo !== -1 && lo !== -1 && (fa === -1 || fo < fa)) extracted = c.slice(fo, lo + 1);
-  else if (fa !== -1 && la !== -1) extracted = c.slice(fa, la + 1);
-  try { return JSON.parse(extracted); } catch {}
-  const rep = extracted.replace(/,\s*([}\]])/g, "$1");
-  try { return JSON.parse(rep); } catch (e: any) { throw new Error(`JSON parse failed: ${e.message}`); }
+  const result = repairTruncatedJSON(text);
+  if (!result.data) {
+    throw new Error(result.error || "JSON parse failed");
+  }
+  return result.data;
 }
 
 function validatePayload(p: any) {
