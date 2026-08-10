@@ -2,20 +2,32 @@ name: SBOM & Build Provenance
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - '**/package.json'
-      - '**/package-lock.json'
-      - '**/yarn.lock'
-      - '**/pnpm-lock.yaml'
-      - '**/requirements*.txt'
-      - '**/pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
       - '**/poetry.lock'
       - '.github/workflows/sbom.yml'
+
+  pull_request:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - '**/poetry.lock'
+      - '.github/workflows/sbom.yml'
+
   release:
-    types: [ published ]
+    types: [published]
+
   workflow_dispatch: {}
 
 concurrency:
