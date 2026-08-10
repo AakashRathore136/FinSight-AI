@@ -3,9 +3,34 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - 'eslint.config.*'
+      - '.eslintrc*'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - 'eslint.config.*'
+      - '.eslintrc*'
+      - '.github/workflows/ci.yml'
 
+permissions:
+  contents: read
+  
 jobs:
   quality:
     name: Type Check · Lint · Build
@@ -15,29 +40,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+      - name: Setup Node.js project
+        uses: ./.github/actions/setup-node-project
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for attempt in 1 2 3; do
+            echo "npm ci attempt ${attempt}/3"
+
+            if npm ci; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "npm ci failed; retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+
+          echo "npm ci failed after 3 attempts."
+          exit 1
+          package-manager: npm
+          install-dependencies: 'true'
+          install-retries: '3'
+          cache: 'true'
 
       - name: TypeScript type check
         run: npx tsc --noEmit
 
       - name: Lint
         run: npm run lint
-        # If no lint script exists yet, this step will fail gracefully
-        # and remind maintainers to add it — see notes in PR
 
       - name: Build
         run: npm run build
         env:
-          # These secrets must be added in GitHub → Settings → Secrets → Actions
-          # For PRs from forks, build runs without real keys (Vite still builds
-          # as long as env vars are defined, even if empty)
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}

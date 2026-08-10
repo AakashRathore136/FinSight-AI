@@ -1,0 +1,29 @@
+name: Validate GitHub Actions Workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'docs/WORKFLOW_VALIDATION.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate workflow files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install actionlint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
+            | bash -s -- 1.7.12
+          sudo mv actionlint /usr/local/bin/actionlint
+
+      - name: Validate GitHub Actions workflows
+        run: actionlint
