@@ -8,6 +8,11 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 dotenv.config({ quiet: true });
 
+interface RiskAssessmentItem {
+  level?: unknown;
+  description?: unknown;
+}
+
 export const config = {
   api: {
     bodyParser: false,
@@ -177,8 +182,8 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
       ? payload.risk_assessment.map((item: unknown) =>
           typeof item === "object" && item
             ? {
-                level: sanitizeString(String(item.level || "")),
-                description: sanitizeString(String(item.description || "")),
+                level: sanitizeString(String((item as RiskAssessmentItem).level || "")),
+                description: sanitizeString(String((item as RiskAssessmentItem).description || "")),
               }
             : sanitizeString(String(item || "")),
         )
