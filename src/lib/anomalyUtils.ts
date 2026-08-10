@@ -240,7 +240,7 @@ export function detectAnomalies(
     if (avg && avg.count > 1) {
       const mean = avg.total / avg.count;
       const amount = Math.abs(t.amount);
-      if (amount > mean * 3 && amount > 1000) {
+      if (mean > 0 && amount > mean * 3 && amount > 1000) {
         anomalies.push({
           userId: t.userId,
           transactionId: t.id,
