@@ -48,11 +48,24 @@ const upload = multer({
 // "report_.._final.pdf" would otherwise be stored but permanently
 // un-downloadable.
 function sanitizeStorageFilename(filename: string): string {
-  let name =
-    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
-    "document.pdf";
+  let name = String(filename || "document.pdf");
+
+  // Iterative multi-pass URL decoding to collapse double/triple-encoded sequences
+  for (let i = 0; i < 5; i++) {
+    try {
+      const decoded = decodeURIComponent(name);
+      if (decoded === name) break;
+      name = decoded;
+    } catch {
+      break;
+    }
+  }
+
+  name = name.replace(/\\/g, "/").split("/").pop() || "document.pdf";
   name = name
     .replace(/\.\./g, "_")
+    .replace(/%2e/gi, "_")
+    .replace(/%2f/gi, "_")
     .replace(/[\/\\]/g, "_")
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .trim();

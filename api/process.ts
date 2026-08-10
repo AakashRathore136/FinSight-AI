@@ -393,6 +393,7 @@ async function getAdminApp(): Promise<any | null> {
       admin,
       getFirestore: () => (admin as any).firestore(getFirestoreDatabaseId()),
     };
+    // admin.firestore(getFirestoreDatabaseId())
     return _adminApp;
   } catch (err: any) {
     console.warn("[process] Firebase Admin init failed:", err?.message);
