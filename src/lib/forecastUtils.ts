@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { format, addMonths, isWithinInterval } from 'date-fns';
-import { toDate } from './utils';
+import { toDate, csvEscape } from './utils';
 
 export interface ForecastData {
   id: string;
@@ -204,7 +204,9 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
     '============================',
     '',
     'Month,Income,Expenses,Net Balance,Confidence',
-    ...data.map((d) => `${d.month},${d.income},${d.expenses},${d.net},${d.confidence}%`),
+    ...data.map((d) =>
+      [csvEscape(d.month), d.income, d.expenses, d.net, `${d.confidence}%`].join(','),
+    ),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
   ];

@@ -13,7 +13,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
-import { toDate, formatCurrency } from "@/src/lib/utils";
+import { toDate, formatCurrency, csvEscape } from "@/src/lib/utils";
 import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -163,13 +163,13 @@ export function generateCSV(reportData: ReportData): string {
   lines.push("Expenses");
   reportData.expenseSummary.forEach((item) => {
     lines.push(
-      `${item.category},Expense,${item.total.toFixed(2)},${item.count}`,
+      `${csvEscape(item.category)},Expense,${item.total.toFixed(2)},${item.count}`,
     );
   });
   lines.push("");
   lines.push("Income");
   reportData.incomeSummary.forEach((item) => {
-    lines.push(`${item.source},Income,${item.total.toFixed(2)},${item.count}`);
+    lines.push(`${csvEscape(item.source)},Income,${item.total.toFixed(2)},${item.count}`);
   });
   lines.push("");
   lines.push(
@@ -179,9 +179,8 @@ export function generateCSV(reportData: ReportData): string {
   lines.push("Transaction Details");
   lines.push("Date,Description,Category,Amount,Type");
   reportData.transactions.forEach((t) => {
-    const desc = (t.description || "").replace(/,/g, ";");
     lines.push(
-      `${formatDateShort(t.date)},${desc},${t.category},${t.amount.toFixed(2)},${t.type || "expense"}`,
+      `${formatDateShort(t.date)},${csvEscape(t.description)},${csvEscape(t.category)},${t.amount.toFixed(2)},${csvEscape(t.type || "expense")}`,
     );
   });
   return lines.join("\n");
