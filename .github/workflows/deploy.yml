@@ -1,0 +1,36 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: CI Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: |
+          # your existing test/build/lint commands
+          npm ci
+          npm test
+
+  deploy:
+    name: Deploy
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        id: deploy
+        env:
+          PROD_SECRET: ${{ secrets.PROD_SECRET }}
+        run: |
+          # your deployment commands
+          echo "url=https://your-prod-url.com" >> "$GITHUB_OUTPUT"
