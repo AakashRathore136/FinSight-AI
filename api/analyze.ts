@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import pdfParse from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from "firebase-admin";
