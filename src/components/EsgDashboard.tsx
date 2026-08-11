@@ -30,18 +30,10 @@ export default function EsgDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/portfolio/esg-scores')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setEsgData(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/esg-scores route.
+    setEsgData(null);
+    setLoading(false);
   }, []);
 
   if (loading || !esgData) {

@@ -133,6 +133,7 @@ const USER_COLLECTIONS = [
   "forecasts",
   "tax_estimates",
   "bills",
+  "activity_log",
 ];
 
 export async function exportUserData(

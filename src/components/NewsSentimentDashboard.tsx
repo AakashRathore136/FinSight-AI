@@ -15,18 +15,10 @@ export default function NewsSentimentDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/portfolio/sentiment')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setSentiments(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to load sentiment data", err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/sentiment route; render empty.
+    setSentiments([]);
+    setLoading(false);
   }, []);
 
   const getSentimentColor = (classification: string) => {
