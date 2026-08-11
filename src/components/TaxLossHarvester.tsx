@@ -15,18 +15,10 @@ export default function TaxLossHarvester() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/portfolio/tax-loss-harvesting')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setOpportunities(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to load tax loss opportunities", err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/tax-loss-harvesting route.
+    setOpportunities([]);
+    setLoading(false);
   }, []);
 
   const totalSavings = opportunities.reduce((acc, curr) => acc + curr.potentialSavings, 0);
