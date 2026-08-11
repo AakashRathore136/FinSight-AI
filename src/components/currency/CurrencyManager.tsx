@@ -436,7 +436,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
 
               <div className="space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                  By Currency
+                  By Currency (converted to {settings?.baseCurrency || 'USD'})
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {Object.entries(aggregated.byCurrency).map(([currency, total]) => (
@@ -450,7 +450,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                         </Badge>
                       </div>
                       <span className="text-sm font-bold text-white tabular-nums">
-                        {formatCurrencyDisplay(total, currency)}
+                        {formatCurrencyDisplay(total, settings?.baseCurrency || 'USD')}
                       </span>
                     </div>
                   ))}
