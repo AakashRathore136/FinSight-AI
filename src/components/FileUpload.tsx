@@ -101,27 +101,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
     return `Analysis failed with status ${statusCode}`;
   };
 
-  const cacheLocalAnalysis = (payload: any) => {
-    if (typeof window === "undefined") return;
-    if (!payload?.documentId) return;
-
-    const cached = {
-      record: payload.record || null,
-      analysis: payload.analysis || null,
-      persistenceMode: payload.persistenceMode || "local",
-      storedAt: new Date().toISOString(),
-    };
-
-    try {
-      window.sessionStorage.setItem(
-        `fin_local_doc_${payload.documentId}`,
-        JSON.stringify(cached),
-      );
-    } catch (error) {
-      console.warn("Could not cache local analysis result", error);
-    }
-  };
-
   const startAnalysis = async () => {
     if (!file || !user) return;
 

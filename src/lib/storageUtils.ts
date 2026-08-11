@@ -11,8 +11,9 @@ export interface CachedAnalysisPayload {
 }
 
 /**
- * Persists an analysis result locally in both localStorage (for long-term persistence across tabs/sessions)
- * and sessionStorage (for instant retrieval).
+ * Persists an analysis result locally in the localStorage documents map.
+ * The localStorage map is the single source of truth for the local/offline
+ * document list, so there is no divergent sessionStorage mirror.
  */
 export function saveLocalAnalysis(payload: CachedAnalysisPayload): void {
   if (typeof window === "undefined" || !payload?.documentId) return;
@@ -26,17 +27,7 @@ export function saveLocalAnalysis(payload: CachedAnalysisPayload): void {
     storedAt: now,
   };
 
-  // 1. Store in sessionStorage for fast session retrieval
-  try {
-    window.sessionStorage.setItem(
-      `fin_local_doc_${payload.documentId}`,
-      JSON.stringify(cached),
-    );
-  } catch (err) {
-    console.warn("Could not cache in sessionStorage", err);
-  }
-
-  // 2. Store in localStorage documents map
+  // Store in localStorage documents map
   try {
     const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
     const docMap: Record<string, CachedAnalysisPayload> = rawMap
@@ -96,25 +87,18 @@ export function getLocalDocuments(ownerId?: string): any[] {
 }
 
 /**
- * Retrieves a single cached analysis by documentId (checks localStorage first, then sessionStorage).
+ * Retrieves a single cached analysis by documentId from the localStorage map.
  */
 export function getLocalDocumentById(documentId: string): CachedAnalysisPayload | null {
   if (typeof window === "undefined" || !documentId) return null;
 
   try {
-    // Check localStorage map first
     const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
     if (rawMap) {
       const docMap: Record<string, CachedAnalysisPayload> = JSON.parse(rawMap);
       if (docMap[documentId]) {
         return docMap[documentId];
       }
-    }
-
-    // Check sessionStorage backup
-    const rawSession = window.sessionStorage.getItem(`fin_local_doc_${documentId}`);
-    if (rawSession) {
-      return JSON.parse(rawSession);
     }
   } catch (err) {
     console.error("Error reading local document by id", err);
@@ -124,16 +108,10 @@ export function getLocalDocumentById(documentId: string): CachedAnalysisPayload 
 }
 
 /**
- * Deletes a local document from both localStorage and sessionStorage.
+ * Deletes a local document from the localStorage map.
  */
 export function deleteLocalDocument(documentId: string): void {
   if (typeof window === "undefined" || !documentId) return;
-
-  try {
-    window.sessionStorage.removeItem(`fin_local_doc_${documentId}`);
-  } catch {
-    // ignore
-  }
 
   try {
     const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
