@@ -14,7 +14,7 @@
  *  - Calculating category trends (week-over-week, month-over-month)
  */
 
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
   endOfWeek,
@@ -160,21 +160,25 @@ function total(transactions: Transaction[]): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch all transactions for a user. Reads once from the `transactions`
- * collection filtered by `userId`. Filtering by period is performed
- * client-side so a single read powers every analysis window.
+ * Fetch a user's transactions for the analysis windows. The query is bounded
+ * server-side (orderBy date desc + limit) so reads stay flat as the user's
+ * history grows; the analysis windows all sit inside the most recent
+ * transactions, so a large limit is never exhausted in practice.
  *
  * Returns an empty array (never throws) so the dashboard can render an
  * onboarding/empty state gracefully when no data exists yet.
  */
 export async function fetchTransactions(
   userId: string,
+  limitCount: number = 1000,
 ): Promise<Transaction[]> {
   if (!userId) return [];
   try {
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
+      orderBy("date", "desc"),
+      limit(limitCount),
     );
     const snap = await getDocs(q);
     return snap.docs.map((doc) => {

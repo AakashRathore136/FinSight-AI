@@ -15,6 +15,7 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { format } from 'date-fns';
@@ -153,14 +154,18 @@ export async function saveMessage(message: Omit<ChatMessage, 'id'>): Promise<Cha
   }
 }
 
-export async function loadMessages(conversationId: string, userId: string): Promise<ChatMessage[]> {
+export async function loadMessages(conversationId: string, userId: string, limitCount: number = 200): Promise<ChatMessage[]> {
   try {
     const ref = collection(db, MESSAGE_COLLECTION);
+    // Read the most recent messages server-side (desc + limit) then reverse
+    // so the returned list is still chronological — avoids unbounded reads of
+    // long conversations.
     const q = query(
       ref,
       where('conversationId', '==', conversationId),
       where('userId', '==', userId),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
     );
     const snapshot = await getDocs(q);
     const messages: ChatMessage[] = [];
@@ -179,7 +184,7 @@ export async function loadMessages(conversationId: string, userId: string): Prom
         metadata: data.metadata,
       });
     });
-    return messages;
+    return messages.reverse();
   } catch (error) {
     console.error('Error loading messages:', error);
     handleFirestoreError(error, OperationType.LIST, MESSAGE_COLLECTION);

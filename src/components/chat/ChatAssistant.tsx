@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 
@@ -176,11 +177,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     if (!currentConversationId || !currentUserId) return;
 
     const messagesRef = collection(db, 'chat_messages');
+    // Read the most recent messages (server-side desc + limit) and reverse for
+    // chronological display, so long conversations never trigger an unbounded
+    // read of the entire chat_messages collection.
     const q = query(
       messagesRef,
       where('conversationId', '==', currentConversationId),
       where('userId', '==', currentUserId),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'desc'),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(
@@ -204,7 +209,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
             metadata: data.metadata,
           });
         });
-        setMessages(msgs);
+        setMessages(msgs.reverse());
       },
       (error) => {
         console.error('Error listening to messages:', error);
