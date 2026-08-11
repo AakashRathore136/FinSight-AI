@@ -12,8 +12,9 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, addMonths, isWithinInterval } from 'date-fns';
-import { toDate, csvEscape } from './utils';
+import { format, isWithinInterval } from 'date-fns';
+import { toDate } from './utils';
+import { getForecastMonths } from './forecastMonthUtils';
 
 export interface ForecastData {
   id: string;
@@ -95,8 +96,9 @@ export function generateMonthlyForecast(
   const volatilityPenalty = (incomeCV + expenseCV) * 100;
 
   const forecasts: MonthlyForecast[] = [];
+  const forecastMonths = getForecastMonths(monthsAhead);
   for (let i = 0; i < monthsAhead; i++) {
-    const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
+    const month = forecastMonths[i];
     const income = avgIncome;
     const expenses = avgExpenses;
     const confidence = Math.max(

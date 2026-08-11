@@ -20,19 +20,10 @@ export default function DripAnalyzer() {
 
   const fetchProjection = async () => {
     setLoading(true);
-    try {
-      const response = await fetch('/api/portfolio/drip-analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-      });
-      const json = await response.json();
-      if (json.success) setData(json.data);
-    } catch (err) {
-      console.error("Failed to fetch DRIP projection", err);
-    } finally {
-      setLoading(false);
-    }
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/drip-analyze route.
+    setData(null);
+    setLoading(false);
   };
 
   useEffect(() => {
