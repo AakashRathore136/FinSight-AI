@@ -2,7 +2,13 @@ import { initializeApp, FirebaseError } from "firebase/app";
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  runTransaction,
+  doc,
+  Transaction,
+  serverTimestamp,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
@@ -179,3 +185,109 @@ if (
     "Firebase configuration is missing. Authentication and database features will be disabled until setup is complete.",
   );
 }
+
+/**
+ * Runs a Firestore transaction with exponential backoff retries to prevent race conditions
+ * and handle concurrent write collisions safely.
+ */
+export async function runAtomicTransactionWithRetry<T>(
+  updateFn: (transaction: Transaction) => Promise<T>,
+  maxRetries = 5,
+  initialDelayMs = 100,
+): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await runTransaction(db, updateFn);
+    } catch (error: any) {
+      attempt++;
+      const isCollision =
+        error?.code === "failed-precondition" ||
+        error?.code === "aborted" ||
+        error?.message?.includes("transaction");
+
+      if (isCollision && attempt < maxRetries) {
+        const delay = initialDelayMs * Math.pow(2, attempt) + Math.random() * 50;
+        console.warn(`[Firestore Concurrency] Retry attempt ${attempt}/${maxRetries} after ${Math.round(delay)}ms`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`Transaction failed after ${maxRetries} max retries due to concurrent write contention.`);
+}
+
+/**
+ * Atomically validates and increments a user's monthly document analysis quota.
+ * Prevents race conditions when uploading multiple documents simultaneously.
+ */
+export async function incrementUserQuotaAtomic(
+  userId: string,
+  monthlyLimit = 50,
+): Promise<{ success: boolean; currentQuota: number; remainingQuota: number }> {
+  return runAtomicTransactionWithRetry(async (transaction) => {
+    const userRef = doc(db, "users", userId);
+    const userSnap = await transaction.get(userRef);
+
+    if (!userSnap.exists()) {
+      throw new Error(`User account record [${userId}] not found.`);
+    }
+
+    const userData = userSnap.data();
+    const currentQuota = Number(userData.documentsAnalyzedThisMonth || 0);
+
+    if (currentQuota >= monthlyLimit) {
+      throw new Error(`Monthly analysis quota limit reached (${monthlyLimit} documents max).`);
+    }
+
+    const newQuota = currentQuota + 1;
+    transaction.update(userRef, {
+      documentsAnalyzedThisMonth: newQuota,
+      lastQuotaUpdateAt: serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      currentQuota: newQuota,
+      remainingQuota: monthlyLimit - newQuota,
+    };
+  });
+}
+
+/**
+ * Performs version-controlled document state transition with optimistic concurrency locking.
+ */
+export async function updateDocumentStateAtomic(
+  docId: string,
+  updates: Record<string, any>,
+  expectedVersion?: number,
+): Promise<{ docId: string; version: number }> {
+  return runAtomicTransactionWithRetry(async (transaction) => {
+    const docRef = doc(db, "documents", docId);
+    const docSnap = await transaction.get(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error(`Document record [${docId}] not found.`);
+    }
+
+    const currentData = docSnap.data();
+    const currentVersion = Number(currentData.version || 1);
+
+    if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+      throw new Error(
+        `Optimistic lock failure: Document version mismatch (expected: ${expectedVersion}, actual: ${currentVersion}).`,
+      );
+    }
+
+    const nextVersion = currentVersion + 1;
+    transaction.update(docRef, {
+      ...updates,
+      version: nextVersion,
+      updatedAt: serverTimestamp(),
+    });
+
+    return { docId, version: nextVersion };
+  });
+}
+

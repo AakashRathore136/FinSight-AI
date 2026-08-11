@@ -11,17 +11,10 @@ export default function PlaidLinkConnect() {
   const handleConnect = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/plaid/create-link-token', { method: 'POST' });
-      const data = await response.json();
-      
-      if (data.success) {
-        setToken(data.link_token);
-        // Here we would configure the react-plaid-link component with the token
-        console.log("Mock Plaid Link Token generated:", data.link_token);
-        alert(`Plaid Link Initiated. Mock Token: ${data.link_token}`);
-      }
-    } catch (err) {
-      console.error("Failed to connect bank", err);
+      // Demo feature without a serverless endpoint (see #895): no request is
+      // issued to the non-existent /api/plaid/create-link-token route.
+      setToken(null);
+      alert("Bank syncing is not available yet. Plaid requires a backend endpoint.");
     } finally {
       setLoading(false);
     }
