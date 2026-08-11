@@ -14,7 +14,9 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   serverTimestamp,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { format } from 'date-fns';
@@ -126,6 +128,17 @@ export async function loadConversations(userId: string): Promise<Conversation[]>
 
 export async function deleteConversation(conversationId: string): Promise<boolean> {
   try {
+    const messages = await getDocs(query(
+      collection(db, MESSAGE_COLLECTION),
+      where('conversationId', '==', conversationId),
+    ));
+
+    for (let index = 0; index < messages.docs.length; index += 450) {
+      const batch = writeBatch(db);
+      messages.docs.slice(index, index + 450).forEach((message) => batch.delete(message.ref));
+      await batch.commit();
+    }
+
     await deleteDoc(doc(db, CHAT_COLLECTION, conversationId));
     return true;
   } catch (error) {
@@ -153,14 +166,18 @@ export async function saveMessage(message: Omit<ChatMessage, 'id'>): Promise<Cha
   }
 }
 
-export async function loadMessages(conversationId: string, userId: string): Promise<ChatMessage[]> {
+export async function loadMessages(conversationId: string, userId: string, limitCount: number = 200): Promise<ChatMessage[]> {
   try {
     const ref = collection(db, MESSAGE_COLLECTION);
+    // Read the most recent messages server-side (desc + limit) then reverse
+    // so the returned list is still chronological — avoids unbounded reads of
+    // long conversations.
     const q = query(
       ref,
       where('conversationId', '==', conversationId),
       where('userId', '==', userId),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
     );
     const snapshot = await getDocs(q);
     const messages: ChatMessage[] = [];
@@ -179,7 +196,7 @@ export async function loadMessages(conversationId: string, userId: string): Prom
         metadata: data.metadata,
       });
     });
-    return messages;
+    return messages.reverse();
   } catch (error) {
     console.error('Error loading messages:', error);
     handleFirestoreError(error, OperationType.LIST, MESSAGE_COLLECTION);
@@ -286,7 +303,7 @@ export function generateSpendingSummary(context: FinancialContext): ChatResponse
   const { totalSpending, totalIncome, monthlySpending, spendingByMonth, topCategories } = context;
   const currentMonth = format(new Date(), 'yyyy-MM');
   const currentMonthSpending = monthlySpending[currentMonth] || 0;
-  const avgMonthly = spendingByMonth.length > 0
+  const avgMonthly = spendingByMonth.length > 1
     ? Math.round(spendingByMonth.reduce((sum, m) => sum + m.amount, 0) / spendingByMonth.length)
     : 0;
 
@@ -429,3 +446,8 @@ function generateDefaultResponse(context: FinancialContext): ChatResponse {
   response += `Your savings rate is ${savingsRate}%. Ask me about expenses, budget advice, spending patterns, category insights, or savings recommendations.`;
   return { message: response };
 }
+
+// Agentic copilot: a ReAct-style tool-calling agent loop that exposes the
+// deterministic analysis modules in src/lib/* as tools the model can call.
+// Falls back to the keyword router above when no model/token is configured.
+export { generateAgentChatResponse, runAgentLoop, TOOL_CATALOGUE } from "./chatAgent";

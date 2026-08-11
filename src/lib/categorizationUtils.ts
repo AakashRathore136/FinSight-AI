@@ -18,6 +18,8 @@ export interface TransactionRule {
  * It checks each active rule to see if the transaction description
  * contains the rule's keyword (case-insensitive).
  *
+ * Empty or whitespace-only keywords are ignored and never match.
+ *
  * @param description The transaction description text
  * @param rules Array of categorization rules configured by the user
  * @returns The assigned category if a rule matches, or null if no match is found
@@ -35,7 +37,8 @@ export function applyCategorizationRules(
   for (const rule of rules) {
     if (!rule.isActive) continue;
 
-    if (normalizedDesc.includes(rule.keyword.toLowerCase())) {
+    const normalizedKeyword = rule.keyword.trim().toLowerCase();
+    if (normalizedKeyword.length > 0 && normalizedDesc.includes(normalizedKeyword)) {
       return rule.assignedCategory;
     }
   }
