@@ -37,7 +37,9 @@ export function checkGoalCompletion(goal: Goal): boolean {
 }
 
 export function calculateDaysRemaining(deadline: string): number {
+  if (!deadline) return Infinity;
   const deadlineDate = new Date(deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return Infinity;
   const now = new Date();
   const days = differenceInDays(deadlineDate, now);
   return Math.max(0, days);
@@ -46,11 +48,7 @@ export function calculateDaysRemaining(deadline: string): number {
 export function generateContributionSuggestions(
   targetAmount: number,
   currentAmount: number,
-  deadline: string,
-  options: {
-    conservative?: boolean;
-    aggressive?: boolean;
-  } = {}
+  deadline: string
 ): { label: string; amount: number }[] {
   const remaining = targetAmount - currentAmount;
   if (remaining <= 0) return [{ label: 'Goal reached', amount: 0 }];
@@ -67,11 +65,11 @@ export function generateContributionSuggestions(
     },
     {
       label: 'Conservative',
-      amount: Math.ceil(baseMonthly * (options.conservative ? 0.85 : 1.2)),
+      amount: Math.ceil(baseMonthly * 0.85),
     },
     {
       label: 'Aggressive',
-      amount: Math.max(1, Math.floor(baseMonthly * (options.aggressive ? 1.2 : 0.85))),
+      amount: Math.max(1, Math.floor(baseMonthly * 1.2)),
     },
   ];
 
@@ -89,9 +87,8 @@ export function generateTimelineProjection(
   const projection: { month: string; projected: number }[] = [];
   let running = currentAmount;
 
-  for (let i = 1; i <= 24 && running < targetAmount; i++) {
-    running += monthlyContribution;
-    if (running > targetAmount) running = targetAmount;
+  for (let i = 1; running < targetAmount && i <= 600; i++) {
+    running = Math.min(targetAmount, running + monthlyContribution);
     projection.push({
       month: format(addMonths(now, i), 'MMM yyyy'),
       projected: Math.round(running),
