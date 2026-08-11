@@ -53,24 +53,11 @@ export default function ReceiptUploader() {
     setIsUploading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append('receipt', file);
-
     try {
-      const response = await fetch('/api/receipt/scan', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setResult(data.data);
-      } else {
-        setError(data.error || 'Failed to process receipt.');
-      }
-    } catch (err) {
-      setError('A network error occurred while uploading.');
+      // Demo feature without a serverless endpoint (see #895): no request is
+      // issued to the non-existent /api/receipt/scan route.
+      setResult(null);
+      setError('Receipt scanning is not available yet.');
     } finally {
       setIsUploading(false);
     }

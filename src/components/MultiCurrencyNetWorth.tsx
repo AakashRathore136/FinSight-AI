@@ -22,22 +22,16 @@ export default function MultiCurrencyNetWorth() {
   const [baseCurrency, setBaseCurrency] = useState('USD');
   const [loading, setLoading] = useState(true);
 
-  const fetchNetWorth = (base: string) => {
+  const fetchNetWorth = () => {
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/net-worth route.
     setLoading(true);
-    fetch(`/api/portfolio/net-worth?base=${base}`)
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) setData(json.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    setData(null);
+    setLoading(false);
   };
 
   useEffect(() => {
-    fetchNetWorth(baseCurrency);
+    fetchNetWorth();
   }, [baseCurrency]);
 
   // Helper to format currency symbol based on code
