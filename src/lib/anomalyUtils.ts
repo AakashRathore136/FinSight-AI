@@ -150,7 +150,7 @@ export function detectCategorySpikes(
 ): Array<{
   category: string;
   amount: number;
-  baseline: CategoryBaseline;
+  baseline: CategoryBaseline | null;
   transactions: Transaction[];
 }> {
   const currentMonth = format(new Date(), "yyyy-MM");
@@ -163,21 +163,41 @@ export function detectCategorySpikes(
     byCategory.set(category, [...(byCategory.get(category) || []), transaction]);
   });
 
+  // Overall per-category average used as a sanity floor for categories with
+  // no prior baseline (i.e. brand-new spending categories).
+  const categoryAverages = Array.from(baseline.values())
+    .map((catBaseline) => {
+      const previousTotals = catBaseline.monthlyTotals.slice(0, -1);
+      return previousTotals.length > 0
+        ? previousTotals.reduce((sum, total) => sum + total, 0) / previousTotals.length
+        : 0;
+    })
+    .filter((avg) => avg > 0);
+  const averageAllCategories =
+    categoryAverages.length > 0
+      ? categoryAverages.reduce((sum, avg) => sum + avg, 0) / categoryAverages.length
+      : 0;
+
   return Array.from(byCategory.entries())
     .map(([category, items]) => {
-      const categoryBaseline = baseline.get(category);
+      const categoryBaseline = baseline.get(category) || null;
       const amount = items.reduce((sum, item) => sum + Math.abs(item.amount), 0);
-      return categoryBaseline
-        ? { category, amount, baseline: categoryBaseline, transactions: items }
-        : null;
+      return { category, amount, baseline: categoryBaseline, transactions: items };
     })
-    .filter((item): item is NonNullable<typeof item> => {
-      if (!item || item.baseline.monthlyTotals.length < 2) return false;
+    .filter((item) => {
+      if (!item.baseline) {
+        return averageAllCategories > 0 && item.amount > averageAllCategories * 2;
+      }
+      if (item.baseline.monthlyTotals.length < 2) return false;
       const previousTotals = item.baseline.monthlyTotals.slice(0, -1);
       const average =
         previousTotals.reduce((sum, total) => sum + total, 0) /
         previousTotals.length;
-      return average > 0 && item.amount > average * 1.5 && item.amount - average > 500;
+      return (
+        average > 0 &&
+        item.amount > average * 1.5 &&
+        item.amount - average > Math.max(20, average * 0.5)
+      );
     });
 }
 
@@ -289,10 +309,11 @@ export function detectAnomalies(
   if (thisMonthData && lastMonthData) {
     thisMonthData.forEach((amount, cat) => {
       const lastAmount = lastMonthData.get(cat) || 0;
+      const minDelta = Math.max(50, lastAmount * 0.5);
       if (
         lastAmount > 0 &&
         amount > lastAmount * 1.5 &&
-        amount - lastAmount > 5000
+        amount - lastAmount > minDelta
       ) {
         anomalies.push({
           userId: transactions[0]?.userId || "",

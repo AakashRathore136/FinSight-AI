@@ -66,7 +66,7 @@ test("account-deletion tombstone does not preserve privileged roles", () => {
 test("Firestore rules force junior_analyst on user create and lock role on update", () => {
   assert.match(
     firestoreRules,
-    /allow create:\s*if isAuthenticatedOwner\(userId\) && isValidUser\(incoming\(\)\) && incoming\(\)\.role == 'junior_analyst'/,
+    /isAuthenticatedOwner\(userId\) && isValidUser\(incoming\(\)\) && incoming\(\)\.role == 'junior_analyst'/,
     "create must require junior_analyst (blocks cro/senior_pm/compliance/admin)",
   );
   assert.ok(

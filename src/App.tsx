@@ -194,6 +194,7 @@ import { ThemeProvider } from '@/src/lib/themeContext';
 import { ThemeToggle } from '@/src/components/ThemeToggle';
 import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
+import { clearAllLocalData } from '@/src/lib/storageUtils';
 
 // Feature screens that were implemented but never mounted (issue #897)
 import { ReportExport } from "./components/reports/ReportExport";
@@ -467,6 +468,7 @@ export default function App() {
           uid: newUser.uid,
           username: username,
           email: email,
+          emailVerified: newUser.emailVerified,
           role: DEFAULT_ROLE,
           createdAt: new Date().toISOString(),
         });
@@ -551,8 +553,10 @@ export default function App() {
   const handleLogout = () => {
     signOut(auth);
     // Drop every cached API response (may include session-bound data or
-    // signed URLs) before the next user signs in on this device.
+    // signed URLs) and the local analysis mirror before the next user signs
+    // in on this device.
     void purgeApiCaches();
+    clearAllLocalData();
     setActiveTab("dashboard");
     setShowVerificationScreen(false);
     setUsername("");
@@ -1389,18 +1393,24 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'currencies' && user && (
-              <motion.div 
+            {activeTab === 'currencies' && (
+              <motion.div
                 key="currencies"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
               >
                 <div className="space-y-6">
-                  <CurrencyManager user={user} />
-                  <CurrencyConverter />
-                  <MultiCurrencyNetWorth />
-                  <FxExposureMatrix />
+                  {user ? (
+                    <>
+                      <CurrencyManager user={user} />
+                      <CurrencyConverter />
+                      <MultiCurrencyNetWorth />
+                      <FxExposureMatrix />
+                    </>
+                  ) : (
+                    <CurrencyConverter />
+                  )}
                 </div>
               </motion.div>
             )}
