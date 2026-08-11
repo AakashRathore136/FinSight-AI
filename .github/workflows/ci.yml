@@ -28,6 +28,9 @@ on:
       - '.eslintrc*'
       - '.github/workflows/ci.yml'
 
+permissions:
+  contents: read
+  
 jobs:
   quality:
     name: Type Check · Lint · Build
@@ -35,10 +38,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 
 
-      - name: Setup Node.js project
-        uses: ./.github/actions/setup-node-project
+      - name: Setup Node.js 18
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 
         with:
           node-version: '18'
           cache: 'npm'
@@ -60,10 +63,6 @@ jobs:
 
           echo "npm ci failed after 3 attempts."
           exit 1
-          package-manager: npm
-          install-dependencies: 'true'
-          install-retries: '3'
-          cache: 'true'
 
       - name: TypeScript type check
         run: npx tsc --noEmit
@@ -81,3 +80,43 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+
+      - name: CI Job Summary
+        if: always()
+        run: |
+          {
+            echo "## CI Job Summary"
+            echo ""
+            echo "- **Workflow:** ${{ github.workflow }}"
+            echo "- **Run:** #${{ github.run_number }}"
+            echo "- **Node.js:** $(node --version)"
+            echo "- **npm:** $(npm --version)"
+            echo "- **Overall result:** ${{ job.status }}"
+            echo ""
+            echo "### CI Stages"
+            echo "- Type Check → See workflow step result"
+            echo "- Lint → See workflow step result"
+            echo "- Build → See workflow step result"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure Diagnostics
+        if: failure()
+        run: |
+          {
+            echo "## CI Failure Diagnostics"
+            echo ""
+            echo "CI failed. Review the failed workflow step above for the exact error."
+            echo ""
+            echo "### Environment"
+            echo "- **Node.js:** $(node --version)"
+            echo "- **npm:** $(npm --version)"
+            echo "- **Runner:** $RUNNER_OS"
+            echo ""
+            echo "### Troubleshooting"
+            echo "- Check dependency installation errors first."
+            echo "- Check TypeScript output for type-check failures."
+            echo "- Check lint output for code-quality failures."
+            echo "- Check build output for production build failures."
+            echo ""
+            echo "No secrets or sensitive environment variables are included."
+          } >> "$GITHUB_STEP_SUMMARY"
