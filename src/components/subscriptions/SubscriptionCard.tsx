@@ -14,6 +14,7 @@ import { Calendar, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 import { Subscription } from "@/src/lib/subscriptionUtils";
+import { formatCurrency } from "@/src/lib/utils";
 import {
   updateSubscription,
   deleteSubscription,
@@ -74,11 +75,11 @@ export function SubscriptionCard({
       setTimeout(
         () => {
           new Notification("Subscription Renewal Reminder", {
-            body: `${subscription.name} ($${subscription.amount.toFixed(2)}) renews soon.`,
+            body: `${subscription.name} (${formatCurrency(subscription.amount)}) renews soon.`,
             icon: "/vite.svg",
           });
         },
-        differenceInDays(reminderDate, new Date()) * 24 * 60 * 60 * 1000,
+        Math.max(0, differenceInDays(reminderDate, new Date())) * 24 * 60 * 60 * 1000,
       );
       toast.success("Reminder set for renewal");
     } else if (
@@ -128,7 +129,7 @@ export function SubscriptionCard({
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span className="font-medium">{frequencyLabel}</span>
                 <span className="text-slate-600">|</span>
-                <span>${subscription.amount.toFixed(2)}</span>
+                <span>{formatCurrency(subscription.amount)}</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -181,15 +182,14 @@ export function SubscriptionCard({
                   Annual Cost
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
-                  $
-                  {(
+                  {formatCurrency(
                     subscription.amount *
                     (subscription.frequency === "monthly"
                       ? 12
                       : subscription.frequency === "yearly"
                         ? 1
                         : 52)
-                  ).toFixed(2)}
+                  )}
                 </span>
               </div>
               <Progress
