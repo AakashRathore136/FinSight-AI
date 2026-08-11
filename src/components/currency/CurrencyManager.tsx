@@ -458,7 +458,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                         </Badge>
                       </div>
                       <span className="text-sm font-bold text-white tabular-nums">
-                        {formatCurrencyDisplay(total, currency)}
+                        {formatCurrencyDisplay(total, settings?.baseCurrency || 'USD')}
                       </span>
                     </div>
                   ))}

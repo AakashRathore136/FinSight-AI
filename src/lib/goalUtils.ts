@@ -37,7 +37,9 @@ export function checkGoalCompletion(goal: Goal): boolean {
 }
 
 export function calculateDaysRemaining(deadline: string): number {
+  if (!deadline) return Infinity;
   const deadlineDate = new Date(deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return Infinity;
   const now = new Date();
   const days = differenceInDays(deadlineDate, now);
   return Math.max(0, days);
