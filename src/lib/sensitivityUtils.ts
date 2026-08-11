@@ -48,8 +48,12 @@ export function calculateSensitivityDrivers(
       name: "Benchmark Interest Rate",
       baselineValue: interestRate,
       unit: "%",
-      lowSwingImpact: Math.round((revenue * (0.02 / 100))),
-      highSwingImpact: Math.round(-(revenue * (0.02 / 100))),
+      lowSwingImpact: Math.round(
+        (revenue - cogs - opex - revenue * ((interestRate * 0.8) / 100)) - baseNetProfit
+      ),
+      highSwingImpact: Math.round(
+        (revenue - cogs - opex - revenue * ((interestRate * 1.2) / 100)) - baseNetProfit
+      ),
     },
   ];
 }
