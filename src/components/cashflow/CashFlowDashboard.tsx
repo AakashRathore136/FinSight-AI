@@ -36,6 +36,7 @@ import {
   calculateBalanceProjection,
   calculateConfidenceScore,
   identifyRecurringTransactions,
+  FORECAST_WINDOW_MONTHS,
   ForecastData,
   BalanceProjection,
   RecurringTransaction,
@@ -63,8 +64,14 @@ export function CashFlowDashboard({ user }: { user: any }) {
       const stored = Number(localStorage.getItem("finsight_starting_balance") || 0);
       const starting = Number.isFinite(stored) ? stored : 0;
       setStartingBalance(starting);
-      const transactions = await fetchUserTransactions(user.uid, 6);
-      const forecastData = calculateMonthlyForecast(transactions, 6);
+      const transactions = await fetchUserTransactions(
+        user.uid,
+        FORECAST_WINDOW_MONTHS,
+      );
+      const forecastData = calculateMonthlyForecast(
+        transactions,
+        FORECAST_WINDOW_MONTHS,
+      );
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
