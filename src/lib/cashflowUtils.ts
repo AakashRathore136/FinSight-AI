@@ -41,6 +41,9 @@ export interface RecurringTransaction {
   frequency: "weekly" | "monthly" | "quarterly" | "yearly";
 }
 
+// Single source of truth for the observation/projection window so the fetch
+// count, the averaging divisor, and the projected month count cannot drift.
+export const FORECAST_WINDOW_MONTHS = 6;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function getMonthKey(date: Date): string {
@@ -90,7 +93,17 @@ function parseTransactionDate(raw: unknown): Date {
   return new Date();
 }
 
+// Starts at the month AFTER the current one: the current, still-running month
+// already appears in the observation window, so it must not also be projected
+// as a full month.
 function getNextMonths(count: number): string[] {
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1);
+    months.push(getMonthKey(d));
+  }
+  return months;
   // Shared forecast-window convention: forecast months start at the NEXT
   // calendar month so the cash-flow engine agrees with the Forecast
   // Comparison engine (issue #900).
@@ -99,11 +112,13 @@ function getNextMonths(count: number): string[] {
 
 export async function fetchUserTransactions(
   userId: string,
-  months: number = 6,
+  months: number = FORECAST_WINDOW_MONTHS,
 ): Promise<Transaction[]> {
   if (!userId) return [];
   const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
+  // Exactly `months` calendar months: the current month plus the preceding
+  // `months - 1`, so the averaging divisor below always matches the window.
+  const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
   try {
     const transactionsRef = collection(db, "transactions");
     const q = query(
@@ -128,7 +143,7 @@ export async function fetchUserTransactions(
   } catch (error) {
     if ((error as any)?.code === "failed-precondition") {
       const now = new Date();
-      const fallbackStartDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
+      const fallbackStartDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
       const q = query(
         collection(db, "transactions"),
         where("userId", "==", userId),
@@ -155,7 +170,7 @@ export async function fetchUserTransactions(
 
 export function calculateMonthlyForecast(
   transactions: Transaction[],
-  windowMonths: number = 6,
+  windowMonths: number = FORECAST_WINDOW_MONTHS,
 ): ForecastData[] {
   if (windowMonths <= 0) return [];
   const months = getNextMonths(windowMonths);
@@ -219,17 +234,13 @@ export function calculateBalanceProjection(
   // Seed with the user's real current account balance. Past net cash flow is
   // NOT used as the seed (it is a cumulative figure, not a balance) so the
   // projection reflects an actual account balance rather than a fabricated
-  // sum of up to six months of activity.
+  // sum of up to six months of activity. The forecast starts at the month
+  // after the current one, so every projected month advances the balance and
+  // the displayed balance is consistent with the displayed projected net.
   let currentBalance = startingBalance;
 
-  // The current month's projected net is not applied: the current month
-  // reports the real starting balance; only future months advance the balance.
-  const currentMonth = getMonthKey(new Date());
-
   return forecast.map((f) => {
-    if (f.month !== currentMonth) {
-      currentBalance += f.projectedNet;
-    }
+    currentBalance += f.projectedNet;
     return {
       month: f.month,
       projectedBalance: Math.round(currentBalance * 100) / 100,
@@ -347,7 +358,7 @@ export function calculateConfidenceScore(
   if (transactions.length === 0) return 0;
   const monthsWithData = new Set(transactions.map((t) => getMonthKey(t.date)))
     .size;
-  const dataScore = Math.min(monthsWithData / 6, 1) * 40;
+  const dataScore = Math.min(monthsWithData / FORECAST_WINDOW_MONTHS, 1) * 40;
   const volumeScore = Math.min(transactions.length / 60, 1) * 35;
   const categories = new Set(transactions.map((t) => t.category)).size;
   const diversityScore = Math.min(categories / 10, 1) * 25;
