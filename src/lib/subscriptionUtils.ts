@@ -220,6 +220,11 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
+      // Use the full normalized description as the group key: truncating to
+      // 20 chars merges distinct subscriptions that share a prefix (e.g.
+      // "adobe creative cloud photography plan" vs "... all-apps annual").
+      const newKey = normalized;
+      groups.set(newKey, [transaction]);
       groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
