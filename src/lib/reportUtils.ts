@@ -368,7 +368,7 @@ export async function saveReportToFirestore(
   reportData: ReportData,
 ): Promise<string | null> {
   try {
-    const { doc, setDoc, collection } = await import("firebase/firestore");
+    const { doc, setDoc, collection, serverTimestamp } = await import("firebase/firestore");
     const reportsCol = collection(db, "reports");
     const newDocRef = doc(reportsCol);
     const payload: any = {
@@ -385,7 +385,7 @@ export async function saveReportToFirestore(
       totalIncome: reportData.totalIncome,
       totalExpenses: reportData.totalExpenses,
       currency: reportData.currency || "USD",
-      createdAt: new Date().toISOString(),
+      createdAt: serverTimestamp(),
     };
     await setDoc(newDocRef, payload);
     return newDocRef.id;
