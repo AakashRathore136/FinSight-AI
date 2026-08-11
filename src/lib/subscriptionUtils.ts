@@ -192,6 +192,10 @@ export function groupTransactionsIntoSubscriptions(
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
     const normalized = normalizeText(transaction.description);
+    // Empty/punctuation-only/emoji-only/foreign descriptions normalize to ""
+    // and would match every group via `key.includes("")`. Exclude them from
+    // auto-detection instead of folding them into an unrelated merchant.
+    if (!normalized) continue;
     const category = transaction.category.toLowerCase();
 
     let matchedKey: string | null = null;
@@ -215,9 +219,7 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
-      const newKey =
-        normalized.length > 20 ? normalized.substring(0, 20) : normalized;
-      groups.set(newKey, [transaction]);
+      groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
       existing.push(transaction);
@@ -262,6 +264,7 @@ export function analyzeSubscriptionPattern(
 function advanceByFrequency(
   date: Date,
   frequency: "monthly" | "yearly" | "weekly",
+  originalDay?: number,
 ): Date {
   switch (frequency) {
     case "weekly":
@@ -269,8 +272,13 @@ function advanceByFrequency(
     case "yearly":
       return addYears(date, 1);
     case "monthly":
-    default:
-      return addMonths(date, 1);
+    default: {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 1);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
   }
 }
 
@@ -288,9 +296,10 @@ export function predictNextRenewalDate(
   // occurrence. A stale last charge (paused service, missed payment, long
   // gap) must not produce a past renewal date that hides the subscription
   // from upcoming-renewals and reminders.
+  const originalDay = lastDate.getDate();
   let next = startOfDay(lastDate);
   do {
-    next = advanceByFrequency(next, frequency);
+    next = advanceByFrequency(next, frequency, originalDay);
   } while (isBefore(next, now));
 
   return next;
@@ -382,6 +391,22 @@ export function getUpcomingRenewals(
         !isAfter(sub.nextRenewalDate, cutoff),
     )
     .sort((a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime());
+}
+
+export function estimateMonthlyIncome(
+  transactions: Transaction[],
+  windowMonths: number = 6,
+): number {
+  const incomeByMonth = new Map<string, number>();
+  transactions.forEach((t) => {
+    if (t.type !== "income") return;
+    const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+    incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+  });
+  const monthCount = incomeByMonth.size;
+  if (monthCount === 0) return 0;
+  const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
+  return total / Math.min(monthCount, windowMonths);
 }
 
 export function calculateSubscriptionBurden(
@@ -489,15 +514,14 @@ export async function detectAndSaveSubscriptions(
     if (!analysis || analysis.confidence < 0.4) continue;
 
     const name = txns[0].description || key;
-    const normalized = name.length > 20 ? name.substring(0, 20) : name;
 
-    if (existingNames.has(normalized.toLowerCase())) continue;
+    if (existingNames.has(name.toLowerCase())) continue;
 
     const nextRenewal = predictNextRenewalDate(txns, analysis.frequency);
 
     try {
       const id = await saveSubscription(userId, {
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
@@ -509,7 +533,7 @@ export async function detectAndSaveSubscriptions(
       createdSubs.push({
         id,
         userId,
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
