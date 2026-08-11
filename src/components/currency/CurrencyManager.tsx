@@ -210,6 +210,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(newTx.amount),
         currency: newTx.currency,
         category: newTx.category,
+        type: newTx.type,
         date: toFirestoreDate(newTx.date),
         createdAt: serverTimestamp(),
       });
@@ -239,6 +240,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
         amount: parseFloat(editForm.amount),
         currency: editForm.currency,
         category: editForm.category,
+        type: editForm.type,
         date: toFirestoreDate(editForm.date),
       });
       toast.success('Transaction updated');
@@ -458,7 +460,7 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                         </Badge>
                       </div>
                       <span className="text-sm font-bold text-white tabular-nums">
-                        {formatCurrencyDisplay(total, currency)}
+                        {formatCurrencyDisplay(total, settings?.baseCurrency || 'USD')}
                       </span>
                     </div>
                   ))}

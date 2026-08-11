@@ -14,6 +14,9 @@ import {
   updateDoc,
   serverTimestamp,
   orderBy,
+  runTransaction,
+  increment,
+  arrayUnion,
 } from 'firebase/firestore';
 import { addMonths, differenceInCalendarDays } from 'date-fns';
 import { db, handleFirestoreError, OperationType } from './firebase';
@@ -221,14 +224,49 @@ export async function addContribution(
   amount: number,
   note?: string
 ): Promise<EmergencyFund | null> {
-  const result = trackContribution(fund, amount, note);
-  if (!result.fund || !result.contribution) return null;
-  const ok = await updateEmergencyFund(fund.id, {
-    currentAmount: result.fund.currentAmount,
-    estimatedCompletionDate: result.fund.estimatedCompletionDate,
-    contributions: result.fund.contributions,
-  });
-  return ok ? result.fund : null;
+  if (!fund || Number.isNaN(amount) || amount <= 0) return null;
+
+  const contribution: Contribution = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    amount: Math.round(amount * 100) / 100,
+    date: new Date().toISOString(),
+    note: note?.trim() || undefined,
+  };
+
+  try {
+    const updated = await runTransaction(db, async (tx) => {
+      const fundRef = doc(db, 'emergency_funds', fund.id);
+      const snapshot = await tx.get(fundRef);
+      if (!snapshot.exists()) throw new Error('Emergency fund no longer exists');
+
+      const current = normalizeFund(fund.id, snapshot.data());
+      const currentAmount = Math.max(0, current.currentAmount + contribution.amount);
+      const estimatedCompletionDate = estimateCompletionDate(
+        current.targetAmount,
+        currentAmount,
+        current.monthlyContribution || 0,
+      );
+
+      tx.update(fundRef, {
+        currentAmount: increment(contribution.amount),
+        contributions: arrayUnion(contribution),
+        estimatedCompletionDate,
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        ...current,
+        currentAmount,
+        estimatedCompletionDate,
+        contributions: [contribution, ...current.contributions],
+      };
+    });
+    return updated;
+  } catch (error) {
+    console.error('Error adding emergency fund contribution:', error);
+    handleFirestoreError(error, OperationType.UPDATE, `emergency_funds/${fund.id}`);
+    return null;
+  }
 }
 
 function normalizeFund(id: string, data: any): EmergencyFund {

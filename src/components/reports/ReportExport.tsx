@@ -34,7 +34,14 @@ import {
   FileSpreadsheet,
   Printer,
 } from "lucide-react";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import {
+  format,
+  subDays,
+  startOfMonth,
+  endOfMonth,
+  endOfDay,
+} from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, endOfDay } from "date-fns";
 import {
   fetchTransactionsForDateRange,
   generateExpenseSummary,
@@ -50,6 +57,10 @@ import {
 } from "@/src/lib/reportUtils";
 import { formatCurrency } from "@/src/lib/utils";
 import { ReportPreview } from "@/src/components/reports/ReportPreview";
+import {
+  renderMultipleElementsSafely,
+  releaseCanvasMemory,
+} from "./pdfRenderUtils";
 import {
   BarChart,
   Bar,
@@ -97,7 +108,7 @@ function getDateRange(
 
   if (preset === "Last 3 Months") {
     const start = startOfMonth(subDays(today, 90));
-    return { start, end: today };
+    return { start, end: endOfDay(today) };
   }
 
   if (preset === "Custom" && customStart && customEnd) {
@@ -105,7 +116,7 @@ function getDateRange(
   }
 
   const days = preset === "Last 7 Days" ? 7 : 30;
-  return { start: subDays(today, days), end: today };
+  return { start: subDays(today, days), end: endOfDay(today) };
 }
 
 export function ReportExport() {
@@ -201,9 +212,17 @@ export function ReportExport() {
     setActiveTab("preview");
   };
 
+  const [exportProgress, setExportProgress] = useState<{ percent: number; stage: string }>({
+    percent: 0,
+    stage: "",
+  });
+
   const handleExport = async () => {
     if (!auth.currentUser) return;
     setExporting(true);
+    setExportProgress({ percent: 10, stage: "Building report payload..." });
+
+    let chartCanvases: HTMLCanvasElement[] = [];
     try {
       const data = buildReportData(
         auth.currentUser.uid,
@@ -213,6 +232,7 @@ export function ReportExport() {
         transactions,
         expenseSummary,
         incomeSummary,
+        baseCurrency,
       );
       setReportData(data);
 
@@ -220,29 +240,28 @@ export function ReportExport() {
         downloadCSV(data);
         await saveReportToFirestore(data);
       } else {
-        const chartCanvases: HTMLCanvasElement[] = [];
-        if (expenseChartRef.current) {
-          const canvas = await html2canvas(expenseChartRef.current, {
-            backgroundColor: "#0f1219",
-            scale: 2,
-          });
-          chartCanvases.push(canvas);
-        }
-        if (incomeChartRef.current) {
-          const canvas = await html2canvas(incomeChartRef.current, {
-            backgroundColor: "#0f1219",
-            scale: 2,
-          });
-          chartCanvases.push(canvas);
-        }
+        const elementsToRender: HTMLElement[] = [];
+        if (expenseChartRef.current) elementsToRender.push(expenseChartRef.current);
+        if (incomeChartRef.current) elementsToRender.push(incomeChartRef.current);
+
+        chartCanvases = await renderMultipleElementsSafely(
+          elementsToRender,
+          (percent, stage) => setExportProgress({ percent, stage })
+        );
+
+        setExportProgress({ percent: 90, stage: "Compiling vector PDF..." });
         await generatePDF(data, chartCanvases);
         await saveReportToFirestore(data);
       }
+      toast.success("Report exported successfully!");
     } catch (e) {
       console.error("Export failed:", e);
       toast.error("Failed to export report. Please try again.");
     } finally {
+      // Memory Cleanup: release all canvas buffers
+      chartCanvases.forEach((canvas) => releaseCanvasMemory(canvas));
       setExporting(false);
+      setExportProgress({ percent: 0, stage: "" });
     }
   };
 

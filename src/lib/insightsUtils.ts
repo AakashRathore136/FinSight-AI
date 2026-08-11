@@ -14,7 +14,7 @@
  *  - Calculating category trends (week-over-week, month-over-month)
  */
 
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
   endOfWeek,
@@ -164,21 +164,25 @@ function total(transactions: Transaction[]): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch all transactions for a user. Reads once from the `transactions`
- * collection filtered by `userId`. Filtering by period is performed
- * client-side so a single read powers every analysis window.
+ * Fetch a user's transactions for the analysis windows. The query is bounded
+ * server-side (orderBy date desc + limit) so reads stay flat as the user's
+ * history grows; the analysis windows all sit inside the most recent
+ * transactions, so a large limit is never exhausted in practice.
  *
  * Returns an empty array (never throws) so the dashboard can render an
  * onboarding/empty state gracefully when no data exists yet.
  */
 export async function fetchTransactions(
   userId: string,
+  limitCount: number = 1000,
 ): Promise<Transaction[]> {
   if (!userId) return [];
   try {
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
+      orderBy("date", "desc"),
+      limit(limitCount),
     );
     const snap = await getDocs(q);
     return snap.docs.map((doc) => {
@@ -214,17 +218,21 @@ export function filterByPeriod(
 
 /**
  * Flag individual transactions whose amount is more than `threshold`x the
- * average spend for their category. Categories need a minimum sample size to
- * avoid flagging noise. Returns anomaly `Insight` objects.
+ * average spend for their category. The baseline for each transaction excludes
+ * the transaction itself (leave-one-out) so a large charge cannot inflate its
+ * own threshold. Categories need a minimum sample size to avoid flagging
+ * noise. Returns anomaly `Insight` objects.
  */
 export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
+  ignoredTransactionIds?: Set<string>,
 ): Insight[] {
   const byCategory = new Map<string, Transaction[]>();
   for (const tx of transactions) {
     if (normalizeTransactionType(tx.type) !== "expense") continue;
+    if (ignoredTransactionIds?.has(tx.id)) continue;
     const key = tx.category || "Uncategorized";
     const list = byCategory.get(key) || [];
     list.push(tx);
@@ -234,11 +242,14 @@ export function detectAnomalies(
   const anomalies: Insight[] = [];
   for (const [category, list] of byCategory.entries()) {
     if (list.length < 3) continue; // need a meaningful baseline
-    const avg = total(list) / list.length;
-    if (avg <= 0) continue;
 
     for (const tx of list) {
       const amount = normalizeAmount(tx.amount);
+      // Leave-one-out baseline: the candidate transaction is excluded from the
+      // average it is compared against, so a dominant expense is not judged
+      // against a baseline it inflated itself.
+      const avg = (total(list) - amount) / (list.length - 1);
+      if (avg <= 0) continue;
       const ratio = amount / avg;
       if (ratio >= threshold) {
         const severity: Severity =
@@ -347,10 +358,17 @@ export function identifyOpportunities(
       }
       avgInterval = intervalCount > 0 ? intervalTotal / intervalCount : 0;
     }
+    // A realistic annual figure requires cadence evidence: at least two
+    // charges with a measurable interval (>= 1 day). A single one-time charge
+    // — even one whose merchant matches a subscription keyword — is not a
+    // recurring subscription and must never be annualized at a fixed 12x.
+    // (Issue #868)
+    if (sorted.length < 2 || avgInterval < 1) continue;
     // Weekly cadence ≈ 52 charges/year, monthly ≈ 12, quarterly ≈ 4. Charges
     // bunched closer than a week are capped at the weekly rate rather than
-    // inflating the annual figure.
-    const chargesPerYear = avgInterval >= 1 ? Math.min(52, 365 / avgInterval) : 12;
+    // inflating the annual figure. The factor is always derived from the
+    // measured cadence, never a hardcoded default.
+    const chargesPerYear = Math.min(52, 365 / Math.max(1, avgInterval));
     const annualized = monthly * chargesPerYear;
     const display = list[0].merchant || list[0].description || key;
     opportunities.push({
@@ -610,6 +628,7 @@ export function summaryToInsight(
 export function buildInsights(
   transactions: Transaction[],
   userId?: string,
+  ignoredTransactionIds?: Set<string>,
 ): InsightsBundle {
   const expenseTransactions = transactions.filter(
     (tx) => normalizeTransactionType(tx.type) === "expense",
@@ -647,6 +666,8 @@ export function buildInsights(
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
     anomalies: detectAnomalies(expenseTransactions, userId),
     opportunities: identifyOpportunities(expenseTransactions, userId),
+    anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
+    opportunities: identifyOpportunities(transactions, userId),
     trends,
     trendCategories: categories,
     transactionCount: expenseTransactions.length,

@@ -88,7 +88,7 @@ export function formatMonthKey(date: Date): string {
 }
 
 export function formatWeekKey(date: Date): string {
-  return format(date, "yyyy-'W'II");
+  return format(date, "RRRR-'W'II");
 }
 
 export function formatPeriodLabel(period: string, type: TrendPeriod): string {
@@ -163,7 +163,7 @@ export function groupByCategoryAndPeriod(
         key: formatMonthKey(d),
         label: format(d, 'MMM yyyy'),
       }))
-    : eachWeekOfInterval({ start: config.startDate, end: config.endDate }).map((d) => ({
+    : eachWeekOfInterval({ start: config.startDate, end: config.endDate }, { weekStartsOn: 1 as const }).map((d) => ({
         key: formatWeekKey(d),
         label: format(d, "'W'II MMM"),
       }));
@@ -229,7 +229,7 @@ export function generateWeeklyComparison(
   start: Date,
   end: Date,
 ): { data: CategoryPeriodDatum[]; periods: { key: string; label: string }[] } {
-  const periods = eachWeekOfInterval({ start, end }).map((d) => ({
+  const periods = eachWeekOfInterval({ start, end }, { weekStartsOn: 1 as const }).map((d) => ({
     key: formatWeekKey(d),
     label: format(d, "'W'II MMM"),
   }));
@@ -327,13 +327,15 @@ export function buildPeriodConfig(
   customEnd?: Date,
 ): PeriodConfig {
   switch (type) {
-    case 'week':
+    case 'week': {
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 as const });
       return {
         type,
-        startDate: startOfWeek(now),
-        endDate: endOfWeek(now),
-        label: `Week of ${format(startOfWeek(now), 'MMM d')}`,
+        startDate: weekStart,
+        endDate: endOfWeek(now, { weekStartsOn: 1 as const }),
+        label: `Week of ${format(weekStart, 'MMM d')}`,
       };
+    }
     case 'quarter': {
       const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
       const qStart = startOfMonth(new Date(now.getFullYear(), qStartMonth, 1));
