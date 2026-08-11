@@ -213,9 +213,10 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
-      const newKey =
-        normalized.length > 20 ? normalized.substring(0, 20) : normalized;
-      groups.set(newKey, [transaction]);
+      // Use the full normalized description as the group key. Truncating to
+      // 20 chars merged distinct subscriptions sharing a long prefix (e.g.
+      // "netflix premium monthly" and "netflix premium yearly").
+      groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
       existing.push(transaction);
@@ -471,7 +472,7 @@ export async function detectAndSaveSubscriptions(
     if (!analysis || analysis.confidence < 0.4) continue;
 
     const name = txns[0].description || key;
-    const normalized = name.length > 20 ? name.substring(0, 20) : name;
+    const normalized = name;
 
     if (existingNames.has(normalized.toLowerCase())) continue;
 
