@@ -464,7 +464,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => (admin as any).firestore(getFirestoreDatabaseId()),
+      getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
       getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
     // admin.firestore(getFirestoreDatabaseId())
