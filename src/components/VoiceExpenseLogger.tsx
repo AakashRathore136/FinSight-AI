@@ -76,20 +76,10 @@ export default function VoiceExpenseLogger() {
     setSuccessData(null);
 
     try {
-      const res = await fetch('/api/expenses/voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setSuccessData(data.data);
-      } else {
-        setError(data.error || "Failed to process voice command");
-      }
-    } catch (err) {
-      setError("Network error while submitting expense");
+      // Demo feature without a serverless endpoint (see #895): no request is
+      // issued to the non-existent /api/expenses/voice route.
+      setSuccessData(null);
+      setError("Voice expense logging is not available yet.");
     } finally {
       setIsProcessing(false);
     }

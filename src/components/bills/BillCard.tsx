@@ -16,6 +16,7 @@ interface BillCardProps {
   bill: Bill;
   onPay: (bill: Bill) => void;
   onDelete: (billId: string) => void;
+  disabled?: boolean;
 }
 
 const FREQUENCY_LABELS: Record<Bill['frequency'], string> = {
@@ -25,7 +26,7 @@ const FREQUENCY_LABELS: Record<Bill['frequency'], string> = {
   custom: 'Custom',
 };
 
-export function BillCard({ bill, onPay, onDelete }: BillCardProps) {
+export function BillCard({ bill, onPay, onDelete, disabled }: BillCardProps) {
   const overdue = isOverdue(bill);
   const daysUntil = getDaysUntilDue(bill);
   const dueDate = toDate(bill.nextDueDate || bill.dueDate);
@@ -153,6 +154,7 @@ export function BillCard({ bill, onPay, onDelete }: BillCardProps) {
         {!bill.isPaid && (
           <Button
             onClick={() => onPay(bill)}
+            disabled={disabled}
             className={cn(
               'w-full font-semibold text-sm rounded-lg h-10',
               overdue

@@ -145,6 +145,12 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (monthly.length === 0) return;
+    const months = monthly.map((forecast) => forecast.month).sort();
+    setFilter({ startDate: months[0], endDate: months[months.length - 1] });
+  }, [monthly]);
+
   const filteredMonthly = useMemo(
     () => applyFilters(monthly, filter),
     [monthly, filter]
