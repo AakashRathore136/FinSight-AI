@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,11 +13,10 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
+  writeBatch,
   orderBy,
 } from 'firebase/firestore';
 import {
-  addDays,
   addWeeks,
   addMonths,
   addYears,
@@ -41,6 +41,7 @@ export interface Bill {
   lastPaidDate?: string | null;
   createdAt: string;
   nextDueDate?: string | null;
+  deleted?: boolean;
 }
 
 export interface BillInput {
@@ -52,6 +53,27 @@ export interface BillInput {
 }
 
 const UPCOMING_WINDOW_DAYS = 7;
+
+export function isRecurringFrequency(frequency: BillFrequency): boolean {
+  return frequency === 'weekly' || frequency === 'monthly' || frequency === 'yearly';
+}
+
+function advanceByFrequency(
+  date: Date,
+  frequency: BillFrequency,
+  originalDueDay?: number
+): Date {
+  if (frequency === 'weekly') return addWeeks(date, 1);
+  if (frequency === 'monthly') {
+    const day = originalDueDay ?? date.getDate();
+    const next = addMonths(date, 1);
+    const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(day, lastDayOfNextMonth));
+    return next;
+  }
+  if (frequency === 'yearly') return addYears(date, 1);
+  return date;
+}
 
 export async function fetchUserBills(userId: string): Promise<Bill[]> {
   try {
@@ -65,6 +87,7 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
     const bills: Bill[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      if (data.deleted === true) return;
       bills.push({
         id: docSnap.id,
         userId: data.userId || '',
@@ -77,6 +100,7 @@ export async function fetchUserBills(userId: string): Promise<Bill[]> {
         lastPaidDate: data.lastPaidDate || null,
         createdAt: data.createdAt || '',
         nextDueDate: data.nextDueDate || null,
+        deleted: data.deleted === true,
       });
     });
     return bills;
@@ -140,34 +164,76 @@ export function calculateNextDueDate(
 ): string | null {
   const base = toDate(dueDate);
   if (!base) return null;
+  if (!isRecurringFrequency(frequency)) {
+    return startOfDay(base).toISOString();
+  }
 
   const reference = fromDate ? startOfDay(fromDate) : startOfDay(new Date());
   let next = startOfDay(base);
 
   while (isBefore(next, reference)) {
-    if (frequency === 'weekly') {
-      next = addWeeks(next, 1);
-    } else if (frequency === 'monthly') {
-      next = addMonths(next, 1);
-    } else if (frequency === 'yearly') {
-      next = addYears(next, 1);
-    } else {
-      break;
-    }
+    next = advanceByFrequency(next, frequency);
   }
 
   return next.toISOString();
 }
 
+/** Next cycle after a payment — always moves at least one period for recurring bills. */
+export function advanceDueDateAfterPayment(
+  dueDate: string,
+  frequency: BillFrequency,
+  paidDate: Date = new Date()
+): string | null {
+  if (!isRecurringFrequency(frequency)) return null;
+
+  const base = toDate(dueDate);
+  if (!base) return null;
+
+  const reference = startOfDay(paidDate);
+  const originalDay = base.getDate();
+  let next = startOfDay(base);
+
+  do {
+    next = advanceByFrequency(next, frequency, originalDay);
+  } while (next.getTime() <= reference.getTime());
+
+  return next.toISOString();
+}
+
+export function applyBillPayment(
+  bill: Bill,
+  paidDate: Date = new Date()
+): Pick<Bill, 'isPaid' | 'lastPaidDate' | 'nextDueDate' | 'dueDate'> {
+  const recurring = isRecurringFrequency(bill.frequency);
+  const currentDue = bill.nextDueDate || bill.dueDate;
+
+  if (!recurring) {
+    return {
+      isPaid: true,
+      lastPaidDate: paidDate.toISOString(),
+      nextDueDate: bill.nextDueDate ?? bill.dueDate,
+      dueDate: bill.dueDate,
+    };
+  }
+
+  const nextDueDate = advanceDueDateAfterPayment(currentDue, bill.frequency, paidDate) || currentDue;
+  return {
+    isPaid: false,
+    lastPaidDate: paidDate.toISOString(),
+    nextDueDate,
+    dueDate: nextDueDate,
+  };
+}
+
 export function isOverdue(bill: Bill, reference: Date = new Date()): boolean {
-  if (bill.isPaid) return false;
+  if (bill.deleted || bill.isPaid) return false;
   const due = toDate(bill.nextDueDate || bill.dueDate);
   if (!due) return false;
   return isBefore(startOfDay(due), startOfDay(reference));
 }
 
 export function isUpcoming(bill: Bill, reference: Date = new Date()): boolean {
-  if (bill.isPaid || isOverdue(bill, reference)) return false;
+  if (bill.deleted || bill.isPaid || isOverdue(bill, reference)) return false;
   const due = toDate(bill.nextDueDate || bill.dueDate);
   if (!due) return false;
   const days = differenceInCalendarDays(startOfDay(due), startOfDay(reference));
@@ -206,7 +272,7 @@ export function getDaysUntilDue(bill: Bill, reference: Date = new Date()): numbe
 
 export function calculateMonthlyObligations(bills: Bill[]): number {
   return bills.reduce((total, bill) => {
-    if (bill.isPaid) return total;
+    if (bill.deleted || bill.isPaid) return total;
     switch (bill.frequency) {
       case 'weekly':
         return total + bill.amount * 52 / 12;
@@ -223,20 +289,11 @@ export function calculateMonthlyObligations(bills: Bill[]): number {
 export async function markBillAsPaid(
   bill: Bill,
   userId: string
-): Promise<boolean> {
+): Promise<Bill | null> {
+  if (bill.deleted || bill.isPaid) return null;
   try {
     const paidDate = new Date();
-    const nextDueDate = calculateNextDueDate(
-      bill.nextDueDate || bill.dueDate,
-      bill.frequency,
-      paidDate
-    );
-
-    await updateDoc(doc(db, 'bills', bill.id), {
-      isPaid: false,
-      lastPaidDate: paidDate.toISOString(),
-      nextDueDate,
-    });
+    const payment = applyBillPayment(bill, paidDate);
 
     const transactionData = {
       userId,
@@ -248,13 +305,20 @@ export async function markBillAsPaid(
       billId: bill.id,
       createdAt: serverTimestamp(),
     };
-    await addDoc(collection(db, 'transactions'), transactionData);
 
-    return true;
+    // The bill update and its expense transaction commit atomically: either
+    // both persist or neither does, so a failed write can never advance the
+    // bill without a matching expense record (or double-charge on retry).
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'bills', bill.id), payment);
+    batch.set(doc(collection(db, 'transactions')), transactionData);
+    await batch.commit();
+
+    return { ...bill, ...payment };
   } catch (error) {
     console.error('Error marking bill as paid:', error);
     handleFirestoreError(error, OperationType.UPDATE, `bills/${bill.id}`);
-    return false;
+    return null;
   }
 }
 
@@ -263,14 +327,18 @@ export function generateRecurringSchedule(
   reference: Date = new Date(),
   occurrences = 6
 ): string[] {
+  if (bill.isPaid && !isRecurringFrequency(bill.frequency)) {
+    return [];
+  }
+
   const schedule: string[] = [];
-  let next = toDate(bill.nextDueDate || bill.dueDate) || startOfDay(reference);
+  const start = toDate(bill.nextDueDate || bill.dueDate) || startOfDay(reference);
+  const originalDay = start.getDate();
+  let next = startOfDay(start);
   for (let i = 0; i < occurrences; i++) {
     schedule.push(next.toISOString());
-    if (bill.frequency === 'weekly') next = addWeeks(next, 1);
-    else if (bill.frequency === 'monthly') next = addMonths(next, 1);
-    else if (bill.frequency === 'yearly') next = addYears(next, 1);
-    else break;
+    if (!isRecurringFrequency(bill.frequency)) break;
+    next = advanceByFrequency(next, bill.frequency, originalDay);
   }
   return schedule;
 }

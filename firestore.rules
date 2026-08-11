@@ -29,7 +29,14 @@ service cloud.firestore {
              // Only allow https fileUrl so a stored link can never render as
              // a javascript:/data: URL or a link-injection vector.
              data.fileUrl is string && data.fileUrl.size() <= 2048 && data.fileUrl.startsWith('https://') &&
-             data.status in ['pending', 'processing', 'completed', 'failed'];
+             data.status in ['pending', 'processing', 'completed', 'failed'] &&
+             // If a storagePath is stored on the record, it must live inside
+             // the caller's own namespace. Otherwise a client could create a
+             // document whose storagePath points at another user's object and
+             // abuse the server-side purge/delete endpoints that trust it.
+             (!data.keys().has('storagePath') ||
+              (data.storagePath is string &&
+               data.storagePath.startsWith('analyses/' + request.auth.uid + '/')));
     }
 
     function isValidAnalysis(data) {
@@ -55,7 +62,12 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
+      // A user can only create their own profile with the default
+      // non-privileged role. Privileged roles (senior_pm, cro, compliance,
+      // admin) must be granted server-side (Admin SDK) and can never be
+      // self-assigned at account creation. (Issues #505, #603)
+      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role == 'junior_analyst';
+      // Owners may only update non-privilege fields; role changes require admin.
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
@@ -109,28 +121,8 @@ service cloud.firestore {
       allow delete: if isOwner(existing().ownerId) || isAdmin();
     }
 
-    match /anomalies/{anomalyId} {
-      // SECURITY: Per-user RLS for the anomalies collection
-      // Prevents cross-user access to anomaly detection data
-      allow get: if isOwner(existing().userId);
-      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if isOwner(existing().userId) || isAdmin();
-      allow delete: if isOwner(existing().userId) || isAdmin();
-    }
-
     match /subscriptions/{subId} {
       allow read: if isOwner(existing().userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if isOwner(existing().userId) || isAdmin();
-      allow delete: if isOwner(existing().userId) || isAdmin();
-    }
-
-    match /transactions/{txnId} {
-      // SECURITY: Per-user RLS for the transactions collection
-      // Prevents cross-user access to financial transaction data
-      allow get: if isOwner(existing().userId);
-      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if isOwner(existing().userId) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
@@ -201,6 +193,119 @@ service cloud.firestore {
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if isOwner(existing().userId) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    // ----------------------------------------------------
+    // FINANCIAL DATA COLLECTIONS
+    // Per-user RLS for every client-touched collection that
+    // previously fell through to the default deny (or, if
+    // rules were left in test mode, had no owner checks).
+    // Ownership field is `userId` across these collections.
+    // ----------------------------------------------------
+
+    match /transactions/{txId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /chat_conversations/{conversationId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /chat_messages/{messageId} {
+      // Append-only chat history: clients create and read; no updates.
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /activity_log/{logId} {
+      // Per-user action history. Append-only: clients create and read their
+      // own entries; no updates. Delete is owner-scoped so account erasure
+      // (deleteUserData) can purge the audit history with the rest of the
+      // user's data. Matches the userId field fetchActivityLog queries on.
+      allow get: if isOwner(existing().userId) || isAdmin();
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /portfolios/{portfolioId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /portfolioHoldings/{holdingId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /portfolioTransactions/{txId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /portfolioSnapshots/{snapshotId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /anomalies/{anomalyId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /forecasts/{forecastId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /health_scores/{scoreId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    // Document ID == uid for per-user singleton settings docs.
+    match /privacy_settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /currencies/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
     }
   }
 }
