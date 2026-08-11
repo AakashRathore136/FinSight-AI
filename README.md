@@ -1,4 +1,3 @@
-# FinSight AI
 
 > **AI-powered BFSI intelligence platform for financial document analysis, risk assessment, and automated business insights.**
 

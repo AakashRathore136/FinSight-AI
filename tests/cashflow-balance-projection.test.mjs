@@ -21,9 +21,10 @@ const bodyStart = source.indexOf("{", start);
 const bodyEnd = source.indexOf("\n}", bodyStart);
 const body = source.slice(bodyStart, bodyEnd + 1);
 
-test("projection seeds the starting balance from actual transactions", () => {
-  assert.match(body, /transactions\.forEach/);
-  assert.match(body, /currentBalance/);
+test("projection seeds from the real starting balance, not cumulative net flow", () => {
+  assert.match(body, /startingBalance/);
+  assert.match(body, /let currentBalance = startingBalance/);
+  assert.doesNotMatch(body, /transactions\.forEach/);
 });
 
 test("projection reports today's real balance for the current month", () => {

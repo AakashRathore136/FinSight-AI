@@ -1,0 +1,69 @@
+name: Stale Issue and PR Management
+
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Manage stale issues and pull requests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mark and close stale issues and pull requests
+        uses: actions/stale@v11
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Issue lifecycle
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+
+          # Pull request lifecycle
+          days-before-pr-stale: 45
+          days-before-pr-close: 14
+
+          # Stale label
+          stale-issue-label: stale
+          stale-pr-label: stale
+
+          # Important issues/PRs are exempt
+          exempt-issue-labels: pinned,security,bug,high priority,good first issue,gssoc:approved
+          exempt-pr-labels: pinned,security,bug,high priority,good first issue,gssoc:approved
+
+          # Do not process draft PRs
+          exempt-draft-pr: true
+
+          # Remove stale label when activity resumes
+          remove-stale-when-updated: true
+
+          # Issue warning
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has
+            had no recent activity for 30 days. It will be closed after 7
+            additional days of inactivity. Please comment or provide an update
+            to keep it open.
+
+          # PR warning
+          stale-pr-message: >
+            This pull request has been automatically marked as stale because
+            it has had no recent activity for 45 days. It will be closed after
+            14 additional days of inactivity. Please update the PR or leave a
+            comment to keep it active.
+
+          # Issue closure message
+          close-issue-message: >
+            This issue has been automatically closed due to prolonged
+            inactivity. If the issue is still relevant, please reopen it or
+            create a new issue with updated information.
+
+          # PR closure message
+          close-pr-message: >
+            This pull request has been automatically closed due to prolonged
+            inactivity. If the work is still relevant, please reopen the PR
+            or submit an updated pull request.

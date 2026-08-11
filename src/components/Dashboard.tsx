@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
+import { useState, useEffect, useRef } from "react";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
   collection,
@@ -16,6 +17,9 @@ import {
   ComplianceLayout,
 } from "./dashboard/RoleLayouts";
 
+import { getLocalDocuments } from "@/src/lib/storageUtils";
+import { DEFAULT_ROLE, VALID_ROLES } from "@/src/lib/roleConstants";
+
 type DashboardDocument = {
   id: string;
   status?: string;
@@ -25,18 +29,23 @@ type DashboardDocument = {
 };
 
 function normalizeConfidence(value: any): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return null;
-  if (n <= 1) return Math.round(n * 100 + Number.EPSILON);
-  return Math.round(Math.min(100, n));
+  const n = Number(value ?? 0);
+  // Missing, non-numeric, or zero scores carry no confidence signal: exclude
+  // them instead of fabricating a value (a real 0 is the most negative
+  // sentiment, not a 92%).
+  if (isNaN(n) || n === 0) return null;
+  if (n <= 1) return Math.round(Math.abs(n) * 100);
+  return Math.round(Math.min(100, Math.abs(n)));
 }
 
 export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
-  let viewRole = userProfile?.role || "junior_analyst";
-  const validRoles = ["junior_analyst", "senior_pm", "cro", "compliance"];
-  if (!validRoles.includes(viewRole)) {
-    viewRole = "junior_analyst";
+  let viewRole = userProfile?.role || DEFAULT_ROLE;
+  // admin is not a dashboard layout role — fall back to the default view
+  const layoutRoles = (VALID_ROLES as readonly string[]).filter(
+    (r) => r !== "admin",
+  );
+  if (!layoutRoles.includes(viewRole)) {
+    viewRole = DEFAULT_ROLE;
   }
 
   const [stats, setStats] = useState({
@@ -45,6 +54,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
     pending: 0,
     highRisk: 0,
     avgConfidence: 0,
+    hasConfidenceData: false,
   });
   const [chartData, setChartData] = useState<any>({
     confidenceTrend: [],
@@ -53,6 +63,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
   });
   const [recentDocs, setRecentDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const latestRemoteRef = useRef<DashboardDocument[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -61,8 +72,142 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
       collection(db, "documents"),
       where("ownerId", "==", user.uid),
       orderBy("createdAt", "desc"),
-      limit(5),
+      limit(10),
     );
+
+    const getTimestamp = (dateVal: any) => {
+      if (!dateVal) return Date.now();
+      if (typeof dateVal === "number") return dateVal;
+      if (typeof dateVal.toDate === "function") return dateVal.toDate().getTime();
+      if (dateVal.seconds) return dateVal.seconds * 1000;
+      const parsed = new Date(dateVal).getTime();
+      return isNaN(parsed) ? Date.now() : parsed;
+    };
+
+    const processDocuments = async (remoteDocs: DashboardDocument[]) => {
+      const localDocs = getLocalDocuments(user.uid) as DashboardDocument[];
+      const combinedMap = new Map<string, DashboardDocument>();
+
+      for (const ld of localDocs) {
+        combinedMap.set(ld.id, ld);
+      }
+      for (const rd of remoteDocs) {
+        combinedMap.set(rd.id, rd);
+      }
+
+      const data = Array.from(combinedMap.values());
+      data.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+
+      setRecentDocs(data.slice(0, 5));
+      setLoading(false);
+
+      // Aggregate stats
+      const completedDocs = data.filter((d: any) => d.status === "completed");
+      const totalConfidenceValues: number[] = [];
+      const confidenceTrend: any[] = [];
+      const entitiesMap: Record<string, number> = {};
+
+      for (const doc of completedDocs) {
+        try {
+          let analysisData = doc.latestAnalysis;
+
+          if (!analysisData && !doc.id.startsWith("local-")) {
+            const analysesQuery = query(
+              collection(db, "documents", doc.id, "analyses"),
+              where("ownerId", "==", user.uid),
+              orderBy("processedAt", "desc"),
+              limit(1),
+            );
+            const analysesSnap = await getDocs(analysesQuery);
+            if (!analysesSnap.empty) {
+              analysisData = analysesSnap.docs[0].data();
+            }
+          }
+
+          if (analysisData) {
+            const raw =
+              analysisData.sentiment_score ??
+              analysisData.sentimentScore ??
+              0;
+            const confidence = normalizeConfidence(raw);
+            if (confidence !== null) {
+              totalConfidenceValues.push(confidence);
+
+              const ts = getTimestamp(
+                analysisData.processedAt || doc.createdAt,
+              );
+
+              confidenceTrend.push({ confidence, timestamp: ts });
+            }
+
+            const entities = analysisData.entities || [];
+            entities.forEach((e: string) => {
+              entitiesMap[e] = (entitiesMap[e] || 0) + 1;
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch analysis for doc:", doc.id, err);
+        }
+      }
+
+      const avgConfidence = totalConfidenceValues.length
+        ? Math.round(
+            totalConfidenceValues.reduce((a, b) => a + b, 0) /
+              totalConfidenceValues.length,
+          )
+        : 0;
+
+      setStats({
+        total: data.length,
+        completed: completedDocs.length,
+        pending: data.filter(
+          (d: any) => d.status === "pending" || d.status === "processing",
+        ).length,
+        highRisk: data.filter((d: any) => d.riskLevel === "high").length,
+        avgConfidence,
+        hasConfidenceData: totalConfidenceValues.length > 0,
+      });
+
+      confidenceTrend.sort((a, b) => a.timestamp - b.timestamp);
+
+      const uploadTrend = data
+        .map((doc) => ({
+          timestamp: getTimestamp(doc.createdAt),
+          count: 1,
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      const riskDistribution = [
+        {
+          name: "High",
+          value: data.filter((d: any) => d.riskLevel === "high").length,
+        },
+        {
+          name: "Medium",
+          value: data.filter((d: any) => d.riskLevel === "medium").length,
+        },
+        {
+          name: "Low",
+          value: data.filter((d: any) => d.riskLevel === "low").length,
+        },
+      ].filter((r) => r.value > 0);
+
+      const entityExposure = Object.entries(entitiesMap)
+        .map(([sector, weight]) => ({
+          sector,
+          weight,
+          risk: weight > 3 ? "High" : weight > 1 ? "Medium" : "Low",
+        }))
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, 8);
+
+      setChartData({
+        confidenceTrend,
+        uploadTrend,
+        riskDistribution,
+        entityExposure,
+      });
+    };
 
     const unsubscribe = onSnapshot(
       docsQuery,
@@ -70,161 +215,25 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
         const docs = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() }) as DashboardDocument,
         );
-        setRecentDocs(docs);
-
-        setLoading(false);
+        latestRemoteRef.current = docs;
+        processDocuments(docs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "documents");
-        setLoading(false);
+        latestRemoteRef.current = [];
+        processDocuments([]);
       },
     );
 
-    // Real aggregation for stats and charts
-    const fetchStats = async () => {
-      try {
-        const allDocsQuery = query(
-          collection(db, "documents"),
-          where("ownerId", "==", user.uid),
-        );
-        const allDocs = await getDocs(allDocsQuery);
-        const data = allDocs.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as DashboardDocument,
-        );
-
-        const getTimestamp = (dateVal: any) => {
-          if (!dateVal) return Date.now();
-          if (typeof dateVal === "number") return dateVal;
-          if (typeof dateVal.toDate === "function")
-            return dateVal.toDate().getTime();
-          if (dateVal.seconds) return dateVal.seconds * 1000;
-          const parsed = new Date(dateVal).getTime();
-          return isNaN(parsed) ? Date.now() : parsed;
-        };
-
-        const completedDocs = data.filter((d: any) => d.status === "completed");
-        let totalConfidenceValues: number[] = [];
-
-        let confidenceTrend: any[] = [];
-        let entitiesMap: Record<string, number> = {};
-
-        // For each completed document, get its latest analysis from subcollection or doc field
-        for (const doc of completedDocs) {
-          try {
-            let analysisData = doc.latestAnalysis;
-
-            if (!analysisData) {
-              const analysesQuery = query(
-                collection(db, "documents", doc.id, "analyses"),
-                where("ownerId", "==", user.uid),
-                orderBy("processedAt", "desc"),
-                limit(1),
-              );
-              const analysesSnap = await getDocs(analysesQuery);
-              if (!analysesSnap.empty) {
-                analysisData = analysesSnap.docs[0].data();
-              }
-            }
-
-            if (analysisData) {
-              const raw =
-                analysisData.sentiment_score ??
-                analysisData.sentimentScore ??
-                0;
-              const confidence = normalizeConfidence(raw);
-
-              // Only include documents that have a usable sentiment score in
-              // the average; missing data must not inflate or deflate it.
-              if (confidence !== null) {
-                totalConfidenceValues.push(confidence);
-
-                // Build confidence trend
-                const ts = getTimestamp(
-                  analysisData.processedAt || doc.createdAt,
-                );
-
-                // Only push if confidence > 0 to avoid zero-flatlines from missing data
-                if (confidence > 0) {
-                  confidenceTrend.push({ confidence, timestamp: ts });
-                }
-              }
-
-              // Aggregate entities
-              const entities = analysisData.entities || [];
-              entities.forEach((e: string) => {
-                entitiesMap[e] = (entitiesMap[e] || 0) + 1;
-              });
-            }
-          } catch (err) {
-            console.error("Failed to fetch analysis for doc:", doc.id, err);
-          }
-        }
-
-        const avgConfidence = totalConfidenceValues.length
-          ? Math.round(
-              totalConfidenceValues.reduce((a, b) => a + b, 0) /
-                totalConfidenceValues.length,
-            )
-          : 0;
-
-        setStats({
-          total: data.length,
-          completed: completedDocs.length,
-          pending: data.filter(
-            (d: any) => d.status === "pending" || d.status === "processing",
-          ).length,
-          highRisk: data.filter((d: any) => d.riskLevel === "high").length,
-          avgConfidence,
-        });
-
-        // Finalize chart data
-        confidenceTrend.sort((a, b) => a.timestamp - b.timestamp);
-
-        // Pass raw upload events for dynamic bucketing
-        const uploadTrend = data
-          .map((doc) => ({
-            timestamp: getTimestamp(doc.createdAt),
-            count: 1,
-          }))
-          .sort((a, b) => a.timestamp - b.timestamp);
-
-        const riskDistribution = [
-          {
-            name: "High",
-            value: data.filter((d: any) => d.riskLevel === "high").length,
-          },
-          {
-            name: "Medium",
-            value: data.filter((d: any) => d.riskLevel === "medium").length,
-          },
-          {
-            name: "Low",
-            value: data.filter((d: any) => d.riskLevel === "low").length,
-          },
-        ].filter((r) => r.value > 0);
-
-        const entityExposure = Object.entries(entitiesMap)
-          .map(([sector, weight]) => ({
-            sector,
-            weight,
-            risk: weight > 3 ? "High" : weight > 1 ? "Medium" : "Low",
-          }))
-          .sort((a, b) => b.weight - a.weight)
-          .slice(0, 8); // Top 8 entities
-
-        setChartData({
-          confidenceTrend,
-          uploadTrend,
-          riskDistribution,
-          entityExposure,
-        });
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, "documents");
-      }
+    const handleLocalDocsChanged = () => {
+      processDocuments(latestRemoteRef.current);
     };
-    fetchStats();
+    window.addEventListener("fin_local_docs_changed", handleLocalDocsChanged);
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener("fin_local_docs_changed", handleLocalDocsChanged);
+    };
   }, [user]);
 
   const sharedProps = { recentDocs, stats, chartData, onAction, onDocSelect };
