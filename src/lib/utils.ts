@@ -123,4 +123,11 @@ export function clearSharedDocId() {
   window.history.replaceState({}, "", url.toString());
 }
 
+export function csvEscape(value: unknown): string {
+  let text = value == null ? "" : String(value);
+  if (/^[=+\-@]/.test(text)) text = "'" + text;
+  if (/[",\r\n]/.test(text)) text = '"' + text.replace(/"/g, '""') + '"';
+  return text;
+}
+
 
