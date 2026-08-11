@@ -256,7 +256,7 @@ export function detectAnomalies(
             " expense of " +
             formatCurrency(amount) +
             " - " +
-            Math.round((amount / mean) * 100) +
+            Math.round(((amount - mean) / mean) * 100) +
             "% above average of " +
             formatCurrency(mean),
           date: t.date,
@@ -307,7 +307,7 @@ export function detectAnomalies(
             " this month vs " +
             formatCurrency(lastAmount) +
             " last month (" +
-            Math.round((amount / lastAmount) * 100) +
+            Math.round(((amount - lastAmount) / lastAmount) * 100) +
             "% increase)",
           date: new Date(),
           dismissed: false,
