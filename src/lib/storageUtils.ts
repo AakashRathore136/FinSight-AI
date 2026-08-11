@@ -2,6 +2,14 @@
 
 const LOCAL_DOCS_KEY = "fin_local_documents_v1";
 
+// Bounded local cache: keep at most this many documents in the localStorage
+// mirror so the 5 MB quota can never be exhausted by unbounded growth.
+const MAX_LOCAL_DOCS = 50;
+
+// When the browser reports usage above this fraction of quota, evict the
+// oldest entries before writing so new analyses keep being cached locally.
+const QUOTA_PRESSURE_RATIO = 0.9;
+
 export interface CachedAnalysisPayload {
   documentId: string;
   record: any;
@@ -10,12 +18,75 @@ export interface CachedAnalysisPayload {
   storedAt?: string;
 }
 
+export interface LocalSaveResult {
+  /** True when the localStorage mirror write succeeded. */
+  ok: boolean;
+  /** True when a quota error was encountered or storage pressure forced eviction. */
+  quotaExceeded: boolean;
+}
+
+function isQuotaError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as any)?.name === "QuotaExceededError"
+  );
+}
+
+function epochOf(entry?: CachedAnalysisPayload): number {
+  const ms = entry?.storedAt ? new Date(entry.storedAt).getTime() : 0;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function readLocalDocMap(): Record<string, CachedAnalysisPayload> {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_DOCS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.error("Error reading local documents from localStorage", err);
+    return {};
+  }
+}
+
+function writeLocalDocMap(
+  map: Record<string, CachedAnalysisPayload>,
+  documentId?: string,
+): void {
+  window.localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(map));
+  if (documentId) {
+    window.dispatchEvent(
+      new CustomEvent("fin_local_docs_changed", { detail: { documentId } }),
+    );
+  }
+}
+
+/** Evicts the oldest storedAt entries until the map has at most maxCount. */
+function evictOldest(
+  map: Record<string, CachedAnalysisPayload>,
+  maxCount: number,
+): void {
+  const keys = Object.keys(map);
+  if (keys.length <= maxCount) return;
+  keys
+    .sort((a, b) => epochOf(map[a]) - epochOf(map[b]))
+    .slice(0, keys.length - maxCount)
+    .forEach((key) => delete map[key]);
+}
+
 /**
- * Persists an analysis result locally in both localStorage (for long-term persistence across tabs/sessions)
- * and sessionStorage (for instant retrieval).
+ * Persists an analysis result locally in the localStorage documents map.
+ * The localStorage map is the single source of truth for the local/offline
+ * document list, so there is no divergent sessionStorage mirror. The map is
+ * bounded to MAX_LOCAL_DOCS entries (oldest evicted first) and quota pressure
+ * is checked before writing, so caching can never silently stall once storage
+ * fills up.
  */
-export function saveLocalAnalysis(payload: CachedAnalysisPayload): void {
-  if (typeof window === "undefined" || !payload?.documentId) return;
+export async function saveLocalAnalysis(
+  payload: CachedAnalysisPayload,
+): Promise<LocalSaveResult> {
+  if (typeof window === "undefined" || !payload?.documentId) {
+    return { ok: true, quotaExceeded: false };
+  }
 
   const now = new Date().toISOString();
   const cached: CachedAnalysisPayload = {
@@ -26,30 +97,51 @@ export function saveLocalAnalysis(payload: CachedAnalysisPayload): void {
     storedAt: now,
   };
 
-  // 1. Store in sessionStorage for fast session retrieval
+  // Check overall storage pressure; when near quota, evict oldest entries
+  // proactively so the mirror write below does not fail.
   try {
-    window.sessionStorage.setItem(
-      `fin_local_doc_${payload.documentId}`,
-      JSON.stringify(cached),
-    );
+    if (navigator.storage?.estimate) {
+      const { usage, quota } = await navigator.storage.estimate();
+      if (quota && usage && usage / quota >= QUOTA_PRESSURE_RATIO) {
+        const docMap = readLocalDocMap();
+        evictOldest(docMap, Math.max(1, Math.floor(MAX_LOCAL_DOCS / 2)));
+        try {
+          writeLocalDocMap(docMap);
+        } catch (err) {
+          if (!isQuotaError(err)) console.warn("Could not compact local cache", err);
+        }
+      }
+    }
   } catch (err) {
-    console.warn("Could not cache in sessionStorage", err);
+    // navigator.storage.estimate() is unavailable/unsupported — continue.
+    console.warn("Could not estimate storage quota", err);
   }
 
-  // 2. Store in localStorage documents map
+  // 3. Store in localStorage documents map (bounded + evicting)
   try {
-    const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
-    const docMap: Record<string, CachedAnalysisPayload> = rawMap
-      ? JSON.parse(rawMap)
-      : {};
-
+    const docMap = readLocalDocMap();
     docMap[payload.documentId] = cached;
-    window.localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(docMap));
-    
-    // Dispatch custom event so components can update reactively if needed
-    window.dispatchEvent(new CustomEvent("fin_local_docs_changed", { detail: { documentId: payload.documentId } }));
+    evictOldest(docMap, MAX_LOCAL_DOCS);
+    writeLocalDocMap(docMap, payload.documentId);
+    return { ok: true, quotaExceeded: false };
   } catch (err) {
+    if (isQuotaError(err)) {
+      // Drop the oldest entry and retry once so the newest analysis still
+      // gets an offline copy.
+      try {
+        const docMap = readLocalDocMap();
+        delete docMap[payload.documentId];
+        evictOldest(docMap, Math.max(1, MAX_LOCAL_DOCS - 1));
+        docMap[payload.documentId] = cached;
+        evictOldest(docMap, MAX_LOCAL_DOCS);
+        writeLocalDocMap(docMap, payload.documentId);
+        return { ok: true, quotaExceeded: true };
+      } catch {
+        return { ok: false, quotaExceeded: true };
+      }
+    }
     console.warn("Could not cache in localStorage", err);
+    return { ok: false, quotaExceeded: false };
   }
 }
 
@@ -75,15 +167,9 @@ export function getLocalDocuments(ownerId?: string): any[] {
         record.latestAnalysis = item.analysis;
       }
 
-      if (
-        !ownerId ||
-        !record.ownerId ||
-        record.ownerId === ownerId ||
-        record.ownerId === "anonymous" ||
-        record.ownerId === "anonymous_user" ||
-        record.ownerId?.startsWith("local-") ||
-        record.ownerId?.includes("anon")
-      ) {
+      if (!ownerId) {
+        docs.push(record);
+      } else if (record.ownerId === ownerId) {
         docs.push(record);
       }
     }
@@ -96,25 +182,18 @@ export function getLocalDocuments(ownerId?: string): any[] {
 }
 
 /**
- * Retrieves a single cached analysis by documentId (checks localStorage first, then sessionStorage).
+ * Retrieves a single cached analysis by documentId from the localStorage map.
  */
 export function getLocalDocumentById(documentId: string): CachedAnalysisPayload | null {
   if (typeof window === "undefined" || !documentId) return null;
 
   try {
-    // Check localStorage map first
     const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
     if (rawMap) {
       const docMap: Record<string, CachedAnalysisPayload> = JSON.parse(rawMap);
       if (docMap[documentId]) {
         return docMap[documentId];
       }
-    }
-
-    // Check sessionStorage backup
-    const rawSession = window.sessionStorage.getItem(`fin_local_doc_${documentId}`);
-    if (rawSession) {
-      return JSON.parse(rawSession);
     }
   } catch (err) {
     console.error("Error reading local document by id", err);
@@ -124,26 +203,54 @@ export function getLocalDocumentById(documentId: string): CachedAnalysisPayload 
 }
 
 /**
- * Deletes a local document from both localStorage and sessionStorage.
+ * Deletes a local document from the localStorage map.
  */
 export function deleteLocalDocument(documentId: string): void {
   if (typeof window === "undefined" || !documentId) return;
 
   try {
-    window.sessionStorage.removeItem(`fin_local_doc_${documentId}`);
+    const docMap = readLocalDocMap();
+    if (docMap[documentId]) {
+      delete docMap[documentId];
+      writeLocalDocMap(docMap, documentId);
+    }
+  } catch (err) {
+    console.error("Error removing local document", err);
+  }
+}
+
+/**
+ * Clears every locally-cached analysis payload — the localStorage documents
+ * map and all sessionStorage fin_local_doc_* entries. Called from account
+ * erasure (and logout) so deleted or abandoned financial data never survives
+ * on the device.
+ */
+export function clearAllLocalData(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(LOCAL_DOCS_KEY);
   } catch {
     // ignore
   }
 
   try {
-    const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
-    if (rawMap) {
-      const docMap: Record<string, CachedAnalysisPayload> = JSON.parse(rawMap);
-      delete docMap[documentId];
-      window.localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(docMap));
-      window.dispatchEvent(new CustomEvent("fin_local_docs_changed", { detail: { documentId } }));
+    const session = window.sessionStorage;
+    const doomed: string[] = [];
+    for (let i = 0; i < session.length; i++) {
+      const key = session.key(i);
+      if (key && key.startsWith("fin_local_doc_")) doomed.push(key);
     }
-  } catch (err) {
-    console.error("Error removing local document", err);
+    doomed.forEach((key) => session.removeItem(key));
+  } catch {
+    // ignore
+  }
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent("fin_local_docs_changed", { detail: { cleared: true } }),
+    );
+  } catch {
+    // ignore
   }
 }

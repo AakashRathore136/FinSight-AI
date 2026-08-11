@@ -101,27 +101,6 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
     return `Analysis failed with status ${statusCode}`;
   };
 
-  const cacheLocalAnalysis = (payload: any) => {
-    if (typeof window === "undefined") return;
-    if (!payload?.documentId) return;
-
-    const cached = {
-      record: payload.record || null,
-      analysis: payload.analysis || null,
-      persistenceMode: payload.persistenceMode || "local",
-      storedAt: new Date().toISOString(),
-    };
-
-    try {
-      window.sessionStorage.setItem(
-        `fin_local_doc_${payload.documentId}`,
-        JSON.stringify(cached),
-      );
-    } catch (error) {
-      console.warn("Could not cache local analysis result", error);
-    }
-  };
-
   const startAnalysis = async () => {
     if (!file || !user) return;
 
@@ -212,7 +191,20 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
       }
 
       // Save locally in localStorage + sessionStorage
-      saveLocalAnalysis(result);
+      try {
+        const saved = await saveLocalAnalysis(result);
+        if (!saved.ok) {
+          toast.warning(
+            "Offline copy couldn't be saved (storage quota reached). Your analysis is safe in the cloud.",
+          );
+        } else if (saved.quotaExceeded) {
+          toast.warning(
+            "Local storage is full — older offline analyses were evicted to make room.",
+          );
+        }
+      } catch (err) {
+        console.error("Failed to cache analysis locally", err);
+      }
 
       // If local persistence mode was used by server, attempt client-side Firestore write as well
       if (result?.persistenceMode === "local" && user?.uid) {
