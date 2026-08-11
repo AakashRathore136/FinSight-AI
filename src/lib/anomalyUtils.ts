@@ -15,7 +15,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
-import { formatCurrency, toDate } from "./utils";
+import { formatCurrency, normalizeTransactionType, toDate } from "./utils";
 import { format, subMonths, startOfMonth } from "date-fns";
 import {
   calculateCategoryBaseline,
@@ -157,6 +157,7 @@ export function detectCategorySpikes(
   const byCategory = new Map<string, Transaction[]>();
 
   transactions.forEach((transaction) => {
+    if (normalizeTransactionType(transaction.type) !== "expense") return;
     const date = toDate(transaction.date) || new Date();
     if (format(date, "yyyy-MM") !== currentMonth) return;
     const category = transaction.category || "Other";
@@ -247,6 +248,7 @@ export function detectAnomalies(
   const anomalies: Omit<Anomaly, "id" | "createdAt">[] = [];
   const categoryAverages = new Map<string, { total: number; count: number }>();
   transactions.forEach((t) => {
+    if (normalizeTransactionType(t.type) !== "expense") return;
     const cat = t.category || "Other";
     const existing = categoryAverages.get(cat) || { total: 0, count: 0 };
     existing.total += Math.abs(t.amount);
@@ -255,6 +257,7 @@ export function detectAnomalies(
   });
 
   transactions.forEach((t) => {
+    if (normalizeTransactionType(t.type) !== "expense") return;
     const cat = t.category || "Other";
     const avg = categoryAverages.get(cat);
     if (avg && avg.count > 1) {
@@ -294,6 +297,7 @@ export function detectAnomalies(
   const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
   const monthlySpend = new Map<string, Map<string, number>>();
   transactions.forEach((t) => {
+    if (normalizeTransactionType(t.type) !== "expense") return;
     const monthKey = format(
       toDate(t.date) || new Date(),
       "yyyy-MM",
