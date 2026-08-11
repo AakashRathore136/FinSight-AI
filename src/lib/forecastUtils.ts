@@ -15,6 +15,7 @@ import { db, handleFirestoreError, OperationType } from './firebase';
 import { format, isWithinInterval } from 'date-fns';
 import { toDate } from './utils';
 import { getForecastMonths } from './forecastMonthUtils';
+import { csvEscape } from './reportUtils';
 
 export interface ForecastData {
   id: string;
@@ -201,12 +202,13 @@ export function applyFilters<T extends { month: string }>(
 }
 
 export function exportForecastChart(data: MonthlyForecast[]): string {
+  const esc = (v: unknown) => csvEscape(v);
   const lines = [
     'FinSight AI — Forecast Export',
     '============================',
     '',
     'Month,Income,Expenses,Net Balance,Confidence',
-    ...data.map((d) => `${d.month},${d.income},${d.expenses},${d.net},${d.confidence}%`),
+    ...data.map((d) => [esc(d.month), esc(d.income), esc(d.expenses), esc(d.net), esc(d.confidence + '%')].join(',')),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
   ];
