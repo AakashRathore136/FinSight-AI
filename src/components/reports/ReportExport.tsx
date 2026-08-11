@@ -34,7 +34,7 @@ import {
   Printer,
   ChevronRight,
 } from "lucide-react";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, endOfDay } from "date-fns";
 import {
   fetchTransactionsForDateRange,
   generateExpenseSummary,
@@ -97,9 +97,15 @@ function getDateRange(
     return { start: startOfMonth(today), end: endOfMonth(today) };
   }
 
+  // End at the close of today so the primary Firestore query path
+  // (where("date", "<=", endDate)) includes today's transactions — matching
+  // the fallback path which applies endOfDay. Otherwise the midnight upper
+  // bound silently drops every transaction timestamped today.
+  const endOfToday = endOfDay(today);
+
   if (preset === "Last 3 Months") {
     const start = startOfMonth(subDays(today, 90));
-    return { start, end: today };
+    return { start, end: endOfToday };
   }
 
   if (preset === "Custom" && customStart && customEnd) {
@@ -107,7 +113,7 @@ function getDateRange(
   }
 
   const days = preset === "Last 7 Days" ? 7 : 30;
-  return { start: subDays(today, days), end: today };
+  return { start: subDays(today, days), end: endOfToday };
 }
 
 export function ReportExport() {
