@@ -341,10 +341,17 @@ export function identifyOpportunities(
       }
       avgInterval = intervalCount > 0 ? intervalTotal / intervalCount : 0;
     }
+    // A realistic annual figure requires cadence evidence: at least two
+    // charges with a measurable interval (>= 1 day). A single one-time charge
+    // — even one whose merchant matches a subscription keyword — is not a
+    // recurring subscription and must never be annualized at a fixed 12x.
+    // (Issue #868)
+    if (sorted.length < 2 || avgInterval < 1) continue;
     // Weekly cadence ≈ 52 charges/year, monthly ≈ 12, quarterly ≈ 4. Charges
     // bunched closer than a week are capped at the weekly rate rather than
-    // inflating the annual figure.
-    const chargesPerYear = avgInterval >= 1 ? Math.min(52, 365 / avgInterval) : 12;
+    // inflating the annual figure. The factor is always derived from the
+    // measured cadence, never a hardcoded default.
+    const chargesPerYear = Math.min(52, 365 / Math.max(1, avgInterval));
     const annualized = monthly * chargesPerYear;
     const display = list[0].merchant || list[0].description || key;
     opportunities.push({
