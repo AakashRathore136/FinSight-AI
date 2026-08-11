@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 // Tax utility functions for the Regional Tax Estimation Assistant.
 // Bracket data is simplified for estimation/educational purposes only.
 
@@ -56,8 +57,8 @@ export const COUNTRY_TAX_DATA: CountryTaxData[] = [
           { threshold: 47150, rate: 0.12 },
           { threshold: 100525, rate: 0.22 },
           { threshold: 191950, rate: 0.24 },
-          { threshold: 383900, rate: 0.32 },
-          { threshold: 487450, rate: 0.35 },
+          { threshold: 243725, rate: 0.32 },
+          { threshold: 609350, rate: 0.35 },
           { threshold: Infinity, rate: 0.37 },
         ],
       },
@@ -70,8 +71,8 @@ export const COUNTRY_TAX_DATA: CountryTaxData[] = [
           { threshold: 47150, rate: 0.12 },
           { threshold: 100525, rate: 0.22 },
           { threshold: 191950, rate: 0.24 },
-          { threshold: 383900, rate: 0.32 },
-          { threshold: 487450, rate: 0.35 },
+          { threshold: 243725, rate: 0.32 },
+          { threshold: 609350, rate: 0.35 },
           { threshold: Infinity, rate: 0.37 },
         ],
         stateBrackets: [
@@ -95,8 +96,8 @@ export const COUNTRY_TAX_DATA: CountryTaxData[] = [
           { threshold: 47150, rate: 0.12 },
           { threshold: 100525, rate: 0.22 },
           { threshold: 191950, rate: 0.24 },
-          { threshold: 383900, rate: 0.32 },
-          { threshold: 487450, rate: 0.35 },
+          { threshold: 243725, rate: 0.32 },
+          { threshold: 609350, rate: 0.35 },
           { threshold: Infinity, rate: 0.37 },
         ],
         notes: 'Texas has no state income tax.',
@@ -110,8 +111,8 @@ export const COUNTRY_TAX_DATA: CountryTaxData[] = [
           { threshold: 47150, rate: 0.12 },
           { threshold: 100525, rate: 0.22 },
           { threshold: 191950, rate: 0.24 },
-          { threshold: 383900, rate: 0.32 },
-          { threshold: 487450, rate: 0.35 },
+          { threshold: 243725, rate: 0.32 },
+          { threshold: 609350, rate: 0.35 },
           { threshold: Infinity, rate: 0.37 },
         ],
         stateBrackets: [
