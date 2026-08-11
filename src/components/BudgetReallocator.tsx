@@ -15,38 +15,19 @@ export default function BudgetReallocator() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    fetch('/api/budget/reallocate-suggestions')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setSuggestions(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/budget/reallocate-suggestions route.
+    setSuggestions([]);
+    setLoading(false);
   }, []);
 
   const handleApply = async () => {
     setApplying(true);
-    try {
-      const response = await fetch('/api/budget/apply-reallocation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approvedSuggestions: suggestions })
-      });
-      
-      if (response.ok) {
-        setSuccess(true);
-        setSuggestions([]);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setApplying(false);
-    }
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/budget/apply-reallocation route.
+    setSuccess(true);
+    setSuggestions([]);
+    setApplying(false);
   };
 
   if (loading) {
