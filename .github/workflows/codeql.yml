@@ -3,10 +3,27 @@ name: CodeQL Security Analysis
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - '.github/workflows/codeql.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - '.github/workflows/codeql.yml'
   schedule:
-    # Runs every Monday at 03:00 UTC
     - cron: '0 3 * * 1'
   workflow_dispatch: {}
 
@@ -28,14 +45,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v7
+      - name: Setup Node.js project
+        uses: ./.github/actions/setup-node-project
         with:
           node-version: '18'
-          cache: 'npm'
+          package-manager: npm
+          install-dependencies: 'false'
+          cache: 'true'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -44,7 +63,7 @@ jobs:
       # env vars to succeed (Vite build-time checks), replace this step
       # with the manual install+build block commented below.
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       # --- Manual build alternative (use if Autobuild fails) ---
       # - name: Install dependencies
@@ -61,6 +80,6 @@ jobs:
       #     VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{ matrix.language }}'
