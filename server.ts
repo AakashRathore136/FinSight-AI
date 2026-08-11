@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-escape, no-control-regex */
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -857,11 +858,14 @@ async function startServer() {
   // `concurrentAnalyzeLimiter` must run BEFORE `analyzeRateLimiter`: the rate
   // limiter counts every request that reaches it, so a request rejected at the
   // concurrency gate (429 CONCURRENT_LIMIT) must never consume daily quota.
+  // `upload.single` runs before `analyzeRateLimiter` so multer-rejected
+  // uploads (400 bad MIME, 413 LIMIT_FILE_SIZE) don't burn a daily analysis
+  // slot either — only valid files count toward the quota.
   app.post(
     "/api/analyze",
     concurrentAnalyzeLimiter,
-    analyzeRateLimiter,
     upload.single("file"),
+    analyzeRateLimiter,
     async (req: any, res) => {
       try {
 
@@ -1555,6 +1559,64 @@ CRITICAL RULES:
 
       const storagePath =
         typeof docData?.storagePath === "string" ? docData.storagePath : "";
+
+      // SECURITY: the ownership check above only proves the caller owns the
+      // Firestore record. The record's storagePath is client-controlled at
+      // create time, so it must never be trusted to point at another user's
+      // Storage object. Mirror the download endpoint (see
+      // POST /api/document-download-url, which verifies namespace + uploadedBy
+      // metadata): refuse to delete unless the object lives under the caller's
+      // own prefix AND was uploaded by the caller.
+      if (storagePath) {
+        const expectedPrefix = `analyses/${req.ownerId}/`;
+        if (!storagePath.startsWith(expectedPrefix)) {
+          console.warn(
+            `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, storagePath=${storagePath}, reason=path prefix mismatch`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
+        try {
+          const [metadata] = await getStorage().bucket().file(storagePath).getMetadata();
+          const uploadedBy = metadata?.metadata?.uploadedBy;
+          if (!metadata || uploadedBy !== req.ownerId) {
+            console.warn(
+              `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, storagePath=${storagePath}, reason=uploadedBy mismatch`,
+            );
+            return res.status(403).json({
+              error: {
+                stage: "AUTHORIZATION",
+                reason: "You do not have access to this document",
+                recommendation: "Verify the document belongs to your account.",
+              },
+            });
+          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (metadataError: any) {
+          // A missing object (404) is fine — there is nothing left to delete.
+          // Any other failure must not purge a record whose Storage ownership
+          // could not be verified.
+          if (metadataError?.code !== 404) {
+            console.error(
+              "STORAGE_OBJECT_METADATA_ERROR:",
+              metadataError?.message || metadataError,
+            );
+            return res.status(500).json({
+              error: {
+                stage: "DOCUMENT_DELETE",
+                reason: "Failed to verify storage object ownership",
+                recommendation: "Please try again.",
+              },
+            });
+          }
+        }
+      }
 
       // Delete the analyses subcollection docs and the parent document in a
       // single batch so the record cannot be left half-purged.

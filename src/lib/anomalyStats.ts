@@ -40,6 +40,7 @@ export function calculateCategoryBaseline(
 
   const baseline = new Map<string, CategoryBaseline>();
   grouped.forEach((items, category) => {
+    if (items.length === 0) return;
     const amounts = items.map((item) => Math.abs(item.amount));
     const mean =
       amounts.length > 0
