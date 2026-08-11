@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Vercel Serverless Function: /api/process
  *
@@ -30,7 +31,17 @@ function getEnv(key: string, fallback = ""): string {
 function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
-
+// Mirrors api/analyze.ts's resolution exactly, so both serverless handlers
+// agree on which Firestore database they read/write — a mismatch here would
+// mean /api/process silently persists to a different database than
+// /api/analyze and server.ts read from.
+function getFirestoreDatabaseId(): string {
+  return (
+    getEnv("FIREBASE_FIRESTORE_DATABASE_ID") ||
+    getEnv("VITE_FIREBASE_FIRESTORE_DATABASE_ID") ||
+    "(default)"
+  );
+}
 // Strip path separators and traversal segments from client-supplied filenames
 // before they become part of a Storage object path. Without this, a raw
 // filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
@@ -42,8 +53,8 @@ function sanitizeStorageFilename(filename: string): string {
     "document.pdf";
   name = name
     .replace(/\.\./g, "_")
-    .replace(/[\/\\]/g, "_")
-    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .replace(/[/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "_") // eslint-disable-line no-control-regex
     .trim();
   if (!name || name === "." || name === "..") name = "document.pdf";
   if (name.length > 120) {
@@ -243,7 +254,7 @@ function safeJsonParse(text: string): unknown {
   const fa = c.indexOf("["), la = c.lastIndexOf("]");
   if (fo !== -1 && lo !== -1 && (fa === -1 || fo < fa)) extracted = c.slice(fo, lo + 1);
   else if (fa !== -1 && la !== -1) extracted = c.slice(fa, la + 1);
-  try { return JSON.parse(extracted); } catch {}
+  try { return JSON.parse(extracted); } catch { /* ignore - extracted text is not valid JSON */ }
   const rep = extracted.replace(/,\s*([}\]])/g, "$1");
   try { return JSON.parse(rep); } catch (e: any) { throw new Error(`JSON parse failed: ${e.message}`); }
 }
@@ -364,6 +375,7 @@ async function getAdminApp(): Promise<any | null> {
 
   try {
     const { default: admin } = await import("firebase-admin");
+    const { getFirestore } = await import("firebase-admin/firestore");
 
     if (!admin.apps.length) {
       const storageBucket = getEnv("VITE_FIREBASE_STORAGE_BUCKET") || `${projectId}.firebasestorage.app`;
@@ -390,7 +402,7 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => admin.firestore(),
+      getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
     return _adminApp;
   } catch (err: any) {
@@ -538,8 +550,6 @@ export default async function handler(req: any, res: any) {
 
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
-
-    const appCtx = await getAdminApp();
 
     // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
     // then derive fileUrl from the real object URL instead of a placeholder domain.
