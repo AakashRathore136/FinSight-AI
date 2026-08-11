@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import pdfParse from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from "firebase-admin";
@@ -6,6 +7,11 @@ import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
 
 dotenv.config({ quiet: true });
+
+interface RiskAssessmentItem {
+  level?: unknown;
+  description?: unknown;
+}
 
 export const config = {
   api: {
@@ -56,6 +62,65 @@ function sanitizeStorageFilename(filename: string): string {
   }
   return name;
 }
+
+
+function getAllowedOrigins(): Set<string> {
+  const isProduction = process.env.NODE_ENV === "production";
+  const origins = [
+    process.env.APP_URL,
+    process.env.FRONTEND_URL,
+    ...(isProduction
+      ? []
+      : [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:3001",
+          "http://127.0.0.1:3001",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ]),
+  ].filter((origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL");
+  return new Set(origins);
+}
+
+function applyCors(req: IncomingMessage, res: ServerResponse): void {
+  const origin = String(req.headers?.origin ?? "");
+  const allowed = getAllowedOrigins();
+  if (origin && allowed.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else if (!origin && process.env.NODE_ENV !== "production") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
+function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
+  const mimeOk = !mimetype || mimetype === "application/pdf" || mimetype === "application/x-pdf";
+  const magicOk =
+    buffer.length >= 4 &&
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46;
+  return Boolean(magicOk && mimeOk);
+}
+
+const analyzeRateBuckets = new Map<string, number[]>();
+
+function acceptAnalyzeRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
+  const now = Date.now();
+  const recent = (analyzeRateBuckets.get(ip) || []).filter((ts) => now - ts < windowMs);
+  if (recent.length >= limit) {
+    analyzeRateBuckets.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  analyzeRateBuckets.set(ip, recent);
+  return true;
+}
+
 
 type AnalysisResponse = {
   summary: string;
@@ -176,8 +241,8 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
       ? payload.risk_assessment.map((item: any) =>
           typeof item === "object" && item
             ? {
-                level: sanitizeString(String(item.level || "")),
-                description: sanitizeString(String(item.description || "")),
+                level: sanitizeString(String((item as RiskAssessmentItem).level || "")),
+                description: sanitizeString(String((item as RiskAssessmentItem).description || "")),
               }
             : sanitizeString(String(item || "")),
         )
@@ -436,9 +501,7 @@ function parseMultipart(
 }
 
 export default async function handler(req: VercelReq, res: VercelRes) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") {
     res.status(204).end();
@@ -447,6 +510,22 @@ export default async function handler(req: VercelReq, res: VercelRes) {
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
+  const clientIp = String(
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "unknown",
+  );
+  if (!acceptAnalyzeRequest(clientIp)) {
+    res.status(429).json({
+      error: {
+        stage: "RATE_LIMIT",
+        reason: "Too many analysis requests. Please try again later.",
+        recommendation: "Wait a few minutes before retrying.",
+      },
+    });
     return;
   }
 
@@ -531,13 +610,25 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       );
     }
 
+    if (!isPdfBuffer(fileBuffer)) {
+      throw new PipelineError(
+        "PDF_INGESTION",
+        "Uploaded file is not a valid PDF.",
+        "Please upload a PDF that starts with %PDF magic bytes.",
+      );
+    }
+
     let extractedText = "";
     try {
       const parsedPdf = await pdfParse(fileBuffer);
       extractedText = String(parsedPdf?.text || "").trim();
     } catch (pdfErr: any) {
-      console.warn("[analyze] pdfParse failed, using text fallback:", pdfErr?.message);
-      extractedText = fileBuffer.toString("utf8").replace(/[^\x20-\x7E\n\r\t]/g, " ").trim();
+      console.warn("[analyze] pdfParse failed, rejecting non-extractable upload:", pdfErr?.message);
+      throw new PipelineError(
+        "PDF_INGESTION",
+        "Unable to extract text from the uploaded PDF.",
+        "Please upload a text-based PDF and try again.",
+      );
     }
 
     if (!extractedText || extractedText.length < 20) {
@@ -704,13 +795,15 @@ full_report MUST be at least 300 words.`;
 
     console.error(`[analyze] ${stage}: ${reason}`);
 
+    const isProd = process.env.NODE_ENV === "production";
     res.status(500).json({
       error: {
         stage,
-        reason,
+        reason: isProd
+          ? "An unexpected error occurred while analyzing the document."
+          : reason,
         recommendation,
-        stack:
-          process.env.NODE_ENV !== "production" ? error?.stack : undefined,
+        stack: isProd ? undefined : error?.stack,
       },
     });
   }

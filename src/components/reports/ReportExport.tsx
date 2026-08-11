@@ -34,7 +34,7 @@ import {
   FileSpreadsheet,
   Printer,
 } from "lucide-react";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, endOfDay } from "date-fns";
 import {
   fetchTransactionsForDateRange,
   generateExpenseSummary,
@@ -101,7 +101,7 @@ function getDateRange(
 
   if (preset === "Last 3 Months") {
     const start = startOfMonth(subDays(today, 90));
-    return { start, end: today };
+    return { start, end: endOfDay(today) };
   }
 
   if (preset === "Custom" && customStart && customEnd) {
@@ -109,7 +109,7 @@ function getDateRange(
   }
 
   const days = preset === "Last 7 Days" ? 7 : 30;
-  return { start: subDays(today, days), end: today };
+  return { start: subDays(today, days), end: endOfDay(today) };
 }
 
 export function ReportExport() {
@@ -225,6 +225,7 @@ export function ReportExport() {
         transactions,
         expenseSummary,
         incomeSummary,
+        baseCurrency,
       );
       setReportData(data);
 
