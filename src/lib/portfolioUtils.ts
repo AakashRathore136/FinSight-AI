@@ -5,6 +5,7 @@
  */
 
 import {
+  addDoc,
   collection,
   doc,
   getDocs,
@@ -13,7 +14,6 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
   orderBy,
   deleteDoc,
   runTransaction,
@@ -215,6 +215,10 @@ export function generatePortfolioSummary(holdings: Holding[], transactions: Tran
 
 export async function addTransaction(userId: string, input: TransactionInput): Promise<Transaction | null> {
   try {
+    const transactionRef = doc(collection(db, 'portfolioTransactions'));
+    const holdings = collection(db, 'portfolioHoldings');
+    const symbol = input.symbol.trim();
+    const now = new Date().toISOString();
     const id = doc(collection(db, 'portfolioTransactions')).id;
     const transaction: Omit<Transaction, 'id'> = {
       userId,
@@ -229,75 +233,94 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       createdAt: new Date().toISOString(),
     };
 
-    // Buy and sell must reconcile the holding quantity atomically so
-    // concurrent writes cannot clobber each other, and a sell can never push
-    // the quantity below zero. dividend/deposit/withdrawal are cash events
-    // and intentionally leave the share quantity and cost basis untouched.
-    if (input.type === 'buy' || input.type === 'sell') {
-      const holdingSnap = await getDocs(
-        query(
-          collection(db, 'portfolioHoldings'),
-          where('userId', '==', userId),
-          where('symbol', '==', input.symbol),
-        ),
+    // Queries are not allowed inside client transactions — resolve the holding
+    // document ref first, then lock/update it atomically with the ledger write.
+    let holdingRef = input.holdingId ? doc(db, 'portfolioHoldings', input.holdingId) : null;
+    if (!holdingRef && (input.type === 'buy' || input.type === 'sell')) {
+      const holdingsSnap = await getDocs(
+        query(holdings, where('userId', '==', userId), where('symbol', '==', symbol)),
       );
-
-      if (holdingSnap.empty) {
-        if (input.type === 'sell') {
-          throw new Error(
-            `Cannot sell ${input.quantity} shares: no holding exists for ${input.symbol}`,
-          );
-        }
+      if (!holdingsSnap.empty) {
+        holdingRef = holdingsSnap.docs[0].ref;
+      } else if (input.type === 'buy') {
+        holdingRef = doc(holdings);
       } else {
-        const holdingRef = holdingSnap.docs[0].ref;
-        const currentHolding = holdingSnap.docs[0].data();
-        if (
-          input.type === 'sell' &&
-          input.quantity > (currentHolding.quantity || 0)
-        ) {
-          throw new Error(
-            `Cannot sell ${input.quantity} shares: only ${currentHolding.quantity || 0} are held for ${input.symbol}`,
-          );
-        }
-
-        await runTransaction(db, async (tx) => {
-          const snap = await tx.get(holdingRef);
-          const data = snap.data();
-          if (!data) return;
-
-          const currentQty = data.quantity || 0;
-          if (
-            input.type === 'sell' &&
-            input.quantity > currentQty
-          ) {
-            throw new Error(
-              `Cannot sell ${input.quantity} shares: only ${currentQty} are held for ${input.symbol}`,
-            );
-          }
-
-          const totalShares =
-            input.type === 'buy'
-              ? currentQty + input.quantity
-              : currentQty - input.quantity;
-
-          // Average-cost method: buys raise the per-share basis, sells leave
-          // the remaining shares' basis unchanged.
-          let avgCost = data.avgCost || 0;
-          if (input.type === 'buy') {
-            const totalCost =
-              currentQty * avgCost + input.quantity * input.price;
-            avgCost = totalShares > 0 ? totalCost / totalShares : input.price;
-          }
-
-          await tx.update(holdingRef, {
-            quantity: totalShares,
-            avgCost,
-            updatedAt: serverTimestamp(),
-          });
-        });
+        throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
       }
     }
 
+    const transaction = await runTransaction(db, async (tx) => {
+      let resolvedHoldingId = holdingRef?.id || input.holdingId || '';
+
+      if ((input.type === 'buy' || input.type === 'sell') && holdingRef) {
+        const holdingSnap = await tx.get(holdingRef);
+        const existing = holdingSnap.data();
+
+        if (!existing) {
+          if (input.type === 'sell') {
+            throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
+          }
+          const quantity = input.quantity;
+          const avgCost =
+            quantity > 0 ? (input.quantity * input.price + input.fees) / quantity : input.price;
+          tx.set(holdingRef, {
+            userId,
+            symbol,
+            name: symbol,
+            assetClass: 'equities',
+            quantity,
+            avgCost,
+            currentPrice: input.price,
+            currency: 'USD',
+            createdAt: now,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const currentQty = existing.quantity || 0;
+          if (input.type === 'sell' && input.quantity > currentQty) {
+            throw new Error(
+              `Cannot sell ${input.quantity} shares: only ${currentQty} are held for ${symbol}`,
+            );
+          }
+
+          const quantity =
+            input.type === 'buy' ? currentQty + input.quantity : currentQty - input.quantity;
+          const avgCost =
+            input.type === 'buy' && quantity > 0
+              ? (currentQty * (existing.avgCost || 0) +
+                  input.quantity * input.price +
+                  input.fees) /
+                quantity
+              : existing.avgCost || 0;
+
+          tx.update(holdingRef, {
+            quantity,
+            avgCost,
+            currentPrice: input.price,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        resolvedHoldingId = holdingRef.id;
+      }
+
+      const ledgerTransaction: Omit<Transaction, 'id'> = {
+        userId,
+        holdingId: resolvedHoldingId,
+        symbol,
+        type: input.type,
+        quantity: input.quantity,
+        price: input.price,
+        fees: input.fees,
+        notes: input.notes?.trim() || '',
+        date: input.date,
+        createdAt: now,
+      };
+      tx.set(transactionRef, { ...ledgerTransaction, createdAt: serverTimestamp() });
+      return { ...ledgerTransaction, id: transactionRef.id };
+    });
+
+    return transaction;
     let transactionId = id;
     if (input.type === 'buy') {
       const ref = await addDoc(collection(db, 'portfolioTransactions'), {
