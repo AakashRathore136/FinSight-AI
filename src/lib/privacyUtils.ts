@@ -19,6 +19,7 @@ import {
 import { deleteObject, listAll, ref } from "firebase/storage";
 import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
 import { DEFAULT_ROLE } from "./roleConstants";
+import { clearAllLocalData } from "./storageUtils";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -262,6 +263,9 @@ async function deleteUserStorageFiles(userId: string): Promise<void> {
 }
 
 export async function deleteUserData(userId: string): Promise<void> {
+  // Purge the device caches first: the local mirror holds full analysis
+  // payloads (records + AI reports) that must not survive account erasure.
+  clearAllLocalData();
   // Write the deletion tombstone (users/<uid>.deletedAt) first so that
   // onAuthStateChanged cannot resurrect the profile even if a later step fails.
   const userRef = doc(db, "users", userId);
