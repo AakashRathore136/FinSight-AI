@@ -18,6 +18,8 @@ import {
 } from "firebase/firestore";
 import { deleteObject, listAll, ref } from "firebase/storage";
 import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
+import { DEFAULT_ROLE } from "./roleConstants";
+import { clearAllLocalData } from "./storageUtils";
 import { format } from "date-fns";
 
 export interface PrivacySettings {
@@ -25,6 +27,7 @@ export interface PrivacySettings {
   dataRetentionEnabled: boolean;
   analyticsEnabled: boolean;
   sharingEnabled: boolean;
+  mfaEnabled?: boolean;
   exportRequestedAt: string;
   deletionRequestedAt: string;
   updatedAt: string;
@@ -123,11 +126,15 @@ const USER_COLLECTIONS = [
   "chat_messages",
   "budget_categories",
   "budget_rollovers",
+  "budgets",
   "portfolioHoldings",
   "portfolioTransactions",
   "portfolios",
+  "portfolioSnapshots",
+  "forecasts",
   "tax_estimates",
   "bills",
+  "activity_log",
 ];
 
 export async function exportUserData(
@@ -259,6 +266,9 @@ async function deleteUserStorageFiles(userId: string): Promise<void> {
 }
 
 export async function deleteUserData(userId: string): Promise<void> {
+  // Purge the device caches first: the local mirror holds full analysis
+  // payloads (records + AI reports) that must not survive account erasure.
+  clearAllLocalData();
   // Write the deletion tombstone (users/<uid>.deletedAt) first so that
   // onAuthStateChanged cannot resurrect the profile even if a later step fails.
   const userRef = doc(db, "users", userId);
@@ -266,13 +276,13 @@ export async function deleteUserData(userId: string): Promise<void> {
     const existing = await getDoc(userRef);
     const profile = existing.exists() ? existing.data() : {};
     await deleteDoc(userRef);
+    // Tombstone recreate must use DEFAULT_ROLE — Firestore create rules
+    // reject any privileged role, and deleted accounts must not retain
+    // elevated clearance. (See #505 / firestore.rules users create)
     await setDoc(userRef, {
       uid: userId,
       email: profile.email ?? auth.currentUser?.email ?? "",
-      role:
-        profile.role && profile.role !== "admin"
-          ? profile.role
-          : "junior_analyst",
+      role: DEFAULT_ROLE,
       username: profile.username ?? "",
       deletedAt: new Date().toISOString(),
       deleted: true,

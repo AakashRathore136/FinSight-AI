@@ -12,8 +12,10 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, addMonths, isWithinInterval } from 'date-fns';
+import { format, isWithinInterval } from 'date-fns';
 import { toDate } from './utils';
+import { getForecastMonths } from './forecastMonthUtils';
+import { csvEscape } from './reportUtils';
 
 export interface ForecastData {
   id: string;
@@ -95,8 +97,9 @@ export function generateMonthlyForecast(
   const volatilityPenalty = (incomeCV + expenseCV) * 100;
 
   const forecasts: MonthlyForecast[] = [];
+  const forecastMonths = getForecastMonths(monthsAhead);
   for (let i = 0; i < monthsAhead; i++) {
-    const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
+    const month = forecastMonths[i];
     const income = avgIncome;
     const expenses = avgExpenses;
     const confidence = Math.max(
@@ -204,7 +207,9 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
     '============================',
     '',
     'Month,Income,Expenses,Net Balance,Confidence',
-    ...data.map((d) => `${d.month},${d.income},${d.expenses},${d.net},${d.confidence}%`),
+    ...data.map((d) =>
+      [csvEscape(d.month), csvEscape(d.income), csvEscape(d.expenses), csvEscape(d.net), csvEscape(d.confidence + '%')].join(','),
+    ),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
   ];
@@ -213,8 +218,10 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
 
 export function calculateTrend(data: { month: string; value: number }[]): 'up' | 'down' | 'stable' {
   if (data.length < 2) return 'stable';
-  const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / Math.min(3, data.length);
-  const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / Math.max(1, data.length - 3);
+  // Need at least 4 data points to split into two meaningful windows
+  if (data.length < 4) return 'stable';
+  const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / 3;
+  const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / (data.length - 3);
   const diff = recent - older;
   if (Math.abs(diff) < older * 0.05) return 'stable';
   return diff > 0 ? 'up' : 'down';

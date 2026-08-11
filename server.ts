@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-escape, no-control-regex */
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -13,6 +14,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 import logger from "./src/lib/logger.js";
+import { repairTruncatedJSON } from "./src/lib/jsonRepairEngine.js";
 
 dotenv.config({ quiet: true });
 
@@ -47,11 +49,24 @@ const upload = multer({
 // "report_.._final.pdf" would otherwise be stored but permanently
 // un-downloadable.
 function sanitizeStorageFilename(filename: string): string {
-  let name =
-    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
-    "document.pdf";
+  let name = String(filename || "document.pdf");
+
+  // Iterative multi-pass URL decoding to collapse double/triple-encoded sequences
+  for (let i = 0; i < 5; i++) {
+    try {
+      const decoded = decodeURIComponent(name);
+      if (decoded === name) break;
+      name = decoded;
+    } catch {
+      break;
+    }
+  }
+
+  name = name.replace(/\\/g, "/").split("/").pop() || "document.pdf";
   name = name
     .replace(/\.\./g, "_")
+    .replace(/%2e/gi, "_")
+    .replace(/%2f/gi, "_")
     .replace(/[\/\\]/g, "_")
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .trim();
@@ -173,96 +188,14 @@ async function generateShortLivedSignedUrl(
 }
 
 function safeJsonParse(text: string): unknown {
-  const cleaned = (text || "").trim();
-  if (!cleaned) {
-    throw new Error("Empty model response");
+  const result = repairTruncatedJSON(text);
+  if (!result.data) {
+    throw new Error(result.error || "Failed to parse or repair truncated JSON response");
   }
-
-  // 1. Extract JSON block if surrounded by markdown or other text.
-  // Handle both object {...} and array [...] responses.
-  let extracted = cleaned;
-  const firstObj = cleaned.indexOf("{");
-  const lastObj = cleaned.lastIndexOf("}");
-  const firstArr = cleaned.indexOf("[");
-  const lastArr = cleaned.lastIndexOf("]");
-
-  // Prefer the JSON block that starts first and ends last
-  if (firstObj !== -1 && lastObj !== -1 && (firstArr === -1 || firstObj < firstArr)) {
-    extracted = cleaned.substring(firstObj, lastObj + 1);
-  } else if (firstArr !== -1 && lastArr !== -1) {
-    extracted = cleaned.substring(firstArr, lastArr + 1);
+  if (result.repaired) {
+    logger.info("JSON response repaired successfully", { salvagedKeys: result.salvagedKeys });
   }
-
-  // 2. Try parsing the extracted text directly
-  try {
-    return JSON.parse(extracted);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (err: any) {
-    // 3. Perform common repairs:
-    // a. Remove trailing commas before closing braces/brackets
-    const repaired = extracted
-      .replace(/,\s*([}\]])/g, "$1") // trailing commas
-      // b. Handle unescaped newlines in JSON strings.
-      .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
-        return '"' + p1.replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
-      });
-
-    try {
-      return JSON.parse(repaired);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (_err2: any) { void _err2; } {
-      // c. Attempt to repair truncated JSON by appending missing brackets
-      let openBraces = 0;
-      let openBrackets = 0;
-      let inString = false;
-      let escape = false;
-      let repairStr = repaired;
-
-      for (let i = 0; i < repairStr.length; i++) {
-        const char = repairStr[i];
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        if (char === "\\") {
-          escape = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        if (!inString) {
-          if (char === "{") openBraces++;
-          else if (char === "}") openBraces--;
-          else if (char === "[") openBrackets++;
-          else if (char === "]") openBrackets--;
-        }
-      }
-
-      if (inString) {
-        repairStr += '"';
-      }
-
-      while (openBrackets > 0) {
-        repairStr += "]";
-        openBrackets--;
-      }
-      while (openBraces > 0) {
-        repairStr += "}";
-        openBraces--;
-      }
-
-      try {
-        return JSON.parse(repairStr);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (err3: any) {
-        throw new Error(
-          `JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`,
-        );
-      }
-    }
-  }
+  return result.data;
 }
 
 function validateAnalysisPayload(payload: any): AnalysisResponse {
@@ -857,11 +790,14 @@ async function startServer() {
   // `concurrentAnalyzeLimiter` must run BEFORE `analyzeRateLimiter`: the rate
   // limiter counts every request that reaches it, so a request rejected at the
   // concurrency gate (429 CONCURRENT_LIMIT) must never consume daily quota.
+  // `upload.single` runs before `analyzeRateLimiter` so multer-rejected
+  // uploads (400 bad MIME, 413 LIMIT_FILE_SIZE) don't burn a daily analysis
+  // slot either — only valid files count toward the quota.
   app.post(
     "/api/analyze",
     concurrentAnalyzeLimiter,
-    analyzeRateLimiter,
     upload.single("file"),
+    analyzeRateLimiter,
     async (req: any, res) => {
       try {
 
@@ -1182,11 +1118,22 @@ CRITICAL RULES:
             );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (storageError: any) {
-            console.warn(
-              "FIREBASE_STORAGE_UPLOAD_WARNING: Storage bucket not ready, continuing document creation:",
+            console.error(
+              "FIREBASE_STORAGE_UPLOAD_FAILED:",
               storageError?.message || storageError,
             );
+            throw new PipelineError(
+              "STORAGE_UPLOAD",
+              "Failed to store the uploaded PDF in Firebase Storage.",
+              "Check Storage bucket configuration and service-account permissions, then retry.",
+            );
           }
+        } else {
+          throw new PipelineError(
+            "STORAGE_UPLOAD",
+            "Firebase Admin is not initialized; cannot store the uploaded PDF.",
+            "Configure Firebase Admin credentials and retry the upload.",
+          );
         }
 
 
@@ -1555,6 +1502,64 @@ CRITICAL RULES:
 
       const storagePath =
         typeof docData?.storagePath === "string" ? docData.storagePath : "";
+
+      // SECURITY: the ownership check above only proves the caller owns the
+      // Firestore record. The record's storagePath is client-controlled at
+      // create time, so it must never be trusted to point at another user's
+      // Storage object. Mirror the download endpoint (see
+      // POST /api/document-download-url, which verifies namespace + uploadedBy
+      // metadata): refuse to delete unless the object lives under the caller's
+      // own prefix AND was uploaded by the caller.
+      if (storagePath) {
+        const expectedPrefix = `analyses/${req.ownerId}/`;
+        if (!storagePath.startsWith(expectedPrefix)) {
+          console.warn(
+            `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, storagePath=${storagePath}, reason=path prefix mismatch`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
+        try {
+          const [metadata] = await getStorage().bucket().file(storagePath).getMetadata();
+          const uploadedBy = metadata?.metadata?.uploadedBy;
+          if (!metadata || uploadedBy !== req.ownerId) {
+            console.warn(
+              `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, storagePath=${storagePath}, reason=uploadedBy mismatch`,
+            );
+            return res.status(403).json({
+              error: {
+                stage: "AUTHORIZATION",
+                reason: "You do not have access to this document",
+                recommendation: "Verify the document belongs to your account.",
+              },
+            });
+          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (metadataError: any) {
+          // A missing object (404) is fine — there is nothing left to delete.
+          // Any other failure must not purge a record whose Storage ownership
+          // could not be verified.
+          if (metadataError?.code !== 404) {
+            console.error(
+              "STORAGE_OBJECT_METADATA_ERROR:",
+              metadataError?.message || metadataError,
+            );
+            return res.status(500).json({
+              error: {
+                stage: "DOCUMENT_DELETE",
+                reason: "Failed to verify storage object ownership",
+                recommendation: "Please try again.",
+              },
+            });
+          }
+        }
+      }
 
       // Delete the analyses subcollection docs and the parent document in a
       // single batch so the record cannot be left half-purged.

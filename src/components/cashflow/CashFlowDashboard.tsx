@@ -36,12 +36,18 @@ import {
   calculateBalanceProjection,
   calculateConfidenceScore,
   identifyRecurringTransactions,
+  FORECAST_WINDOW_MONTHS,
   ForecastData,
   BalanceProjection,
   RecurringTransaction,
 } from "@/src/lib/cashflowUtils";
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#10b981"];
+const LEGACY_STARTING_BALANCE_KEY = "finsight_starting_balance";
+
+function startingBalanceKey(userId: string) {
+  return `finsight_starting_balance:${userId}`;
+}
 
 export function CashFlowDashboard({ user }: { user: any }) {
   const [loading, setLoading] = useState(true);
@@ -63,12 +69,32 @@ export function CashFlowDashboard({ user }: { user: any }) {
       const stored = Number(localStorage.getItem("finsight_starting_balance") || 0);
       const starting = Number.isFinite(stored) ? stored : 0;
       setStartingBalance(starting);
+      const transactions = await fetchUserTransactions(
+        user.uid,
+        FORECAST_WINDOW_MONTHS,
+      );
+      const forecastData = calculateMonthlyForecast(
+        transactions,
+        FORECAST_WINDOW_MONTHS,
+      );
+      const userBalanceKey = startingBalanceKey(user.uid);
+      let stored = localStorage.getItem(userBalanceKey);
+      if (stored === null) {
+        stored = localStorage.getItem(LEGACY_STARTING_BALANCE_KEY);
+        if (stored !== null) {
+          localStorage.setItem(userBalanceKey, stored);
+          localStorage.removeItem(LEGACY_STARTING_BALANCE_KEY);
+        }
+      }
+      const starting = Number(stored || 0);
+      const safeStarting = Number.isFinite(starting) ? starting : 0;
+      setStartingBalance(safeStarting);
       const transactions = await fetchUserTransactions(user.uid, 6);
       const forecastData = calculateMonthlyForecast(transactions, 6);
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
-        starting,
+        safeStarting,
       );
       const recurringTx = identifyRecurringTransactions(transactions);
       const confScore = calculateConfidenceScore(transactions, forecastData);
@@ -88,7 +114,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
     const parsed = Number(value);
     const balance = Number.isFinite(parsed) ? parsed : 0;
     setStartingBalance(balance);
-    localStorage.setItem("finsight_starting_balance", String(balance));
+    if (user?.uid) localStorage.setItem(startingBalanceKey(user.uid), String(balance));
     setProjection(calculateBalanceProjection([], forecast, balance));
   }
 
@@ -467,6 +493,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
             </CardContent>
           </Card>
 
+          {confidence > 0 && (
           <Card className="bg-slate-900 border-slate-800 rounded-2xl">
             <CardHeader className="p-5 border-b border-slate-800">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">
@@ -514,6 +541,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

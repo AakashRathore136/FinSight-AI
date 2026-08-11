@@ -14,6 +14,7 @@ import {
   updateDoc,
   serverTimestamp,
   orderBy,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Transaction } from './anomalyUtils';
@@ -139,7 +140,11 @@ export function calculateBudgetAdherence(
     const spent = categorySpend.get(cat.name) || 0;
     if (cat.monthlyLimit <= 0) return;
     const ratio = spent / cat.monthlyLimit;
-    const adherence = ratio <= 1 ? 100 - ratio * 20 : Math.max(0, 100 - (ratio - 1) * 40);
+    // Monotonic adherence: every step over budget must strictly lower the
+    // score. A single linear penalty (100 - ratio * 20, capped at 0) keeps
+    // the curve continuous and monotonically decreasing, so spending 105% of
+    // a limit can never outscore spending exactly 100%.
+    const adherence = Math.max(0, 100 - ratio * 20);
     totalAdherence += Math.max(0, adherence);
     counted++;
   });
@@ -225,7 +230,8 @@ export async function getHealthScores(userId: string, limitCount: number = 12): 
       ref,
       where('userId', '==', userId),
       orderBy('month', 'desc'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
     );
     const snapshot = await getDocs(q);
     const scores: HealthScore[] = [];
@@ -233,7 +239,7 @@ export async function getHealthScores(userId: string, limitCount: number = 12): 
       const data = docSnap.data();
       scores.push(normalizeScore(docSnap.id, data));
     });
-    return scores.slice(0, limitCount);
+    return scores;
   } catch (error) {
     console.error('Error fetching health scores:', error);
     handleFirestoreError(error, OperationType.LIST, 'health_scores');
