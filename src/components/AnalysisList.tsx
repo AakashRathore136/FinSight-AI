@@ -128,6 +128,12 @@ export function AnalysisList({ type, user, onSelect }: any) {
         throw new Error(errorText || `Failed to purge record (${res.status})`);
       }
 
+      // Optimistically remove the deleted document from the live list so it
+      // doesn't linger (or reappear after a refresh) before the Firestore
+      // onSnapshot re-emit lands. Previously the success path never touched
+      // local state, so a deleted record stayed visible until the snapshot
+      // caught up — and any cached/local copy would reinsert it.
+      setDocuments((prev) => prev.filter((doc) => doc.id !== id));
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
