@@ -429,3 +429,8 @@ function generateDefaultResponse(context: FinancialContext): ChatResponse {
   response += `Your savings rate is ${savingsRate}%. Ask me about expenses, budget advice, spending patterns, category insights, or savings recommendations.`;
   return { message: response };
 }
+
+// Agentic copilot: a ReAct-style tool-calling agent loop that exposes the
+// deterministic analysis modules in src/lib/* as tools the model can call.
+// Falls back to the keyword router above when no model/token is configured.
+export { generateAgentChatResponse, runAgentLoop, TOOL_CATALOGUE } from "./chatAgent";
