@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import pdfParse from "pdf-parse";
 import * as dotenv from "dotenv";
 import admin from "firebase-admin";
@@ -6,6 +7,11 @@ import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
 
 dotenv.config({ quiet: true });
+
+interface RiskAssessmentItem {
+  level?: unknown;
+  description?: unknown;
+}
 
 export const config = {
   api: {
@@ -173,17 +179,15 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         ? payload.key_metrics
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
-    ? payload.risk_assessment.map((item: unknown) => {
-        if (typeof item === "object" && item) {
-          const obj = item as { level?: unknown; description?: unknown };
-          return {
-            level: sanitizeString(String(obj.level || "")),
-            description: sanitizeString(String(obj.description || "")),
-          };
-        }
-        return sanitizeString(String(item || ""));
-      })
-    : [],
+      ? payload.risk_assessment.map((item: unknown) =>
+          typeof item === "object" && item
+            ? {
+                level: sanitizeString(String((item as RiskAssessmentItem).level || "")),
+                description: sanitizeString(String((item as RiskAssessmentItem).description || "")),
+              }
+            : sanitizeString(String(item || "")),
+        )
+      : [],
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],

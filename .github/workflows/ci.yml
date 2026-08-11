@@ -28,6 +28,9 @@ on:
       - '.eslintrc*'
       - '.github/workflows/ci.yml'
 
+permissions:
+  contents: read
+  
 jobs:
   quality:
     name: Type Check · Lint · Build
