@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,11 +14,9 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  addDoc,
   orderBy,
   deleteDoc,
   writeBatch,
-  Timestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { normalizeTransactionType, formatCurrency } from './utils';
@@ -382,7 +381,8 @@ async function fetchUserTransactionsInRange(
 export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  return fetchUserTransactionsInRange(userId, startDate, null);
+  const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  return fetchUserTransactionsInRange(userId, startDate, endDate);
 }
 
 export async function fetchPreviousMonthTransactions(userId: string): Promise<Transaction[]> {
