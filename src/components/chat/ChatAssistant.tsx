@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 
@@ -45,7 +46,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { format } from 'date-fns';
+import { format, startOfMonth, subMonths } from 'date-fns';
 
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
@@ -65,13 +66,13 @@ import {
   saveMessage,
   buildFinancialContext,
   generateChatResponse,
+  generateAgentChatResponse,
   updateConversation,
 } from '@/src/lib/chatUtils';
 import {
   fetchTransactionsForPeriod,
   buildPeriodConfig,
   type Transaction,
-  type TrendPeriod,
 } from '@/src/lib/trendsUtils';
 import { fetchBudgetCategories } from '@/src/lib/budgetUtils';
 
@@ -108,17 +109,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
   const currentUserId = user?.uid || '';
 
-  const period = useMemo<TrendPeriod>(() => 'month', []);
-
   const periodConfig = useMemo(
     () =>
       buildPeriodConfig(
-        period,
+        'custom',
         new Date(),
-        undefined,
-        undefined,
+        startOfMonth(subMonths(new Date(), 5)),
+        new Date(),
       ),
-    [period],
+    [],
   );
 
   useEffect(() => {
@@ -178,11 +177,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     if (!currentConversationId || !currentUserId) return;
 
     const messagesRef = collection(db, 'chat_messages');
+    // Read the most recent messages (server-side desc + limit) and reverse for
+    // chronological display, so long conversations never trigger an unbounded
+    // read of the entire chat_messages collection.
     const q = query(
       messagesRef,
       where('conversationId', '==', currentConversationId),
       where('userId', '==', currentUserId),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'desc'),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(
@@ -206,7 +209,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
             metadata: data.metadata,
           });
         });
-        setMessages(msgs);
+        setMessages(msgs.reverse());
       },
       (error) => {
         console.error('Error listening to messages:', error);
@@ -289,9 +292,14 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     setChartData(null);
     setSuggestions([]);
 
-    await new Promise((resolve) => setTimeout(resolve, 1200 + Math.random() * 800));
-
-    const response: ChatResponse = generateChatResponse(content, context);
+    // The agentic copilot calls real analysis tools (and the model) instead of
+    // returning a hardcoded template after a fake delay. It falls back to the
+    // deterministic keyword router when no model/token is configured.
+    const response: ChatResponse = await generateAgentChatResponse(
+      content,
+      context,
+      generateChatResponse,
+    );
     const assistantMessage: ChatMessage = {
       id: '',
       conversationId: currentConversationId,
