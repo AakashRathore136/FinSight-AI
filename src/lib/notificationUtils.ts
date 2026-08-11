@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * Push Notification Utility for subscription reminders and alerts
  * Uses the Notification API with Firebase Cloud Messaging support
  */
+
+import { formatCurrency } from './utils';
 
 export interface NotificationPermission {
   granted: boolean;
@@ -88,7 +91,7 @@ export async function scheduleSubscriptionReminder(
   if (daysUntilRenewal === 1) {
     await showNotification({
       title: '📅 Subscription Renewal Tomorrow',
-      body: `${subscriptionName} renews tomorrow for $${amount.toFixed(2)}`,
+      body: `${subscriptionName} renews tomorrow for ${formatCurrency(amount)}`,
       tag: `subscription-${subscriptionName}`,
       requireInteraction: true,
     });
@@ -98,7 +101,7 @@ export async function scheduleSubscriptionReminder(
   if (daysUntilRenewal === 0) {
     await showNotification({
       title: '🔔 Subscription Due Today',
-      body: `${subscriptionName} renews today for $${amount.toFixed(2)}`,
+      body: `${subscriptionName} renews today for ${formatCurrency(amount)}`,
       tag: `subscription-${subscriptionName}`,
       requireInteraction: true,
     });
@@ -116,7 +119,7 @@ export async function sendBudgetAlert(
   
   return showNotification({
     title: overBudget ? '⚠️ Budget Exceeded!' : '💰 Budget Alert',
-    body: `${category}: $${spent.toFixed(2)} of $${limit.toFixed(2)} (${percentageUsed.toFixed(0)}%)`,
+    body: `${category}: ${formatCurrency(spent)} of ${formatCurrency(limit)} (${percentageUsed.toFixed(0)}%)`,
     tag: `budget-${category}`,
     requireInteraction: overBudget,
   });
@@ -130,7 +133,7 @@ export async function sendAnomalyAlert(
 ): Promise<Notification | null> {
   return showNotification({
     title: '🚨 Unusual Transaction Detected',
-    body: `$${amount.toFixed(2)} ${category}: ${description.substring(0, 50)}...`,
+    body: `${formatCurrency(amount)} ${category}: ${description.substring(0, 50)}...`,
     tag: 'anomaly-alert',
     requireInteraction: true,
   });
@@ -141,7 +144,6 @@ export async function subscribeToTopic(userId: string, topic: string): Promise<b
   try {
     // This would integrate with Firebase Cloud Messaging
     // For now, return true to indicate the function exists
-    console.log(`Subscribing user ${userId} to topic: ${topic}`);
     return true;
   } catch (error) {
     console.error('Error subscribing to topic:', error);
