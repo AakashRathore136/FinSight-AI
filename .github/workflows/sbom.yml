@@ -30,6 +30,10 @@ on:
 
   workflow_dispatch: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -92,6 +96,15 @@ jobs:
 
       - name: Summarize run
         run: |
+          echo "### SBOM & Provenance Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SBOM formats: CycloneDX JSON, SPDX JSON" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)" >> "$GITHUB_STEP_SUMMARY"
+          fi
           {
             echo "### SBOM & Provenance Summary"
             echo "- Commit: \`${{ github.sha }}\`"
