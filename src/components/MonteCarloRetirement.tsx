@@ -18,20 +18,10 @@ export default function MonteCarloRetirement() {
     setResults(null);
 
     try {
-      const response = await fetch('/api/retirement/monte-carlo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-      });
-      
-      const json = await response.json();
-      if (json.success) {
-        setResults(json.data);
-      } else {
-        setError(json.error || "Simulation failed");
-      }
-    } catch (err) {
-      setError("Network error while running simulation.");
+      // Demo feature without a serverless endpoint (see #895): no request is
+      // issued to the non-existent /api/retirement/monte-carlo route.
+      setResults(null);
+      setError("Simulation service is not available yet.");
     } finally {
       setLoading(false);
     }
