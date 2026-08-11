@@ -19,7 +19,6 @@ import {
 import {
   addWeeks,
   addMonths,
-  addYears,
   isBefore,
   startOfDay,
   differenceInCalendarDays,
@@ -71,7 +70,11 @@ function advanceByFrequency(
     next.setDate(Math.min(day, lastDayOfNextMonth));
     return next;
   }
-  if (frequency === 'yearly') return addYears(date, 1);
+  if (frequency === 'yearly') {
+    const day = originalDueDay ?? date.getDate();
+    const lastDay = new Date(date.getFullYear() + 1, date.getMonth() + 1, 0).getDate();
+    return new Date(date.getFullYear() + 1, date.getMonth(), Math.min(day, lastDay));
+  }
   return date;
 }
 
@@ -169,10 +172,11 @@ export function calculateNextDueDate(
   }
 
   const reference = fromDate ? startOfDay(fromDate) : startOfDay(new Date());
+  const originalDay = base.getDate();
   let next = startOfDay(base);
 
   while (isBefore(next, reference)) {
-    next = advanceByFrequency(next, frequency);
+    next = advanceByFrequency(next, frequency, originalDay);
   }
 
   return next.toISOString();
@@ -291,6 +295,7 @@ export async function markBillAsPaid(
   userId: string
 ): Promise<Bill | null> {
   if (bill.deleted) return null;
+  if (bill.isPaid) return null;
   try {
     const paidDate = new Date();
     const payment = applyBillPayment(bill, paidDate);
