@@ -83,6 +83,22 @@ export function getMonthLabel(monthKey: string): string {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+// Normalize a Firestore timestamp/Date/string to an ISO string so fields
+// round-trip with the same type whether the record was just created or
+// fetched back from Firestore (where serverTimestamp() is stored as a
+// Timestamp object, not a string).
+function toISO(value: unknown): string {
+  const date = toDate(value);
+  return date ? date.toISOString() : '';
+}
+
+// Normalize a numeric field so a stored 0 is preserved (the previous
+// `value || 0` fallback coerced a valid 0 and also masked `NaN`/`null`).
+function toNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export async function fetchBudgetCategories(userId: string): Promise<BudgetCategory[]> {
   try {
     const ref = collection(db, 'budget_categories');
@@ -95,12 +111,12 @@ export async function fetchBudgetCategories(userId: string): Promise<BudgetCateg
         id: docSnap.id,
         userId: data.userId || '',
         name: data.name || '',
-        monthlyLimit: data.monthlyLimit || 0,
-        rolloverEnabled: data.rolloverEnabled || false,
-        rolloverPercentage: data.rolloverPercentage || 100,
-        rolledOverAmount: data.rolledOverAmount || 0,
-        createdAt: data.createdAt || '',
-        updatedAt: data.updatedAt || '',
+        monthlyLimit: toNumber(data.monthlyLimit),
+        rolloverEnabled: data.rolloverEnabled ?? false,
+        rolloverPercentage: toNumber(data.rolloverPercentage) || 100,
+        rolledOverAmount: toNumber(data.rolledOverAmount),
+        createdAt: toISO(data.createdAt),
+        updatedAt: toISO(data.updatedAt),
       });
     });
     return categories;
@@ -147,8 +163,13 @@ export async function updateBudgetCategory(
 ): Promise<boolean> {
   try {
     const ref = doc(db, 'budget_categories', id);
+    // Drop undefined fields so a partial update cannot overwrite existing
+    // fields (e.g. rolloverPercentage) with undefined.
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined),
+    );
     await updateDoc(ref, {
-      ...updates,
+      ...cleanUpdates,
       updatedAt: serverTimestamp(),
     });
     return true;
@@ -184,9 +205,9 @@ export async function fetchRolloverHistory(userId: string): Promise<RolloverEntr
         fromMonth: data.fromMonth || '',
         toMonth: data.toMonth || '',
         category: data.category || '',
-        amount: data.amount || 0,
-        percentage: data.percentage || 0,
-        createdAt: data.createdAt || '',
+        amount: toNumber(data.amount),
+        percentage: toNumber(data.percentage),
+        createdAt: toISO(data.createdAt),
       });
     });
     return entries;
