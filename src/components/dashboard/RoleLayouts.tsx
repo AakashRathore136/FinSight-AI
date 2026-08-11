@@ -146,10 +146,14 @@ export function SeniorPMLayout({
         />
         <MetricCard
           title="AI Confidence"
-          value={`${stats.avgConfidence}%`}
+          value={stats.hasConfidenceData ? `${stats.avgConfidence}%` : "N/A"}
           change="Average"
           changeType="neutral"
-          subtitle="Extraction accuracy"
+          subtitle={
+            stats.hasConfidenceData
+              ? "Extraction accuracy"
+              : "No confidence data yet"
+          }
         />
         <MetricCard
           title="High Risk Docs"
@@ -248,8 +252,12 @@ export function CROLayout({
         />
         <MetricCard
           title="Average AI Accuracy"
-          value={`${stats.avgConfidence}%`}
-          subtitle="Extraction validation rate"
+          value={stats.hasConfidenceData ? `${stats.avgConfidence}%` : "N/A"}
+          subtitle={
+            stats.hasConfidenceData
+              ? "Extraction validation rate"
+              : "No confidence data yet"
+          }
         />
         <MetricCard
           title="Verified Portfolio size"
@@ -357,8 +365,12 @@ export function JuniorAnalystLayout({
         />
         <MetricCard
           title="AI Confidence Rate"
-          value={`${stats.avgConfidence}%`}
-          subtitle="Confidence average score"
+          value={stats.hasConfidenceData ? `${stats.avgConfidence}%` : "N/A"}
+          subtitle={
+            stats.hasConfidenceData
+              ? "Confidence average score"
+              : "No confidence data yet"
+          }
           changeType="positive"
         />
         <MetricCard
