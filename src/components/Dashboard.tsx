@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
   collection,
@@ -28,10 +28,13 @@ type DashboardDocument = {
   latestAnalysis?: any;
 };
 
-function normalizeConfidence(value: any) {
+function normalizeConfidence(value: any): number | null {
   const n = Number(value ?? 0);
-  if (isNaN(n) || n === 0) return 92;
-  if (n <= 1) return Math.round(Math.abs(n) * 100 + Number.EPSILON) || 92;
+  // Missing, non-numeric, or zero scores carry no confidence signal: exclude
+  // them instead of fabricating a value (a real 0 is the most negative
+  // sentiment, not a 92%).
+  if (isNaN(n) || n === 0) return null;
+  if (n <= 1) return Math.round(Math.abs(n) * 100);
   return Math.round(Math.min(100, Math.abs(n)));
 }
 
@@ -51,6 +54,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
     pending: 0,
     highRisk: 0,
     avgConfidence: 0,
+    hasConfidenceData: false,
   });
   const [chartData, setChartData] = useState<any>({
     confidenceTrend: [],
@@ -59,6 +63,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
   });
   const [recentDocs, setRecentDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const latestRemoteRef = useRef<DashboardDocument[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -125,13 +130,13 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
               analysisData.sentimentScore ??
               0;
             const confidence = normalizeConfidence(raw);
-            totalConfidenceValues.push(confidence);
+            if (confidence !== null) {
+              totalConfidenceValues.push(confidence);
 
-            const ts = getTimestamp(
-              analysisData.processedAt || doc.createdAt,
-            );
+              const ts = getTimestamp(
+                analysisData.processedAt || doc.createdAt,
+              );
 
-            if (confidence > 0) {
               confidenceTrend.push({ confidence, timestamp: ts });
             }
 
@@ -160,6 +165,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
         ).length,
         highRisk: data.filter((d: any) => d.riskLevel === "high").length,
         avgConfidence,
+        hasConfidenceData: totalConfidenceValues.length > 0,
       });
 
       confidenceTrend.sort((a, b) => a.timestamp - b.timestamp);
@@ -209,16 +215,18 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
         const docs = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() }) as DashboardDocument,
         );
+        latestRemoteRef.current = docs;
         processDocuments(docs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "documents");
+        latestRemoteRef.current = [];
         processDocuments([]);
       },
     );
 
     const handleLocalDocsChanged = () => {
-      processDocuments([]);
+      processDocuments(latestRemoteRef.current);
     };
     window.addEventListener("fin_local_docs_changed", handleLocalDocsChanged);
 

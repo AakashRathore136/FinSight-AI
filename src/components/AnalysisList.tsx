@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
   collection,
@@ -50,6 +50,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const latestRemoteRef = useRef<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -104,17 +105,19 @@ export function AnalysisList({ type, user, onSelect }: any) {
       docsQuery,
       (snapshot) => {
         const remoteDocs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        latestRemoteRef.current = remoteDocs;
         updateCombinedDocuments(remoteDocs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "documents");
         // Even if Firestore fails, show local documents
+        latestRemoteRef.current = [];
         updateCombinedDocuments([]);
       },
     );
 
     const handleLocalDocsChanged = () => {
-      updateCombinedDocuments(documents.filter((d) => !d.id?.startsWith("local-")));
+      updateCombinedDocuments(latestRemoteRef.current);
     };
     window.addEventListener("fin_local_docs_changed", handleLocalDocsChanged);
 
