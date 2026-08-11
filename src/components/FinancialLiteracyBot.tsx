@@ -13,7 +13,6 @@ export default function FinancialLiteracyBot() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [score, setScore] = useState(0);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -31,24 +30,13 @@ export default function FinancialLiteracyBot() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/education/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText })
-      });
-      const json = await response.json();
-
-      if (json.success) {
-        setMessages(prev => [...prev, { 
-          id: (Date.now() + 1).toString(), 
-          sender: 'bot', 
-          text: json.data.reply 
-        }]);
-        setScore(json.data.totalScore);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', text: "Sorry, I'm having trouble connecting to the knowledge base right now." }]);
+      // Demo feature without a serverless endpoint (see #895): no request is
+      // issued to the non-existent /api/education/chat route.
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        sender: 'bot',
+        text: "I'm not wired up to a knowledge base yet."
+      }]);
     } finally {
       setLoading(false);
     }
@@ -70,7 +58,7 @@ export default function FinancialLiteracyBot() {
         </div>
         <div className="flex items-center gap-2 bg-indigo-700/50 px-3 py-1.5 rounded-full border border-indigo-500/30">
           <Award className="w-4 h-4 text-yellow-400" />
-          <span className="font-bold text-sm">{score} XP</span>
+          <span className="font-bold text-sm">0 XP</span>
         </div>
       </div>
 
