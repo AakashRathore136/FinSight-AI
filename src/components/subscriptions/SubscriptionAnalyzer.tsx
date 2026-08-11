@@ -31,6 +31,7 @@ import {
   estimateMonthlyIncome,
   Subscription,
 } from "@/src/lib/subscriptionUtils";
+import { formatCurrency } from "@/src/lib/utils";
 
 const FREQUENCY_FILTERS = [
   { value: "all", label: "All" },
@@ -198,7 +199,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                 <div className="flex items-baseline gap-2">
                   <DollarSign className="h-5 w-5 text-indigo-400" />
                   <span className="text-3xl font-black text-white">
-                    ${summary.totalMonthly.toFixed(2)}
+                    {formatCurrency(summary.totalMonthly)}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -217,7 +218,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                 <div className="flex items-baseline gap-2">
                   <TrendingUp className="h-5 w-5 text-emerald-400" />
                   <span className="text-3xl font-black text-white">
-                    ${summary.totalYearly.toFixed(2)}
+                    {formatCurrency(summary.totalYearly)}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -308,7 +309,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                           {sub.name}
                         </p>
                         <p className="text-amber-400 font-mono text-xs mt-1">
-                          ${sub.amount.toFixed(2)} on{" "}
+                          {formatCurrency(sub.amount)} on{" "}
                           {format(sub.nextRenewalDate, "MMM d, yyyy")}
                         </p>
                       </div>
@@ -424,7 +425,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                           </div>
                           <div className="text-right">
                             <span className="text-indigo-400 font-mono text-sm font-bold">
-                              ${data.yearly.toFixed(2)}
+                              {formatCurrency(data.yearly)}
                             </span>
                             <span className="text-slate-500 text-xs ml-2">
                               /yr
@@ -442,7 +443,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                         </Progress>
                         <div className="text-right">
                           <span className="text-slate-500 text-xs font-medium">
-                            ${data.monthly.toFixed(2)}/mo
+                            {formatCurrency(data.monthly)}/mo
                           </span>
                         </div>
                       </div>
