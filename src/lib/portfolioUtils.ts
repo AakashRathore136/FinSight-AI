@@ -17,6 +17,7 @@ import {
   orderBy,
   deleteDoc,
   runTransaction,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -218,6 +219,19 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     const holdings = collection(db, 'portfolioHoldings');
     const symbol = input.symbol.trim();
     const now = new Date().toISOString();
+    const id = doc(collection(db, 'portfolioTransactions')).id;
+    const transaction: Omit<Transaction, 'id'> = {
+      userId,
+      holdingId: input.holdingId,
+      symbol: input.symbol.trim(),
+      type: input.type,
+      quantity: input.quantity,
+      price: input.price,
+      fees: input.fees,
+      notes: input.notes?.trim() || '',
+      date: input.date,
+      createdAt: new Date().toISOString(),
+    };
 
     // Queries are not allowed inside client transactions — resolve the holding
     // document ref first, then lock/update it atomically with the ledger write.
@@ -307,6 +321,21 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     });
 
     return transaction;
+    let transactionId = id;
+    if (input.type === 'buy') {
+      const ref = await addDoc(collection(db, 'portfolioTransactions'), {
+        ...transaction,
+        createdAt: serverTimestamp(),
+      });
+      transactionId = ref.id;
+    } else {
+      await setDoc(doc(db, 'portfolioTransactions', id), {
+        ...transaction,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    return { ...transaction, id: transactionId || '' };
   } catch (error) {
     console.error('Error adding transaction:', error);
     handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
@@ -638,6 +667,7 @@ export async function fetchPortfolioHistory(
       where('userId', '==', userId),
       where('portfolioId', '==', portfolioId),
       orderBy('snapshotDate', 'desc'),
+      limit(limitCount),
     );
     const snapshot = await getDocs(q);
     const snapshots: PortfolioSnapshot[] = [];
@@ -655,7 +685,7 @@ export async function fetchPortfolioHistory(
         createdAt: data.createdAt || '',
       });
     });
-    return snapshots.slice(0, limitCount);
+    return snapshots;
   } catch (error) {
     console.error('Error fetching portfolio history:', error);
     handleFirestoreError(error, OperationType.LIST, 'portfolioSnapshots');

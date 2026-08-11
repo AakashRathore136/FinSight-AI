@@ -191,7 +191,12 @@ export function groupTransactionsIntoSubscriptions(
 
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
+    if (!isLikelySubscription(transaction.description)) continue;
     const normalized = normalizeText(transaction.description);
+    // Empty/punctuation-only/emoji-only/foreign descriptions normalize to ""
+    // and would match every group via `key.includes("")`. Exclude them from
+    // auto-detection instead of folding them into an unrelated merchant.
+    if (!normalized) continue;
     const category = transaction.category.toLowerCase();
 
     let matchedKey: string | null = null;
@@ -215,9 +220,12 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
-      const newKey =
-        normalized.length > 20 ? normalized.substring(0, 20) : normalized;
+      // Use the full normalized description as the group key: truncating to
+      // 20 chars merges distinct subscriptions that share a prefix (e.g.
+      // "adobe creative cloud photography plan" vs "... all-apps annual").
+      const newKey = normalized;
       groups.set(newKey, [transaction]);
+      groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
       existing.push(transaction);
@@ -512,15 +520,14 @@ export async function detectAndSaveSubscriptions(
     if (!analysis || analysis.confidence < 0.4) continue;
 
     const name = txns[0].description || key;
-    const normalized = name.length > 20 ? name.substring(0, 20) : name;
 
-    if (existingNames.has(normalized.toLowerCase())) continue;
+    if (existingNames.has(name.toLowerCase())) continue;
 
     const nextRenewal = predictNextRenewalDate(txns, analysis.frequency);
 
     try {
       const id = await saveSubscription(userId, {
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
@@ -532,7 +539,7 @@ export async function detectAndSaveSubscriptions(
       createdSubs.push({
         id,
         userId,
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
