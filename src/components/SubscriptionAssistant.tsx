@@ -15,18 +15,10 @@ export default function SubscriptionAssistant() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/user/subscriptions')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setSubscriptions(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch subscriptions", err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/user/subscriptions route; render empty.
+    setSubscriptions([]);
+    setLoading(false);
   }, []);
 
   const handleCancelClick = (url: string) => {
