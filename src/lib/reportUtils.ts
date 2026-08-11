@@ -207,7 +207,7 @@ export function generateCSV(reportData: ReportData): string {
     lines.push(
       [
         csvEscape(formatDateShort(t.date)),
-        csvEscape(t.description || ""),
+        csvEscape(t.description),
         csvEscape(t.category),
         csvEscape(t.amount.toFixed(2)),
         csvEscape(t.type || "expense"),

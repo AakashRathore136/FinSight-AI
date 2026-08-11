@@ -202,13 +202,14 @@ export function applyFilters<T extends { month: string }>(
 }
 
 export function exportForecastChart(data: MonthlyForecast[]): string {
-  const esc = (v: unknown) => csvEscape(v);
   const lines = [
     'FinSight AI — Forecast Export',
     '============================',
     '',
     'Month,Income,Expenses,Net Balance,Confidence',
-    ...data.map((d) => [esc(d.month), esc(d.income), esc(d.expenses), esc(d.net), esc(d.confidence + '%')].join(',')),
+    ...data.map((d) =>
+      [csvEscape(d.month), csvEscape(d.income), csvEscape(d.expenses), csvEscape(d.net), csvEscape(d.confidence + '%')].join(','),
+    ),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
   ];
