@@ -175,6 +175,9 @@ export function AnalysisList({ type, user, onSelect }: any) {
         throw new Error(errorText || `Failed to purge record (${res.status})`);
       }
 
+      // Purge the local mirror too, or the deleted record is re-inserted from
+      // localStorage on the next snapshot. (Issue #869)
+      deleteLocalDocument(id);
       // Optimistically remove the deleted document from the live list so it
       // doesn't linger (or reappear after a refresh) before the Firestore
       // onSnapshot re-emit lands. Previously the success path never touched
