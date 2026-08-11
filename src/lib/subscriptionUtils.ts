@@ -192,6 +192,10 @@ export function groupTransactionsIntoSubscriptions(
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
     const normalized = normalizeText(transaction.description);
+    // Empty/punctuation-only/emoji-only/foreign descriptions normalize to ""
+    // and would match every group via `key.includes("")`. Exclude them from
+    // auto-detection instead of folding them into an unrelated merchant.
+    if (!normalized) continue;
     const category = transaction.category.toLowerCase();
 
     let matchedKey: string | null = null;
