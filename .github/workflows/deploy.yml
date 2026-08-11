@@ -9,8 +9,11 @@ jobs:
   ci:
     name: CI Checks
     runs-on: ubuntu-latest
+<<<<<<< HEAD
+=======
     permissions:
       contents: read
+>>>>>>> origin/main
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
@@ -24,8 +27,11 @@ jobs:
     needs: ci
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+<<<<<<< HEAD
+=======
     permissions:
       contents: read
+>>>>>>> origin/main
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}

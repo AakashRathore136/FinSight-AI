@@ -24,10 +24,18 @@ function getEnv(key: string, fallback = ""): string {
   return String(process.env[key] || fallback).trim();
 }
 
+const DEFAULT_FIREBASE_PROJECT_ID = "finsightai-5ef59";
+
 function getFirebaseProjectId(): string {
-  return (
-    getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID")
-  );
+  const clientProjectId =
+    getEnv("VITE_FIREBASE_PROJECT_ID") || DEFAULT_FIREBASE_PROJECT_ID;
+  const serverProjectId = getEnv("FIREBASE_PROJECT_ID");
+  if (serverProjectId && serverProjectId !== clientProjectId) {
+    console.warn(
+      `[analyze] FIREBASE_PROJECT_ID (${serverProjectId}) does not match client Firebase project (${clientProjectId}); using client project for Auth.`,
+    );
+  }
+  return clientProjectId;
 }
 
 function getFirestoreDatabaseId(): string {
@@ -249,7 +257,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         ? payload.key_metrics
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
-    ? payload.risk_assessment.map((item: unknown) => {
+      ? payload.risk_assessment.map((item: unknown) => {
         if (typeof item === "object" && item) {
           const obj = item as { level?: unknown; description?: unknown };
           return {
@@ -259,15 +267,6 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         }
         return sanitizeString(String(item || ""));
       })
-    : [],
-      ? payload.risk_assessment.map((item: any) =>
-          typeof item === "object" && item
-            ? {
-                level: sanitizeString(String((item as RiskAssessmentItem).level || "")),
-                description: sanitizeString(String((item as RiskAssessmentItem).description || "")),
-              }
-            : sanitizeString(String(item || "")),
-        )
       : [],
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
@@ -412,7 +411,7 @@ async function ensureAdminInitialized(): Promise<boolean> {
       }
       admin.initializeApp({
         credential: admin.credential.cert(svc),
-        projectId: svc.project_id || firebaseProjectId,
+        projectId: firebaseProjectId,
         storageBucket,
       });
       return true;
