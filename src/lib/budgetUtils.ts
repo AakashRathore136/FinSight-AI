@@ -266,6 +266,10 @@ export async function resetCategoryRollover(userId: string, categoryId: string):
   }
 }
 
+export function calculateUnusedBudget(monthlyLimit: number, priorMonthSpend: number): number {
+  return Math.max(0, monthlyLimit - priorMonthSpend);
+}
+
 export function calculateRolloverAmount(unusedBudget: number, percentage: number): number {
   if (unusedBudget <= 0) return 0;
   return Math.round(unusedBudget * (percentage / 100) * 100) / 100;
@@ -360,7 +364,8 @@ async function fetchUserTransactionsInRange(
 export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  return fetchUserTransactionsInRange(userId, startDate, null);
+  const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  return fetchUserTransactionsInRange(userId, startDate, endDate);
 }
 
 export async function fetchPreviousMonthTransactions(userId: string): Promise<Transaction[]> {
