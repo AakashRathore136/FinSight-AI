@@ -14,6 +14,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   serverTimestamp,
   limit,
 } from 'firebase/firestore';
@@ -127,6 +128,17 @@ export async function loadConversations(userId: string): Promise<Conversation[]>
 
 export async function deleteConversation(conversationId: string): Promise<boolean> {
   try {
+    const messages = await getDocs(query(
+      collection(db, MESSAGE_COLLECTION),
+      where('conversationId', '==', conversationId),
+    ));
+
+    for (let index = 0; index < messages.docs.length; index += 450) {
+      const batch = writeBatch(db);
+      messages.docs.slice(index, index + 450).forEach((message) => batch.delete(message.ref));
+      await batch.commit();
+    }
+
     await deleteDoc(doc(db, CHAT_COLLECTION, conversationId));
     return true;
   } catch (error) {
