@@ -131,6 +131,7 @@ const USER_COLLECTIONS = [
   "portfolios",
   "tax_estimates",
   "bills",
+  "activity_log",
 ];
 
 export async function exportUserData(

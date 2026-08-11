@@ -23,16 +23,10 @@ export default function RealEstateTracker() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/portfolio/real-estate')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) setData(json.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/portfolio/real-estate route.
+    setData(null);
+    setLoading(false);
   }, []);
 
   const formatCurrency = (val: number) => 
