@@ -69,6 +69,7 @@ import {
   loadMessages,
   buildFinancialContext,
   generateChatResponse,
+  generateAgentChatResponse,
   updateConversation,
 } from '@/src/lib/chatUtils';
 import {
@@ -293,9 +294,14 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
     setChartData(null);
     setSuggestions([]);
 
-    await new Promise((resolve) => setTimeout(resolve, 1200 + Math.random() * 800));
-
-    const response: ChatResponse = generateChatResponse(content, context);
+    // The agentic copilot calls real analysis tools (and the model) instead of
+    // returning a hardcoded template after a fake delay. It falls back to the
+    // deterministic keyword router when no model/token is configured.
+    const response: ChatResponse = await generateAgentChatResponse(
+      content,
+      context,
+      generateChatResponse,
+    );
     const assistantMessage: ChatMessage = {
       id: '',
       conversationId: currentConversationId,
