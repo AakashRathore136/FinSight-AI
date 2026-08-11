@@ -191,6 +191,7 @@ export function groupTransactionsIntoSubscriptions(
 
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
+    if (!isLikelySubscription(transaction.description)) continue;
     const normalized = normalizeText(transaction.description);
     // Empty/punctuation-only/emoji-only/foreign descriptions normalize to ""
     // and would match every group via `key.includes("")`. Exclude them from
