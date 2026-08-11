@@ -59,7 +59,9 @@ function parseTransactionDate(raw: unknown): Date {
 function getNextMonths(count: number): string[] {
   const months: string[] = [];
   const now = new Date();
-  for (let i = 0; i < count; i++) {
+  // Start at +1 so the projection covers only future months. Including the
+  // current (partial) month would double-count its already-elapsed activity.
+  for (let i = 1; i <= count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     months.push(getMonthKey(d));
   }
@@ -124,11 +126,15 @@ export function calculateMonthlyForecast(
   transactions: Transaction[],
 ): ForecastData[] {
   const months = getNextMonths(6);
+  const currentMonth = getMonthKey(new Date());
   const incomeByMonth: Record<string, number> = {};
   const expenseByMonth: Record<string, Record<string, number>> = {};
 
   transactions.forEach((t) => {
     const monthKey = getMonthKey(t.date);
+    // Skip the partial current month so its incomplete totals do not
+    // deflate the average monthly income/expense used for projection.
+    if (monthKey === currentMonth) return;
     if (t.type === "income") {
       incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + t.amount;
     } else {
