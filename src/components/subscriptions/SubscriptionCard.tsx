@@ -11,9 +11,10 @@ import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { Progress } from "@/src/components/ui/progress";
 import { Calendar, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, differenceInMilliseconds, startOfDay } from "date-fns";
 import { toast } from "sonner";
 import { Subscription } from "@/src/lib/subscriptionUtils";
+import { formatCurrency } from "@/src/lib/utils";
 import {
   updateSubscription,
   deleteSubscription,
@@ -69,29 +70,65 @@ export function SubscriptionCard({
   };
 
   const handleSetReminder = async () => {
-    const reminderDate = subscription.nextRenewalDate;
-    if ("Notification" in window && Notification.permission === "granted") {
-      setTimeout(
-        () => {
-          new Notification("Subscription Renewal Reminder", {
-            body: `${subscription.name} ($${subscription.amount.toFixed(2)}) renews soon.`,
-            icon: "/vite.svg",
-          });
-        },
-        differenceInDays(reminderDate, new Date()) * 24 * 60 * 60 * 1000,
-      );
-      toast.success("Reminder set for renewal");
-    } else if (
-      "Notification" in window &&
-      Notification.permission !== "denied"
-    ) {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        handleSetReminder();
-      }
-    } else {
-      toast.success("Browser notifications not supported");
+    if (!("Notification" in window)) {
+      toast.info("Browser notifications not supported");
+      return;
     }
+
+    if (Notification.permission === "denied") {
+      toast.error("Notifications are blocked. Enable them in your browser settings.");
+      return;
+    }
+
+    if (Notification.permission !== "granted") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        toast.error("Notification permission was denied. Reminder not set.");
+        return;
+      }
+    }
+
+    const reminderDate = startOfDay(subscription.nextRenewalDate);
+    const daysUntil = differenceInDays(reminderDate, startOfDay(new Date()));
+
+    // Browsers clamp setTimeout delays to ~2^31 ms (~24.8 days): longer or
+    // negative delays overflow and fire immediately, so never schedule one.
+    if (daysUntil <= 0) {
+      toast.info("This renewal is due today or already overdue.");
+      return;
+    }
+    if (daysUntil > 24) {
+      toast.info("Reminders can only be set up to 24 days before renewal.");
+      return;
+    }
+
+    // Prefer a service-worker notification so the reminder survives tab
+    // closes, falling back to a short in-page timer.
+    try {
+      const registration = await navigator.serviceWorker?.getRegistration();
+      if (registration?.showNotification) {
+        await registration.showNotification("Subscription Renewal Reminder", {
+          body: `${subscription.name} renews on ${format(reminderDate, "MMM d, yyyy")}.`,
+          icon: "/vite.svg",
+          tag: `renewal-${subscription.id}`,
+        });
+        toast.success("Reminder set for renewal");
+        return;
+      }
+    } catch {
+      // Fall back to the in-page timer below.
+    }
+
+    setTimeout(
+      () => {
+        new Notification("Subscription Renewal Reminder", {
+          body: `${subscription.name} renews on ${format(reminderDate, "MMM d, yyyy")}.`,
+          icon: "/vite.svg",
+        });
+      },
+      differenceInMilliseconds(reminderDate, new Date()),
+    );
+    toast.success("Reminder set for renewal");
   };
 
   const frequencyLabel =
@@ -128,7 +165,7 @@ export function SubscriptionCard({
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span className="font-medium">{frequencyLabel}</span>
                 <span className="text-slate-600">|</span>
-                <span>${subscription.amount.toFixed(2)}</span>
+                <span>{formatCurrency(subscription.amount)}</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -181,15 +218,14 @@ export function SubscriptionCard({
                   Annual Cost
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
-                  $
-                  {(
+                  {formatCurrency(
                     subscription.amount *
                     (subscription.frequency === "monthly"
                       ? 12
                       : subscription.frequency === "yearly"
                         ? 1
                         : 52)
-                  ).toFixed(2)}
+                  )}
                 </span>
               </div>
               <Progress

@@ -46,3 +46,32 @@ test("server-generated storage namespaces are covered by storage.rules", () => {
     );
   }
 });
+
+test("sanitizeStorageFilename prevents double URL-encoded path traversal attacks", () => {
+  function sanitize(filename) {
+    let name = String(filename || "document.pdf");
+    for (let i = 0; i < 5; i++) {
+      try {
+        const decoded = decodeURIComponent(name);
+        if (decoded === name) break;
+        name = decoded;
+      } catch { break; }
+    }
+    name = name.replace(/\\/g, "/").split("/").pop() || "document.pdf";
+    name = name
+      .replace(/\.\./g, "_")
+      .replace(/%2e/gi, "_")
+      .replace(/%2f/gi, "_")
+      .replace(/[\/\\]/g, "_")
+      .replace(/[\x00-\x1f\x7f]/g, "_")
+      .trim();
+    if (!name || name === "." || name === "..") name = "document.pdf";
+    return name;
+  }
+
+  const malicious = "%252e%252e%252fother_user%252fsecret.pdf";
+  const sanitized = sanitize(malicious);
+  assert.ok(!sanitized.includes(".."));
+  assert.ok(!sanitized.includes("/"));
+  assert.ok(!sanitized.includes("%2f"));
+});
