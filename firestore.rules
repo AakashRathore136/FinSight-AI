@@ -22,6 +22,19 @@ service cloud.firestore {
              data.role in ['junior_analyst', 'senior_pm', 'cro', 'compliance', 'admin'];
     }
 
+    // Right-to-erasure tombstone: a user may recreate their just-deleted
+    // profile as a deleted marker. This is the dedicated `deleted: true`
+    // path so erasure never depends on the strict profile-create gate
+    // (which rejects non-default roles and non-string emails). The tombstone
+    // must always carry the default non-privileged role. (Issue #862)
+    function isValidTombstone(data) {
+      return data.keys().hasAll(['uid', 'role', 'deleted', 'deletedAt']) &&
+             data.uid == request.auth.uid &&
+             data.role == 'junior_analyst' &&
+             data.deleted == true &&
+             data.deletedAt is string;
+    }
+
     function isValidDocument(data) {
       return data.keys().hasAll(['ownerId', 'fileName', 'fileUrl', 'status']) &&
              data.ownerId == request.auth.uid &&
@@ -66,7 +79,9 @@ service cloud.firestore {
       // non-privileged role. Privileged roles (senior_pm, cro, compliance,
       // admin) must be granted server-side (Admin SDK) and can never be
       // self-assigned at account creation. (Issues #505, #603)
-      allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role == 'junior_analyst';
+      // A deletion tombstone (`deleted: true`) is also allowed so account
+      // erasure completes for privileged roles. (Issue #862)
+      allow create: if (isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role == 'junior_analyst') || (isAuthenticatedOwner(userId) && isValidTombstone(incoming()));
       // Owners may only update non-privilege fields; role changes require admin.
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
