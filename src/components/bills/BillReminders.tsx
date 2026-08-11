@@ -67,6 +67,7 @@ export function BillReminders({ user }: BillRemindersProps) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
@@ -182,16 +183,21 @@ export function BillReminders({ user }: BillRemindersProps) {
 
   const handlePay = async (bill: Bill) => {
     if (!user) return;
-    const updated = await markBillAsPaid(bill, user.uid);
-    if (updated) {
-      setBills((prev) =>
-        prev.map((b) => (b.id === bill.id ? updated : b))
-      );
-      toast.success(`${bill.name} marked as paid`, {
-        description: `${formatCurrency(bill.amount)} recorded as expense`,
-      });
-    } else {
-      toast.error('Failed to mark bill as paid');
+    setPayingId(bill.id);
+    try {
+      const updated = await markBillAsPaid(bill, user.uid);
+      if (updated) {
+        setBills((prev) =>
+          prev.map((b) => (b.id === bill.id ? updated : b))
+        );
+        toast.success(`${bill.name} marked as paid`, {
+          description: `${formatCurrency(bill.amount)} recorded as expense`,
+        });
+      } else {
+        toast.error('Failed to mark bill as paid');
+      }
+    } finally {
+      setPayingId(null);
     }
   };
 
@@ -380,13 +386,13 @@ export function BillReminders({ user }: BillRemindersProps) {
             </TabsList>
 
             <TabsContent value="all" className="mt-4">
-              <BillGrid bills={bills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No bills yet" />
+              <BillGrid bills={bills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No bills yet" payingId={payingId} />
             </TabsContent>
             <TabsContent value="overdue" className="mt-4">
-              <BillGrid bills={overdueBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No overdue bills" emptyIcon={<CheckCircle2 className="h-8 w-8 text-emerald-500" />} />
+              <BillGrid bills={overdueBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="No overdue bills" emptyIcon={<CheckCircle2 className="h-8 w-8 text-emerald-500" />} payingId={payingId} />
             </TabsContent>
             <TabsContent value="upcoming" className="mt-4">
-              <BillGrid bills={upcomingBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="Nothing due in the next 7 days" />
+              <BillGrid bills={upcomingBills} onPay={handlePay} onDelete={handleDelete} loading={loading} emptyLabel="Nothing due in the next 7 days" payingId={payingId} />
             </TabsContent>
           </Tabs>
         </div>
@@ -532,6 +538,7 @@ function BillGrid({
   loading,
   emptyLabel,
   emptyIcon,
+  payingId,
 }: {
   bills: Bill[];
   onPay: (bill: Bill) => void;
@@ -539,6 +546,7 @@ function BillGrid({
   loading: boolean;
   emptyLabel: string;
   emptyIcon?: React.ReactNode;
+  payingId?: string | null;
 }) {
   if (loading) {
     return (
@@ -577,7 +585,7 @@ function BillGrid({
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <BillCard bill={bill} onPay={onPay} onDelete={onDelete} />
+            <BillCard bill={bill} onPay={onPay} onDelete={onDelete} disabled={payingId === bill.id} />
           </motion.div>
         ))}
       </AnimatePresence>

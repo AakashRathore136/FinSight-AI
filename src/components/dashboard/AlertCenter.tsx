@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { auth } from "@/src/lib/firebase";
 import {
   Card,
   CardHeader,
@@ -35,6 +36,37 @@ export function AlertCenter({
   const [comments, setComments] = useState<Record<string, string>>({});
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState("");
+  const hasLoadedActions = useRef(false);
+  const storageKey = `finsight-alert-actions:${auth.currentUser?.uid || "anonymous"}`;
+
+  useEffect(() => {
+    try {
+      const savedActions = localStorage.getItem(storageKey);
+      if (!savedActions) return;
+
+      const { acknowledgedAlerts, escalatedAlerts, comments } = JSON.parse(savedActions);
+      setAcknowledgedAlerts(acknowledgedAlerts || {});
+      setEscalatedAlerts(escalatedAlerts || {});
+      setComments(comments || {});
+    } catch (error) {
+      console.error("Failed to load saved alert actions:", error);
+    } finally {
+      hasLoadedActions.current = true;
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!hasLoadedActions.current) return;
+
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ acknowledgedAlerts, escalatedAlerts, comments }),
+      );
+    } catch (error) {
+      console.error("Failed to save alert actions:", error);
+    }
+  }, [acknowledgedAlerts, escalatedAlerts, comments, storageKey]);
 
   // Derive real alerts from actual document data
   const derivedAlerts = recentDocs
