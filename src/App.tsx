@@ -1391,18 +1391,24 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'currencies' && user && (
-              <motion.div 
+            {activeTab === 'currencies' && (
+              <motion.div
                 key="currencies"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
               >
                 <div className="space-y-6">
-                  <CurrencyManager user={user} />
-                  <CurrencyConverter />
-                  <MultiCurrencyNetWorth />
-                  <FxExposureMatrix />
+                  {user ? (
+                    <>
+                      <CurrencyManager user={user} />
+                      <CurrencyConverter />
+                      <MultiCurrencyNetWorth />
+                      <FxExposureMatrix />
+                    </>
+                  ) : (
+                    <CurrencyConverter />
+                  )}
                 </div>
               </motion.div>
             )}
