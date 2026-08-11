@@ -28,8 +28,18 @@ function getEnv(key: string, fallback = ""): string {
   return String(process.env[key] ?? fallback).trim();
 }
 
+const DEFAULT_FIREBASE_PROJECT_ID = "finsightai-5ef59";
+
 function getFirebaseProjectId(): string {
-  return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
+  const clientProjectId =
+    getEnv("VITE_FIREBASE_PROJECT_ID") || DEFAULT_FIREBASE_PROJECT_ID;
+  const serverProjectId = getEnv("FIREBASE_PROJECT_ID");
+  if (serverProjectId && serverProjectId !== clientProjectId) {
+    console.warn(
+      `[process] FIREBASE_PROJECT_ID (${serverProjectId}) does not match client Firebase project (${clientProjectId}); using client project for Auth.`,
+    );
+  }
+  return clientProjectId;
 }
 
 // Mirrors api/analyze.ts's resolution exactly, so both serverless handlers
@@ -453,7 +463,12 @@ async function getAdminApp(): Promise<any | null> {
         }
 
         if (svc?.private_key) {
-          admin.initializeApp({ credential: admin.credential.cert(svc), projectId: svc.project_id || projectId, storageBucket });
+          if (svc.project_id && svc.project_id !== projectId) {
+            console.warn(
+              `[process] Service account project_id (${svc.project_id}) does not match client Firebase project (${projectId}); using client project for Auth.`,
+            );
+          }
+          admin.initializeApp({ credential: admin.credential.cert(svc), projectId, storageBucket });
         } else {
           admin.initializeApp({ projectId, storageBucket });
         }
@@ -464,7 +479,6 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
-      getFirestore: () => (admin as any).firestore(getFirestoreDatabaseId()),
       getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
     // admin.firestore(getFirestoreDatabaseId())
