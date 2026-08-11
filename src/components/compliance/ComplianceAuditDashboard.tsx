@@ -1,3 +1,25 @@
+import React, { useState } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
+import { ShieldCheck, ShieldAlert, FileText, CheckCircle2, AlertOctagon } from "lucide-react";
+import { ComplianceScorecard } from "./ComplianceScorecard";
+import { auditFinancialData } from "@/src/lib/complianceUtils";
+
+export const ComplianceAuditDashboard: React.FC = () => {
+  // Sample transactions for compliance demonstration
+  const [mockTransactions] = useState([
+    { amount: 9850, description: "Consulting Fee Deposit", date: "2026-08-01", category: "Revenue" },
+    { amount: 9900, description: "Vendor Wire Transfer", date: "2026-08-02", category: "Vendor" },
+    { amount: -65000, description: "Unclassified Special Transfer", date: "2026-08-03", category: "Other" },
+    { amount: 30000, description: "Inbound Wire Co", date: "2026-08-04", category: "Revenue" },
+    { amount: -28000, description: "Outbound Immediate Transfer", date: "2026-08-05", category: "Withdrawal" },
+  ]);
+
+  const auditResult = auditFinancialData(mockTransactions);
+
+  return (
+    <div className="space-y-6">
+      <ComplianceScorecard data={auditResult} />
+
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
 import { ShieldCheck, ShieldAlert, FileText, CheckCircle2 } from "lucide-react";
@@ -175,6 +197,14 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
                   <p className="text-xs text-slate-400">{v.description}</p>
                   <p className="text-xs text-indigo-400 font-medium">Action: {v.recommendedAction}</p>
                 </div>
+                <button className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5">
+                  <FileText size={14} /> File Report
+                </button>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
