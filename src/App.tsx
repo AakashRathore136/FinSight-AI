@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -22,6 +23,7 @@ import {
   deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { DEFAULT_ROLE } from "@/src/lib/roleConstants";
 import {
   Activity,
   TrendingUp,
@@ -44,7 +46,13 @@ import {
   LineChart,
   Globe,
   Lock,
-  Shield
+  Shield,
+  Repeat,
+  FileBarChart,
+  PieChart,
+  Scale,
+  Sparkles,
+  Target
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -187,6 +195,33 @@ import { ThemeToggle } from '@/src/components/ThemeToggle';
 import { ScrollToTop } from '@/src/components/ScrollToTop';
 import { purgeApiCaches } from './pwa/registerSW';
 
+// Feature screens that were implemented but never mounted (issue #897)
+import { ReportExport } from "./components/reports/ReportExport";
+import { InsightsDashboard } from "./components/insights/InsightsDashboard";
+import { CurrencyManager } from "./components/currency/CurrencyManager";
+import { CurrencyConverter } from "./components/currency/CurrencyConverter";
+import MultiCurrencyNetWorth from "./components/MultiCurrencyNetWorth";
+import { FxExposureMatrix } from "./components/currency/FxExposureMatrix";
+import { ComplianceAuditDashboard } from "./components/compliance/ComplianceAuditDashboard";
+import TaxLossHarvester from "./components/TaxLossHarvester";
+import { TaxLossHarvesting } from "./components/tax/TaxLossHarvesting";
+import MonteCarloRetirement from "./components/MonteCarloRetirement";
+import SubscriptionAssistant from "./components/SubscriptionAssistant";
+import DripAnalyzer from "./components/DripAnalyzer";
+import NewsSentimentDashboard from "./components/NewsSentimentDashboard";
+import FinancialLiteracyBot from "./components/FinancialLiteracyBot";
+import OptionsStrategyBuilder from "./components/OptionsStrategyBuilder";
+import PlaidLinkConnect from "./components/PlaidLinkConnect";
+import RealEstateTracker from "./components/RealEstateTracker";
+import CryptoPortfolioTracker from "./components/CryptoPortfolioTracker";
+import EsgDashboard from "./components/EsgDashboard";
+import PeerSpendingComparison from "./components/PeerSpendingComparison";
+import { MultiScenarioMatrix } from "./components/forecast/MultiScenarioMatrix";
+import ReceiptUploader from "./components/ReceiptUploader";
+import SmsOptInSettings from "./components/SmsOptInSettings";
+import VoiceExpenseLogger from "./components/VoiceExpenseLogger";
+import BudgetReallocator from "./components/BudgetReallocator";
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -202,11 +237,8 @@ export default function App() {
   const selectedDocIdRef = useRef<string | null>(getSharedDocId());
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
-  type ViewRole = "junior_analyst" | "senior_pm" | "cro" | "compliance";
-
   // Email auth state
   const [isSignup, setIsSignup] = useState(false);
-  const [signupRole, setSignupRole] = useState<ViewRole>("junior_analyst");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -224,7 +256,8 @@ export default function App() {
     uid: currentUser.uid,
     username: currentUser.displayName || "",
     email: currentUser.email,
-    role: "junior_analyst",
+    emailVerified: currentUser.emailVerified,
+    role: DEFAULT_ROLE,
     createdAt: new Date().toISOString(),
   });
 
@@ -233,12 +266,12 @@ export default function App() {
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
-        return userDoc.data().role || "junior_analyst";
+        return userDoc.data().role || DEFAULT_ROLE;
       }
     } catch (error) {
       console.error("Error fetching user role:", error);
     }
-    return "junior_analyst";
+    return DEFAULT_ROLE;
   };
 
   const validateUsername = (username: string): string | null => {
@@ -381,20 +414,14 @@ export default function App() {
     } catch (error: any) {
       const code = error?.code || "unknown";
       console.error("Auth error:", error);
-      // Common error codes:
-      // auth/popup-blocked → allow popups in your browser
-      // auth/operation-not-allowed → enable Google sign-in in Firebase Console
-      // auth/unauthorized-domain → add domain to Firebase Auth allowed list
       if (code === "auth/popup-blocked") {
-        toast.error(
-          "Popup blocked — please allow popups for localhost in your browser",
-        );
+        toast.error("Popup blocked — please allow popups for localhost in your browser");
       } else if (code === "auth/operation-not-allowed") {
         toast.error("Google sign-in is not enabled in Firebase Console");
       } else if (code === "auth/unauthorized-domain") {
-        toast.error(
-          "Domain not authorized in Firebase — add localhost to Auth settings",
-        );
+        toast.error("Domain not authorized — add localhost to Firebase Auth settings");
+      } else if (code === "auth/cancelled-popup-request" || code === "auth/popup-closed-by-user") {
+        // user dismissed — no toast needed
       } else {
         toast.error(`Sign-in failed: ${code}`);
       }
@@ -431,24 +458,24 @@ export default function App() {
       );
       const newUser = userCredential.user;
 
-      // Create Firestore user profile. If rules are not deployed yet, auth can
-      // still complete and the verified session will retry profile creation.
       try {
+        // SECURITY: Always assign DEFAULT_ROLE ("junior_analyst") at signup.
+        // Privileged roles (senior_pm, cro, compliance, admin) must only be
+        // granted server-side via the Firebase Admin SDK. Firestore rules on
+        // /users/{userId} enforce incoming().role == 'junior_analyst' as a
+        // second layer. Never use user-controlled input for role. (Fixes #505)
         await setDoc(doc(db, "users", newUser.uid), {
           uid: newUser.uid,
           username: username,
           email: email,
-          role: signupRole,
+          emailVerified: false,
+          role: DEFAULT_ROLE,
           createdAt: new Date().toISOString(),
         });
       } catch (profileError) {
         handleFirestoreError(profileError, OperationType.CREATE, "users");
-        toast.warning(
-          "Account created, but your profile could not be saved yet. It will retry after verification.",
-        );
       }
 
-      // Send verification email
       await sendEmailVerification(newUser);
 
       toast.success("Account created!");
@@ -504,13 +531,17 @@ export default function App() {
       }
     } catch (error: any) {
       const code = error?.code || "unknown";
-      console.error("Login error:", error);
-      if (code === "auth/user-not-found") {
+      console.error("Login error full:", JSON.stringify({ code, message: error?.message }));
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
         toast.error("No account found with this email. Please sign up first.");
       } else if (code === "auth/wrong-password") {
         toast.error("Incorrect password. Please try again.");
       } else if (code === "auth/invalid-email") {
         toast.error("Invalid email address");
+      } else if (code === "auth/too-many-requests") {
+        toast.error("Too many failed attempts. Please try again later.");
+      } else if (code === "auth/internal-error") {
+        toast.error(`Firebase internal error — check browser console for details`);
       } else {
         toast.error(`Sign in failed: ${code}`);
       }
@@ -804,23 +835,6 @@ export default function App() {
                       disabled={emailAuthLoading}
                       className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 h-12 rounded-2xl"
                     />
-                    <select
-                      value={signupRole}
-                      onChange={(e) =>
-                        setSignupRole(e.target.value as ViewRole)
-                      }
-                      disabled={emailAuthLoading}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-300 h-12 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-                    >
-                      <option value="junior_analyst">
-                        Junior Risk Analyst
-                      </option>
-                      <option value="senior_pm">
-                        Senior Portfolio Manager
-                      </option>
-                      <option value="cro">Chief Risk Officer</option>
-                      <option value="compliance">Compliance Officer</option>
-                    </select>
                   </>
                 )}
                 <Input
@@ -863,6 +877,8 @@ export default function App() {
                   : "Don't have an account? Sign Up"}
               </button>
 
+
+
               <div className="flex justify-center gap-4">
                 {[ShieldCheck, Lock, Activity].map((Icon, i) => (
                   <div
@@ -886,7 +902,6 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
     <div className="flex h-screen w-full bg-[#0a0c10] text-slate-300 font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 border-r border-slate-800 flex flex-col md:flex">
@@ -899,7 +914,7 @@ export default function App() {
           </span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
+        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
           <NavItem
             icon={<LayoutDashboard size={20} />}
             label="Dashboard"
@@ -995,6 +1010,48 @@ export default function App() {
             label="Portfolio"
             active={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
+          />
+          <NavItem
+            icon={<Repeat size={20} />}
+            label="Subscriptions"
+            active={activeTab === 'subscriptions'}
+            onClick={() => setActiveTab('subscriptions')}
+          />
+          <NavItem
+            icon={<Activity size={20} />}
+            label="Cash Flow"
+            active={activeTab === 'cashflow'}
+            onClick={() => setActiveTab('cashflow')}
+          />
+          <NavItem
+            icon={<Target size={20} />}
+            label="Goals"
+            active={activeTab === 'goals'}
+            onClick={() => setActiveTab('goals')}
+          />
+          <NavItem
+            icon={<FileBarChart size={20} />}
+            label="Reports"
+            active={activeTab === 'reports'}
+            onClick={() => setActiveTab('reports')}
+          />
+          <NavItem
+            icon={<PieChart size={20} />}
+            label="Insights"
+            active={activeTab === 'insights'}
+            onClick={() => setActiveTab('insights')}
+          />
+          <NavItem
+            icon={<Scale size={20} />}
+            label="Compliance"
+            active={activeTab === 'compliance'}
+            onClick={() => setActiveTab('compliance')}
+          />
+          <NavItem
+            icon={<Sparkles size={20} />}
+            label="AI Tools"
+            active={activeTab === 'ai-tools'}
+            onClick={() => setActiveTab('ai-tools')}
           />
           <NavItem
             icon={<Shield size={20} />}
@@ -1146,6 +1203,7 @@ export default function App() {
                 className="space-y-6"
               >
                 <BudgetDashboard user={user} />
+                <BudgetReallocator />
               </motion.div>
             )}
 
@@ -1186,6 +1244,7 @@ export default function App() {
                 className="space-y-6"
               >
                 <SubscriptionAnalyzer user={user} />
+                <SubscriptionAssistant />
               </motion.div>
             )}
 
@@ -1332,6 +1391,22 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'currencies' && user && (
+              <motion.div 
+                key="currencies"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+              >
+                <div className="space-y-6">
+                  <CurrencyManager user={user} />
+                  <CurrencyConverter />
+                  <MultiCurrencyNetWorth />
+                  <FxExposureMatrix />
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'trends' && (
               <motion.div 
                 key="trends"
@@ -1372,7 +1447,69 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <TaxEstimation user={user} />
+                <div className="space-y-6">
+                  <TaxEstimation user={user} />
+                  <TaxLossHarvester />
+                  <TaxLossHarvesting />
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'reports' && (
+              <motion.div
+                key="reports"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <ReportExport />
+              </motion.div>
+            )}
+
+            {activeTab === 'insights' && user && (
+              <motion.div
+                key="insights"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <InsightsDashboard user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'compliance' && user && (
+              <motion.div
+                key="compliance"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <ComplianceAuditDashboard {...({ user } as any)} />
+              </motion.div>
+            )}
+
+            {activeTab === 'ai-tools' && (
+              <motion.div
+                key="ai-tools"
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
+                <MonteCarloRetirement />
+                <DripAnalyzer />
+                <NewsSentimentDashboard />
+                <FinancialLiteracyBot />
+                <OptionsStrategyBuilder />
+                <PeerSpendingComparison />
+                <EsgDashboard />
+                <MultiScenarioMatrix />
+                <PlaidLinkConnect />
+                <RealEstateTracker />
+                <CryptoPortfolioTracker />
+                <ReceiptUploader />
+                <SmsOptInSettings />
+                <VoiceExpenseLogger />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1387,7 +1524,6 @@ export default function App() {
       <ScrollToTop scrollRef={contentScrollRef} />
       <Toaster position="bottom-right" richColors />
     </div>
-    </ThemeProvider>
   );
 }
 

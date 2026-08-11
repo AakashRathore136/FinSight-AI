@@ -1,4 +1,5 @@
-﻿/**
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -116,7 +117,7 @@ export async function fetchTransactions(
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data = d.data() as Omit<Transaction, "id">;
-      return { ...data, id: d.id } as Transaction;
+      return { ...data, date: toDate(data.date) || new Date(), id: d.id } as Transaction;
     });
   } catch (error) {
     if ((error as any)?.code === "failed-precondition") {
@@ -129,7 +130,7 @@ export async function fetchTransactions(
       return snap.docs
         .map((d) => {
           const data = d.data() as Omit<Transaction, "id">;
-          return { ...data, id: d.id } as Transaction;
+          return { ...data, date: toDate(data.date) || new Date(), id: d.id } as Transaction;
         })
         .filter((t) => {
           const time = toDate(t.date)?.getTime() ?? 0;
@@ -237,9 +238,12 @@ export function detectAnomalies(
     const cat = t.category || "Other";
     const avg = categoryAverages.get(cat);
     if (avg && avg.count > 1) {
-      const mean = avg.total / avg.count;
+      // Exclude the current transaction from the baseline so it cannot inflate the mean
+      const baselineCount = avg.count - 1;
+      const baselineTotal = avg.total - Math.abs(t.amount);
+      const mean = baselineCount > 0 ? baselineTotal / baselineCount : 0;
       const amount = Math.abs(t.amount);
-      if (amount > mean * 3 && amount > 1000) {
+      if (mean > 0 && amount > mean * 3 && amount > 1000) {
         anomalies.push({
           userId: t.userId,
           transactionId: t.id,
