@@ -54,7 +54,7 @@ jobs:
           cache: 'true'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -63,7 +63,7 @@ jobs:
       # env vars to succeed (Vite build-time checks), replace this step
       # with the manual install+build block commented below.
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       # --- Manual build alternative (use if Autobuild fails) ---
       # - name: Install dependencies
@@ -80,6 +80,6 @@ jobs:
       #     VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{ matrix.language }}'

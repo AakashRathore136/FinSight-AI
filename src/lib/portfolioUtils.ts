@@ -297,11 +297,13 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       }
     }
 
+    let transactionId = id;
     if (input.type === 'buy') {
-      await addDoc(collection(db, 'portfolioTransactions'), {
+      const ref = await addDoc(collection(db, 'portfolioTransactions'), {
         ...transaction,
         createdAt: serverTimestamp(),
       });
+      transactionId = ref.id;
     } else {
       await setDoc(doc(db, 'portfolioTransactions', id), {
         ...transaction,
@@ -309,7 +311,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       });
     }
 
-    return { ...transaction, id: id || '' };
+    return { ...transaction, id: transactionId || '' };
   } catch (error) {
     console.error('Error adding transaction:', error);
     handleFirestoreError(error, OperationType.CREATE, 'portfolioTransactions');
