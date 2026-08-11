@@ -172,6 +172,9 @@ export function AnalysisList({ type, user, onSelect }: any) {
         throw new Error(errorText || `Failed to purge record (${res.status})`);
       }
 
+      // Purge the local mirror too, or the deleted record is re-inserted from
+      // localStorage on the next snapshot. (Issue #869)
+      deleteLocalDocument(id);
       toast.success("Document removed");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `documents/${id}`);
