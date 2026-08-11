@@ -40,6 +40,7 @@ import {
 } from "@/src/components/ui/tabs";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
 import { getLocalDocumentById } from "@/src/lib/storageUtils";
 
 const XBrandIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -166,7 +167,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   }, [docId, user?.uid]);
 
   const analysisData = analysis || record?.latestAnalysis || null;
-  const riskLevel = (analysisData?.risk_level || record?.riskLevel || "low")
+  const riskLevel = (
+    analysisData?.riskLevel ||
+    analysisData?.risk_level ||
+    record?.riskLevel ||
+    "low"
+  )
     .toString()
     .toLowerCase();
   const confidenceValue = normalizeConfidence(
@@ -225,6 +231,9 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
     if (success) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      toast.warning(
+        "Link copied for your own use. Recipients need ownership or admin access.",
+      );
     }
   };
 
@@ -930,10 +939,10 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
             <div className="mb-6 pr-8">
               <h2 className="text-xl font-black text-white">
-                Share Financial Report
+                Copy Private Report Link
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Send a direct access link to this FinSight AI analysis.
+                Copy this link for your own use. Recipients need ownership or admin access to open this analysis.
               </p>
             </div>
 

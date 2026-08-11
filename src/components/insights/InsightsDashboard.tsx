@@ -51,6 +51,7 @@ import {
 } from "@/src/lib/insightsUtils";
 import { handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { useBaseCurrency } from "@/src/hooks/useBaseCurrency";
+import { fetchAnomalies } from "@/src/lib/anomalyUtils";
 import { InsightCard, CategoryDeltaRow } from "./InsightCard";
 
 const LINE_COLORS = ["#818cf8", "#34d399", "#fbbf24", "#f472b6", "#22d3ee"];
@@ -79,9 +80,16 @@ export function InsightsDashboard({ user }: InsightsDashboardProps) {
     setIsLoading(true);
 
     fetchTransactions(user.uid)
-      .then(transactions => {
+      .then(async transactions => {
         if (cancelled) return;
-        setBundle(buildInsights(transactions, user.uid));
+        const anomalies = await fetchAnomalies(user.uid, true);
+        if (cancelled) return;
+        const dismissedTransactionIds = new Set(
+          anomalies
+            .filter((a) => a.dismissed && a.transactionId)
+            .map((a) => a.transactionId),
+        );
+        setBundle(buildInsights(transactions, user.uid, dismissedTransactionIds));
         setIsLoading(false);
       })
       .catch(error => {

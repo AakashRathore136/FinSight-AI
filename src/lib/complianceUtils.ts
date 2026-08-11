@@ -127,6 +127,26 @@ export function auditFinancialData(
     });
   }
 
+  // FINRA Rule: Weekend and after-hours transaction flag
+  const suspiciousDates = transactions.filter((t) => {
+    const d = new Date(t.date + 'T00:00:00');
+    const day = d.getDay();
+    if (day === 0 || day === 6) return true; // weekend
+    const hours = d.getHours();
+    if (hours < 9 || hours >= 17) return true; // outside business hours
+    return false;
+  });
+  if (suspiciousDates.length > 0) {
+    violations.push({
+      id: "finra-hours-01",
+      category: "FINRA",
+      severity: "medium",
+      title: "Transactions Outside Business Hours",
+      description: `Found ${suspiciousDates.length} transaction(s) occurring on weekends or outside standard business hours (9am-5pm).`,
+      recommendedAction: "Verify the legitimacy of after-hours or weekend transactions with the originating client.",
+    });
+  }
+
   const highCount = violations.filter((v) => v.severity === "high").length;
   const medCount = violations.filter((v) => v.severity === "medium").length;
 
