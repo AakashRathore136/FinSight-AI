@@ -32,6 +32,16 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // esbuild >=0.27.7 started erroring on destructuring lowering for
+    // Vite's default browser target list, even though every target in
+    // that list (chrome87+, safari14+, etc.) supports destructuring
+    // natively. This tells esbuild not to lower it -- same fix Vite's
+    // own team shipped for this bug (vitejs/vite#22346).
+    esbuild: {
+      supported: {
+        destructuring: true,
+      },
+    },
     optimizeDeps: {
       exclude: ['vite-plugin-pwa'],
     },

@@ -49,13 +49,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 
         with:
           fetch-depth: 0
 
       # ---- Phase 1: SBOM Generation ----
       - name: Generate SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 
         with:
           path: .
           format: cyclonedx-json
@@ -63,7 +63,7 @@ jobs:
           upload-artifact: false
 
       - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 
         with:
           path: .
           format: spdx-json
@@ -72,7 +72,7 @@ jobs:
 
       # ---- Phase 2: Artifact Management ----
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 
         with:
           name: sbom-${{ github.sha }}
           path: |
@@ -88,7 +88,7 @@ jobs:
       # unmerged code isn't meaningful anyway.
       - name: Generate build provenance attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@1c608d11d69870c2092266b3f9a6f3abbf17002c 
         with:
           subject-path: |
             sbom.cyclonedx.json
@@ -105,3 +105,14 @@ jobs:
           else
             echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)" >> "$GITHUB_STEP_SUMMARY"
           fi
+          {
+            echo "### SBOM & Provenance Summary"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- SBOM formats: CycloneDX JSON, SPDX JSON"
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              echo "- Provenance: signed via actions/attest-build-provenance (Sigstore/SLSA)"
+            else
+              echo "- Provenance: skipped (PR run — provenance is generated on merge to main/release)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

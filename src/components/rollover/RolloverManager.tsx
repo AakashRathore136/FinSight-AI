@@ -23,6 +23,8 @@ import {
   getPreviousMonthKey,
   getMonthLabel,
   calculateRolloverAmount,
+  calculateUnusedBudget,
+  fetchPreviousMonthTransactions,
   fetchBudgetCategories,
   fetchRolloverHistory,
   createBudgetCategory,
@@ -41,6 +43,7 @@ interface RolloverManagerProps {
 export function RolloverManager({ user }: RolloverManagerProps) {
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [history, setHistory] = useState<RolloverEntry[]>([]);
+  const [priorMonthSpend, setPriorMonthSpend] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('categories');
@@ -58,10 +61,16 @@ export function RolloverManager({ user }: RolloverManagerProps) {
     let active = true;
     const load = async () => {
       setLoading(true);
-      const [cats, hist] = await Promise.all([
+      const [cats, hist, transactions] = await Promise.all([
         fetchBudgetCategories(user.uid),
         fetchRolloverHistory(user.uid),
+        fetchPreviousMonthTransactions(user.uid),
       ]);
+      const spending = transactions.reduce<Record<string, number>>((totals, transaction) => {
+        const isExpense = transaction.type === 'expense' || transaction.amount < 0;
+        if (isExpense) totals[transaction.category] = (totals[transaction.category] || 0) + Math.abs(transaction.amount);
+        return totals;
+      }, {});
       if (active) {
         let finalCats = cats;
         if (cats.length === 0) {
@@ -78,6 +87,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
         }
         setCategories(finalCats);
         setHistory(hist);
+        setPriorMonthSpend(spending);
         setLoading(false);
       }
     };
@@ -86,18 +96,6 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       active = false;
     };
   }, [user]);
-
-  const previousRollovers = useMemo(() => {
-    const map: Record<string, RolloverEntry> = {};
-    history
-      .filter((h) => h.fromMonth === previousMonth)
-      .forEach((h) => {
-        if (!map[h.category] || h.createdAt > map[h.category].createdAt) {
-          map[h.category] = h;
-        }
-      });
-    return map;
-  }, [history, previousMonth]);
 
   const totalRolledOver = useMemo(() => {
     return history
@@ -147,7 +145,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       toast.error('Enable rollover for this category first');
       return;
     }
-    const unusedBudget = category.rolledOverAmount;
+    const unusedBudget = calculateUnusedBudget(category.monthlyLimit, priorMonthSpend[category.name] || 0);
     if (unusedBudget <= 0) {
       toast.error('No unused budget available to roll over');
       return;
@@ -168,15 +166,10 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       category.rolloverPercentage
     );
     if (entry) {
-      const newRolledOverAmount = Math.round((unusedBudget - rolloverAmount) * 100) / 100;
-      await updateBudgetCategory(category.id, { rolledOverAmount: Math.max(0, newRolledOverAmount) });
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === category.id
-            ? { ...c, rolledOverAmount: Math.max(0, newRolledOverAmount) }
-            : c
-        )
-      );
+      await updateBudgetCategory(category.id, { rolledOverAmount: rolloverAmount });
+      setCategories((prev) => prev.map((c) =>
+        c.id === category.id ? { ...c, rolledOverAmount: rolloverAmount } : c
+      ));
       setHistory((prev) => [entry, ...prev]);
       toast.success(`Rolled over ${formatCurrency(rolloverAmount)} for ${category.name}`);
     } else {
@@ -291,8 +284,10 @@ export function RolloverManager({ user }: RolloverManagerProps) {
         <TabsContent value="categories" className="mt-6 space-y-4">
           <AnimatePresence>
             {categories.map((category) => {
-              const prevRollover = previousRollovers[category.name];
-              const unusedBudget = prevRollover?.amount || category.rolledOverAmount || 0;
+              const unusedBudget = calculateUnusedBudget(
+                category.monthlyLimit,
+                priorMonthSpend[category.name] || 0,
+              );
               const rolloverAmount = category.rolloverEnabled
                 ? calculateRolloverAmount(unusedBudget, category.rolloverPercentage)
                 : 0;

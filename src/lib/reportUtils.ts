@@ -18,6 +18,24 @@ import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+/**
+ * RFC 4180 CSV field escaping. Wraps values containing a comma, double quote,
+ * or newline in double quotes (doubling any inner quotes) and neutralises
+ * CSV-injection by prefixing a single quote to values that Excel/Sheets would
+ * otherwise interpret as a formula (=, +, -, @, Tab, Carriage Return). Pure
+ * numbers (e.g. negative amounts like -50.00) are left untouched.
+ */
+export function csvEscape(value: unknown): string {
+  const str = value == null ? "" : String(value);
+  const needsQuote = /[",\n\r]/.test(str);
+  let escaped = str.replace(/"/g, '""');
+  const isNumeric = str.trim() !== "" && Number.isFinite(Number(str));
+  if (!isNumeric && /^[=+\-@\t\r]/.test(str)) {
+    escaped = "'" + escaped;
+  }
+  return needsQuote ? `"${escaped}"` : escaped;
+}
+
 export interface ReportTransaction {
   id: string;
   userId: string;
@@ -74,8 +92,8 @@ export async function fetchTransactionsForDateRange(
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
-      where("date", ">=", startDate),
-      where("date", "<=", endDate),
+      where("date", ">=", startOfDay(startDate)),
+      where("date", "<=", endOfDay(endDate)),
       orderBy("date", "desc"),
     );
 
@@ -163,25 +181,37 @@ export function generateCSV(reportData: ReportData): string {
   lines.push("Expenses");
   reportData.expenseSummary.forEach((item) => {
     lines.push(
-      `${item.category},Expense,${item.total.toFixed(2)},${item.count}`,
+      [csvEscape(item.category), csvEscape("Expense"), csvEscape(item.total.toFixed(2)), csvEscape(item.count)].join(","),
     );
   });
   lines.push("");
   lines.push("Income");
   reportData.incomeSummary.forEach((item) => {
-    lines.push(`${item.source},Income,${item.total.toFixed(2)},${item.count}`);
+    lines.push(
+      [csvEscape(item.source), csvEscape("Income"), csvEscape(item.total.toFixed(2)), csvEscape(item.count)].join(","),
+    );
   });
   lines.push("");
   lines.push(
-    `Summary,,Total Income:${reportData.totalIncome.toFixed(2)},Total Expenses:${reportData.totalExpenses.toFixed(2)}`,
+    [
+      csvEscape("Summary"),
+      csvEscape(""),
+      csvEscape(`Total Income:${reportData.totalIncome.toFixed(2)}`),
+      csvEscape(`Total Expenses:${reportData.totalExpenses.toFixed(2)}`),
+    ].join(","),
   );
   lines.push("");
   lines.push("Transaction Details");
   lines.push("Date,Description,Category,Amount,Type");
   reportData.transactions.forEach((t) => {
-    const desc = (t.description || "").replace(/,/g, ";");
     lines.push(
-      `${formatDateShort(t.date)},${desc},${t.category},${t.amount.toFixed(2)},${t.type || "expense"}`,
+      [
+        csvEscape(formatDateShort(t.date)),
+        csvEscape(t.description),
+        csvEscape(t.category),
+        csvEscape(t.amount.toFixed(2)),
+        csvEscape(t.type || "expense"),
+      ].join(","),
     );
   });
   return lines.join("\n");
@@ -368,7 +398,7 @@ export async function saveReportToFirestore(
   reportData: ReportData,
 ): Promise<string | null> {
   try {
-    const { doc, setDoc, collection } = await import("firebase/firestore");
+    const { doc, setDoc, collection, serverTimestamp } = await import("firebase/firestore");
     const reportsCol = collection(db, "reports");
     const newDocRef = doc(reportsCol);
     const payload: any = {
@@ -385,7 +415,10 @@ export async function saveReportToFirestore(
       totalIncome: reportData.totalIncome,
       totalExpenses: reportData.totalExpenses,
       currency: reportData.currency || "USD",
-      createdAt: new Date().toISOString(),
+      // Use serverTimestamp() so createdAt is a Firestore Timestamp, matching
+      // dateRange and the other writers in this repo (forecastUtils/anomalyUtils).
+      // A mixed string/Timestamp type breaks orderBy/where on this field.
+      createdAt: serverTimestamp(),
     };
     await setDoc(newDocRef, payload);
     return newDocRef.id;
