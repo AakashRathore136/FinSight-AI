@@ -1,3 +1,20 @@
+import React, { useState } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
+import { ShieldCheck, ShieldAlert, FileText, CheckCircle2, AlertOctagon } from "lucide-react";
+import { ComplianceScorecard } from "./ComplianceScorecard";
+import { auditFinancialData } from "@/src/lib/complianceUtils";
+
+export const ComplianceAuditDashboard: React.FC = () => {
+  // Sample transactions for compliance demonstration
+  const [mockTransactions] = useState([
+    { amount: 9850, description: "Consulting Fee Deposit", date: "2026-08-01", category: "Revenue" },
+    { amount: 9900, description: "Vendor Wire Transfer", date: "2026-08-02", category: "Vendor" },
+    { amount: -65000, description: "Unclassified Special Transfer", date: "2026-08-03", category: "Other" },
+    { amount: 30000, description: "Inbound Wire Co", date: "2026-08-04", category: "Revenue" },
+    { amount: -28000, description: "Outbound Immediate Transfer", date: "2026-08-05", category: "Withdrawal" },
+  ]);
+
+  const auditResult = auditFinancialData(mockTransactions);
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
 import { ShieldAlert, FileText, CheckCircle2, AlertOctagon, Loader2 } from "lucide-react";
@@ -83,6 +100,7 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
           </div>
         </CardHeader>
         <CardContent className="pt-6 space-y-4">
+          {auditResult.violations.length === 0 ? (
           {auditResult?.violations.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800">
               <CheckCircle2 size={40} className="text-emerald-400 mb-2" />
@@ -90,6 +108,7 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
               <p className="text-xs text-slate-500">All ledger items comply with AML thresholds & SOX directives.</p>
             </div>
           ) : (
+            auditResult.violations.map((v) => (
             auditResult?.violations.map((v) => (
               <div
                 key={v.id}
@@ -104,6 +123,7 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
                           : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                       }`}
                     >
+                      {v.category} • {v.severity}
                       {v.category} - {v.severity}
                     </span>
                     <h4 className="text-sm font-bold text-white">{v.title}</h4>
