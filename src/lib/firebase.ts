@@ -187,6 +187,19 @@ if (
 }
 
 /**
+ * Safely fetches a valid Firebase ID token with optional forced renewal on 401 unauthenticated errors.
+ */
+export async function getValidIdToken(forceRefresh = false): Promise<string | null> {
+  if (!auth.currentUser) return null;
+  try {
+    return await auth.currentUser.getIdToken(forceRefresh);
+  } catch (err) {
+    console.error("Failed to retrieve or refresh Firebase ID token:", err);
+    return null;
+  }
+}
+
+/**
  * Runs a Firestore transaction with exponential backoff retries to prevent race conditions
  * and handle concurrent write collisions safely.
  */
