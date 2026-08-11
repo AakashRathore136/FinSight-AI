@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-escape, no-control-regex */
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -1117,11 +1118,22 @@ CRITICAL RULES:
             );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (storageError: any) {
-            console.warn(
-              "FIREBASE_STORAGE_UPLOAD_WARNING: Storage bucket not ready, continuing document creation:",
+            console.error(
+              "FIREBASE_STORAGE_UPLOAD_FAILED:",
               storageError?.message || storageError,
             );
+            throw new PipelineError(
+              "STORAGE_UPLOAD",
+              "Failed to store the uploaded PDF in Firebase Storage.",
+              "Check Storage bucket configuration and service-account permissions, then retry.",
+            );
           }
+        } else {
+          throw new PipelineError(
+            "STORAGE_UPLOAD",
+            "Firebase Admin is not initialized; cannot store the uploaded PDF.",
+            "Configure Firebase Admin credentials and retry the upload.",
+          );
         }
 
 

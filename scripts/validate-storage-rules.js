@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Validates that Firebase Storage rules are compatible with server configuration.
  * Run this before deploying to catch configuration mismatches.
