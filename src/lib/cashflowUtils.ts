@@ -40,6 +40,33 @@ export interface RecurringTransaction {
   frequency: "weekly" | "monthly" | "quarterly";
 }
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+// Classify a recurring transaction's frequency from the median number of days
+// between consecutive transactions. within 7 days of 7 => weekly, within 7
+// days of 91 => quarterly, otherwise monthly (the default for ~30-day cycles
+// and irregular-but-recurring expenses).
+function detectFrequency(dates: Date[]): "weekly" | "monthly" | "quarterly" {
+  if (dates.length < 2) return "monthly";
+  const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+  const intervals: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    intervals.push(
+      Math.round((sorted[i].getTime() - sorted[i - 1].getTime()) / MS_PER_DAY),
+    );
+  }
+  intervals.sort((a, b) => a - b);
+  const mid = Math.floor(intervals.length / 2);
+  const median =
+    intervals.length % 2 === 0
+      ? (intervals[mid - 1] + intervals[mid]) / 2
+      : intervals[mid];
+
+  if (Math.abs(median - 7) <= 7) return "weekly";
+  if (Math.abs(median - 91) <= 7) return "quarterly";
+  return "monthly";
+}
+
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -205,13 +232,14 @@ export function identifyRecurringTransactions(
 ): RecurringTransaction[] {
   const categoryMap: Record<
     string,
-    { amounts: number[]; type: "income" | "expense" }
+    { amounts: number[]; dates: Date[]; type: "income" | "expense" }
   > = {};
   transactions.forEach((t) => {
     if (!categoryMap[t.category]) {
-      categoryMap[t.category] = { amounts: [], type: t.type };
+      categoryMap[t.category] = { amounts: [], dates: [], type: t.type };
     }
     categoryMap[t.category].amounts.push(t.amount);
+    categoryMap[t.category].dates.push(t.date);
   });
 
   const recurring: RecurringTransaction[] = [];
@@ -226,7 +254,7 @@ export function identifyRecurringTransactions(
           category,
           type: data.type,
           averageAmount: Math.round(avg * 100) / 100,
-          frequency: "monthly",
+          frequency: detectFrequency(data.dates),
         });
       }
     }
