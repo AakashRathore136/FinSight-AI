@@ -109,7 +109,7 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow get: if isOwner(existing().userId) || isAdmin();
-      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
+      allow list: if resource.data.userId == request.auth.uid || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
       // Reports are append-only: clients may create and read, never edit.
       allow update: if false;
@@ -118,7 +118,7 @@ service cloud.firestore {
 
     match /documents/{docId} {
       allow read: if isOwner(existing().ownerId) || isAdmin();
-      allow list: if request.auth != null && (request.query.ownerId == request.auth.uid || isAdmin());
+      allow list: if resource.data.ownerId == request.auth.uid || isAdmin();
       allow create: if isSignedIn() && isValidDocument(incoming());
       allow update: if (isOwner(existing().ownerId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'riskLevel'])) || isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
@@ -128,7 +128,7 @@ service cloud.firestore {
       // SECURITY: Only allow reading own analyses or if admin
       // Prevents cross-user data leakage of financial AI analysis results
       allow get: if isOwner(existing().ownerId) || isAdmin();
-      allow list: if request.auth != null && (request.query.ownerId == request.auth.uid || isAdmin());
+      allow list: if resource.data.ownerId == request.auth.uid || isAdmin();
       allow create: if isSignedIn() && isValidAnalysis(incoming());
       allow update: if isAdmin();
       allow delete: if isOwner(existing().ownerId) || isAdmin();
