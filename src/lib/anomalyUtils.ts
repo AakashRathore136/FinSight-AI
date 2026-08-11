@@ -289,10 +289,11 @@ export function detectAnomalies(
   if (thisMonthData && lastMonthData) {
     thisMonthData.forEach((amount, cat) => {
       const lastAmount = lastMonthData.get(cat) || 0;
+      const minDelta = Math.max(50, lastAmount * 0.5);
       if (
         lastAmount > 0 &&
         amount > lastAmount * 1.5 &&
-        amount - lastAmount > 5000
+        amount - lastAmount > minDelta
       ) {
         anomalies.push({
           userId: transactions[0]?.userId || "",
