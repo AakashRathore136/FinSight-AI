@@ -24,8 +24,10 @@ type DashboardDocument = {
   latestAnalysis?: any;
 };
 
-function normalizeConfidence(value: any) {
-  const n = Number(value || 0);
+function normalizeConfidence(value: any): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
   if (n <= 1) return Math.round(n * 100 + Number.EPSILON);
   return Math.round(Math.min(100, n));
 }
@@ -130,16 +132,21 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
                 analysisData.sentimentScore ??
                 0;
               const confidence = normalizeConfidence(raw);
-              totalConfidenceValues.push(confidence);
 
-              // Build confidence trend
-              const ts = getTimestamp(
-                analysisData.processedAt || doc.createdAt,
-              );
+              // Only include documents that have a usable sentiment score in
+              // the average; missing data must not inflate or deflate it.
+              if (confidence !== null) {
+                totalConfidenceValues.push(confidence);
 
-              // Only push if confidence > 0 to avoid zero-flatlines from missing data
-              if (confidence > 0) {
-                confidenceTrend.push({ confidence, timestamp: ts });
+                // Build confidence trend
+                const ts = getTimestamp(
+                  analysisData.processedAt || doc.createdAt,
+                );
+
+                // Only push if confidence > 0 to avoid zero-flatlines from missing data
+                if (confidence > 0) {
+                  confidenceTrend.push({ confidence, timestamp: ts });
+                }
               }
 
               // Aggregate entities
