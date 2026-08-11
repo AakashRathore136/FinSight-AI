@@ -215,7 +215,7 @@ export function generatePortfolioSummary(holdings: Holding[], transactions: Tran
 
 export async function addTransaction(userId: string, input: TransactionInput): Promise<Transaction | null> {
   try {
-    const id = doc(collection(db, 'portfolios')).id;
+    const id = doc(collection(db, 'portfolioTransactions')).id;
     const transaction: Omit<Transaction, 'id'> = {
       userId,
       holdingId: input.holdingId,
