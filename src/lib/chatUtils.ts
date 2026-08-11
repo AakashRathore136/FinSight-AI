@@ -286,7 +286,7 @@ export function generateSpendingSummary(context: FinancialContext): ChatResponse
   const { totalSpending, totalIncome, monthlySpending, spendingByMonth, topCategories } = context;
   const currentMonth = format(new Date(), 'yyyy-MM');
   const currentMonthSpending = monthlySpending[currentMonth] || 0;
-  const avgMonthly = spendingByMonth.length > 0
+  const avgMonthly = spendingByMonth.length > 1
     ? Math.round(spendingByMonth.reduce((sum, m) => sum + m.amount, 0) / spendingByMonth.length)
     : 0;
 
