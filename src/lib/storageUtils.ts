@@ -66,15 +66,9 @@ export function getLocalDocuments(ownerId?: string): any[] {
         record.latestAnalysis = item.analysis;
       }
 
-      if (
-        !ownerId ||
-        !record.ownerId ||
-        record.ownerId === ownerId ||
-        record.ownerId === "anonymous" ||
-        record.ownerId === "anonymous_user" ||
-        record.ownerId?.startsWith("local-") ||
-        record.ownerId?.includes("anon")
-      ) {
+      if (!ownerId) {
+        docs.push(record);
+      } else if (record.ownerId === ownerId) {
         docs.push(record);
       }
     }
