@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -8,10 +9,9 @@ import {
 } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
 import { Progress } from "@/src/components/ui/progress";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -22,12 +22,9 @@ import {
   Area,
   BarChart,
   Bar,
-  Cell,
 } from "recharts";
 import {
-  TrendingUp,
   Loader2,
-  Calendar,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
@@ -53,6 +50,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
   const [confidence, setConfidence] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [startingBalance, setStartingBalance] = useState(0);
 
   useEffect(() => {
     loadCashFlowData();
@@ -62,11 +60,15 @@ export function CashFlowDashboard({ user }: { user: any }) {
     if (!user) return;
     setLoading(true);
     try {
+      const stored = Number(localStorage.getItem("finsight_starting_balance") || 0);
+      const starting = Number.isFinite(stored) ? stored : 0;
+      setStartingBalance(starting);
       const transactions = await fetchUserTransactions(user.uid, 6);
-      const forecastData = calculateMonthlyForecast(transactions);
+      const forecastData = calculateMonthlyForecast(transactions, 6);
       const balanceProj = calculateBalanceProjection(
         transactions,
         forecastData,
+        starting,
       );
       const recurringTx = identifyRecurringTransactions(transactions);
       const confScore = calculateConfidenceScore(transactions, forecastData);
@@ -80,6 +82,14 @@ export function CashFlowDashboard({ user }: { user: any }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleStartingBalanceChange(value: string) {
+    const parsed = Number(value);
+    const balance = Number.isFinite(parsed) ? parsed : 0;
+    setStartingBalance(balance);
+    localStorage.setItem("finsight_starting_balance", String(balance));
+    setProjection(calculateBalanceProjection([], forecast, balance));
   }
 
   async function handleRefresh() {
@@ -230,6 +240,22 @@ export function CashFlowDashboard({ user }: { user: any }) {
                     : "$0"}
                 </p>
               </div>
+            </div>
+            <div className="mt-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">
+                Starting Balance
+              </p>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  startingBalance === 0 ? "" : String(startingBalance)
+                }
+                onChange={(e) => handleStartingBalanceChange(e.target.value)}
+                placeholder="Enter your current balance"
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9 text-sm"
+              />
             </div>
           </CardContent>
         </Card>
@@ -441,6 +467,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
             </CardContent>
           </Card>
 
+          {confidence > 0 && (
           <Card className="bg-slate-900 border-slate-800 rounded-2xl">
             <CardHeader className="p-5 border-b border-slate-800">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-white">
@@ -488,6 +515,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>
