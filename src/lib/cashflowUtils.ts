@@ -145,11 +145,17 @@ export function calculateMonthlyForecast(
   // Averages are computed over the full observation window: months without
   // activity are zero-filled so a charge that appears once in the window is
   // projected at its true monthly rate instead of its per-month-with-activity
-  // rate.
+  // rate. The divisor is the actual number of months observed, not the
+  // windowMonths parameter, to correctly reflect the observation period.
+  const observedMonthCount = Math.max(
+    Object.values(incomeByMonth).length,
+    Object.keys(expenseByMonth).length,
+  );
+  const divisor = observedMonthCount > 0 ? observedMonthCount : 1;
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
-        windowMonths
+        divisor
       : 0;
 
   const categoryTotals: Record<string, number> = {};
@@ -160,7 +166,7 @@ export function calculateMonthlyForecast(
   });
   const avgByCategory: Record<string, number> = {};
   Object.entries(categoryTotals).forEach(([cat, total]) => {
-    avgByCategory[cat] = total / windowMonths;
+    avgByCategory[cat] = total / divisor;
   });
 
   return months.map((month) => {
@@ -209,14 +215,30 @@ export function identifyRecurringTransactions(
 ): RecurringTransaction[] {
   const categoryMap: Record<
     string,
-    { amounts: number[]; type: "income" | "expense" }
+    { amounts: number[]; dates: Date[]; type: "income" | "expense" }
   > = {};
   transactions.forEach((t) => {
     if (!categoryMap[t.category]) {
-      categoryMap[t.category] = { amounts: [], type: t.type };
+      categoryMap[t.category] = { amounts: [], dates: [], type: t.type };
     }
     categoryMap[t.category].amounts.push(t.amount);
+    categoryMap[t.category].dates.push(t.date);
   });
+
+  function detectFrequency(dates: Date[]): "weekly" | "monthly" | "quarterly" {
+    if (dates.length < 2) return "monthly";
+    const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      gaps.push(sorted[i].getTime() - sorted[i - 1].getTime());
+    }
+    const medianMs = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];
+    const medianDays = medianMs / (1000 * 60 * 60 * 24);
+    if (Math.abs(medianDays - 7) <= 5) return "weekly";
+    if (Math.abs(medianDays - 30) <= 7) return "monthly";
+    if (Math.abs(medianDays - 91) <= 14) return "quarterly";
+    return "monthly";
+  }
 
   const recurring: RecurringTransaction[] = [];
   Object.entries(categoryMap).forEach(([category, data]) => {
@@ -230,7 +252,7 @@ export function identifyRecurringTransactions(
           category,
           type: data.type,
           averageAmount: Math.round(avg * 100) / 100,
-          frequency: "monthly",
+          frequency: detectFrequency(data.dates),
         });
       }
     }
