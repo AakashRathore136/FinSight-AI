@@ -20,22 +20,12 @@ export default function PeerSpendingComparison() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/insights/peer-comparison')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setData(json.data);
-          setMeta(json.meta);
-        } else {
-          setError(json.message || "Failed to load peer comparison.");
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setError("Network error.");
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/insights/peer-comparison route.
+    setData([]);
+    setMeta(null);
+    setError(null);
+    setLoading(false);
   }, []);
 
   if (loading) {
