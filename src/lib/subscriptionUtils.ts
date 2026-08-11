@@ -215,9 +215,7 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
-      const newKey =
-        normalized.length > 20 ? normalized.substring(0, 20) : normalized;
-      groups.set(newKey, [transaction]);
+      groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
       existing.push(transaction);
@@ -512,15 +510,14 @@ export async function detectAndSaveSubscriptions(
     if (!analysis || analysis.confidence < 0.4) continue;
 
     const name = txns[0].description || key;
-    const normalized = name.length > 20 ? name.substring(0, 20) : name;
 
-    if (existingNames.has(normalized.toLowerCase())) continue;
+    if (existingNames.has(name.toLowerCase())) continue;
 
     const nextRenewal = predictNextRenewalDate(txns, analysis.frequency);
 
     try {
       const id = await saveSubscription(userId, {
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
@@ -532,7 +529,7 @@ export async function detectAndSaveSubscriptions(
       createdSubs.push({
         id,
         userId,
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
