@@ -91,9 +91,8 @@ export function generateTimelineProjection(
   const projection: { month: string; projected: number }[] = [];
   let running = currentAmount;
 
-  for (let i = 1; i <= 24 && running < targetAmount; i++) {
-    running += monthlyContribution;
-    if (running > targetAmount) running = targetAmount;
+  for (let i = 1; running < targetAmount && i <= 600; i++) {
+    running = Math.min(targetAmount, running + monthlyContribution);
     projection.push({
       month: format(addMonths(now, i), 'MMM yyyy'),
       projected: Math.round(running),
