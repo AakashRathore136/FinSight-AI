@@ -294,7 +294,8 @@ export async function markBillAsPaid(
   bill: Bill,
   userId: string
 ): Promise<Bill | null> {
-  if (bill.deleted || bill.isPaid) return { ...bill };
+  if (bill.deleted) return null;
+  if (bill.isPaid) return null;
   try {
     const paidDate = new Date();
     const payment = applyBillPayment(bill, paidDate);
