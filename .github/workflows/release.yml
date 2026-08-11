@@ -1,0 +1,132 @@
+name: Release
+
+# Manual trigger only — never fires on PRs or normal pushes, so it can't
+# interfere with existing CI workflows.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Determine next version
+    runs-on: ubuntu-latest
+    outputs:
+      next_version: ${{ steps.compute.outputs.next_version }}
+      next_tag: ${{ steps.compute.outputs.next_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: compute
+        run: |
+          set -e
+          latest_tag=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="v0.0.0"
+          fi
+          echo "Latest tag: $latest_tag"
+
+          version=${latest_tag#v}
+          IFS='.' read -r major minor patch <<< "$version"
+
+          case "${{ github.event.inputs.bump }}" in
+            major) major=$((major+1)); minor=0; patch=0 ;;
+            minor) minor=$((minor+1)); patch=0 ;;
+            patch) patch=$((patch+1)) ;;
+          esac
+
+          next_version="${major}.${minor}.${patch}"
+          next_tag="v${next_version}"
+          echo "Next tag: $next_tag"
+
+          # Duplicate-release guard: fail fast if this tag somehow exists already.
+          if git rev-parse "$next_tag" >/dev/null 2>&1; then
+            echo "::error::Tag $next_tag already exists. Aborting to avoid duplicate release."
+            exit 1
+          fi
+
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+          echo "next_tag=$next_tag" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and push Docker image
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/finsight-ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # This build must succeed for anything downstream to run — that's
+      # what guarantees a broken build never reaches the release step.
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.version.outputs.next_tag }}
+            ${{ env.IMAGE }}:latest
+
+  release:
+    name: Tag and publish GitHub Release
+    needs: [version, build]
+    # Only reached if the image build succeeded — failed builds never publish.
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/finsight-ai
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.version.outputs.next_tag }}"
+          git push origin "${{ needs.version.outputs.next_tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.next_tag }}
+          name: ${{ needs.version.outputs.next_tag }}
+          generate_release_notes: true
+          append_body: true
+          body: |
+            **Docker image:** `${{ env.IMAGE }}:${{ needs.version.outputs.next_tag }}`
+
+            ```
+            docker pull ${{ env.IMAGE }}:${{ needs.version.outputs.next_tag }}
+            docker run -d --env-file .env -p 3001:3001 ${{ env.IMAGE }}:${{ needs.version.outputs.next_tag }}
+            ```
