@@ -143,13 +143,9 @@ export function calculateMonthlyForecast(
   // Averages are computed over the full observation window: months without
   // activity are zero-filled so a charge that appears once in the window is
   // projected at its true monthly rate instead of its per-month-with-activity
-  // rate. The divisor is the actual number of months observed, not the
-  // windowMonths parameter, to correctly reflect the observation period.
-  const observedMonthCount = Math.max(
-    Object.values(incomeByMonth).length,
-    Object.keys(expenseByMonth).length,
-  );
-  const divisor = observedMonthCount > 0 ? observedMonthCount : 1;
+  // rate. The divisor is always windowMonths so projections span exactly the
+  // requested window regardless of how many months contain transactions.
+  const divisor = windowMonths > 0 ? windowMonths : 1;
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
