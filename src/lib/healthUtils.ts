@@ -14,6 +14,7 @@ import {
   updateDoc,
   serverTimestamp,
   orderBy,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Transaction } from './anomalyUtils';
@@ -229,7 +230,8 @@ export async function getHealthScores(userId: string, limitCount: number = 12): 
       ref,
       where('userId', '==', userId),
       orderBy('month', 'desc'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
     );
     const snapshot = await getDocs(q);
     const scores: HealthScore[] = [];
@@ -237,7 +239,7 @@ export async function getHealthScores(userId: string, limitCount: number = 12): 
       const data = docSnap.data();
       scores.push(normalizeScore(docSnap.id, data));
     });
-    return scores.slice(0, limitCount);
+    return scores;
   } catch (error) {
     console.error('Error fetching health scores:', error);
     handleFirestoreError(error, OperationType.LIST, 'health_scores');

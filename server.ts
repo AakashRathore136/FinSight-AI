@@ -14,6 +14,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 import logger from "./src/lib/logger.js";
+import { repairTruncatedJSON } from "./src/lib/jsonRepairEngine.js";
 
 dotenv.config({ quiet: true });
 
@@ -174,96 +175,14 @@ async function generateShortLivedSignedUrl(
 }
 
 function safeJsonParse(text: string): unknown {
-  const cleaned = (text || "").trim();
-  if (!cleaned) {
-    throw new Error("Empty model response");
+  const result = repairTruncatedJSON(text);
+  if (!result.data) {
+    throw new Error(result.error || "Failed to parse or repair truncated JSON response");
   }
-
-  // 1. Extract JSON block if surrounded by markdown or other text.
-  // Handle both object {...} and array [...] responses.
-  let extracted = cleaned;
-  const firstObj = cleaned.indexOf("{");
-  const lastObj = cleaned.lastIndexOf("}");
-  const firstArr = cleaned.indexOf("[");
-  const lastArr = cleaned.lastIndexOf("]");
-
-  // Prefer the JSON block that starts first and ends last
-  if (firstObj !== -1 && lastObj !== -1 && (firstArr === -1 || firstObj < firstArr)) {
-    extracted = cleaned.substring(firstObj, lastObj + 1);
-  } else if (firstArr !== -1 && lastArr !== -1) {
-    extracted = cleaned.substring(firstArr, lastArr + 1);
+  if (result.repaired) {
+    logger.info("JSON response repaired successfully", { salvagedKeys: result.salvagedKeys });
   }
-
-  // 2. Try parsing the extracted text directly
-  try {
-    return JSON.parse(extracted);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (err: any) {
-    // 3. Perform common repairs:
-    // a. Remove trailing commas before closing braces/brackets
-    const repaired = extracted
-      .replace(/,\s*([}\]])/g, "$1") // trailing commas
-      // b. Handle unescaped newlines in JSON strings.
-      .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
-        return '"' + p1.replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
-      });
-
-    try {
-      return JSON.parse(repaired);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (_err2: any) { void _err2; } {
-      // c. Attempt to repair truncated JSON by appending missing brackets
-      let openBraces = 0;
-      let openBrackets = 0;
-      let inString = false;
-      let escape = false;
-      let repairStr = repaired;
-
-      for (let i = 0; i < repairStr.length; i++) {
-        const char = repairStr[i];
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        if (char === "\\") {
-          escape = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        if (!inString) {
-          if (char === "{") openBraces++;
-          else if (char === "}") openBraces--;
-          else if (char === "[") openBrackets++;
-          else if (char === "]") openBrackets--;
-        }
-      }
-
-      if (inString) {
-        repairStr += '"';
-      }
-
-      while (openBrackets > 0) {
-        repairStr += "]";
-        openBrackets--;
-      }
-      while (openBraces > 0) {
-        repairStr += "}";
-        openBraces--;
-      }
-
-      try {
-        return JSON.parse(repairStr);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (err3: any) {
-        throw new Error(
-          `JSON parsing failed after all repairs. Original: ${err.message}. Repaired: ${err3.message}`,
-        );
-      }
-    }
-  }
+  return result.data;
 }
 
 function validateAnalysisPayload(payload: any): AnalysisResponse {
@@ -1186,11 +1105,22 @@ CRITICAL RULES:
             );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (storageError: any) {
-            console.warn(
-              "FIREBASE_STORAGE_UPLOAD_WARNING: Storage bucket not ready, continuing document creation:",
+            console.error(
+              "FIREBASE_STORAGE_UPLOAD_FAILED:",
               storageError?.message || storageError,
             );
+            throw new PipelineError(
+              "STORAGE_UPLOAD",
+              "Failed to store the uploaded PDF in Firebase Storage.",
+              "Check Storage bucket configuration and service-account permissions, then retry.",
+            );
           }
+        } else {
+          throw new PipelineError(
+            "STORAGE_UPLOAD",
+            "Firebase Admin is not initialized; cannot store the uploaded PDF.",
+            "Configure Firebase Admin credentials and retry the upload.",
+          );
         }
 
 

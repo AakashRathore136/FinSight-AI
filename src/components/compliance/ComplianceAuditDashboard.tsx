@@ -15,6 +15,73 @@ export const ComplianceAuditDashboard: React.FC = () => {
   ]);
 
   const auditResult = auditFinancialData(mockTransactions);
+import React, { useState, useEffect } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
+import { ShieldAlert, FileText, CheckCircle2, AlertOctagon, Loader2 } from "lucide-react";
+import { ComplianceScorecard } from "./ComplianceScorecard";
+import { auditFinancialData } from "@/src/lib/complianceUtils";
+import { fetchUserTransactions } from "@/src/lib/cashflowUtils";
+
+export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [auditResult, setAuditResult] = useState<ReturnType<typeof auditFinancialData> | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    loadComplianceData();
+  }, [user]);
+
+  async function loadComplianceData() {
+    setLoading(true);
+    setError(null);
+    try {
+      const transactions = await fetchUserTransactions(user.uid, 12);
+      const realTransactions = transactions.map((t) => ({
+        amount: t.amount,
+        description: t.description || "",
+        date: t.date instanceof Date ? t.date.toISOString().split("T")[0] : String(t.date),
+        category: t.category,
+      }));
+      const result = auditFinancialData(realTransactions);
+      setAuditResult(result);
+    } catch (err) {
+      setError("Failed to load compliance data. Please try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center p-12 text-slate-400">
+        <ShieldAlert size={24} className="mr-3" />
+        Please sign in to view compliance audit.
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 text-slate-400">
+        <Loader2 size={24} className="mr-3 animate-spin" />
+        Loading compliance audit...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center p-12 text-red-400">
+        <AlertOctagon size={24} className="mr-3" />
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -34,6 +101,7 @@ export const ComplianceAuditDashboard: React.FC = () => {
         </CardHeader>
         <CardContent className="pt-6 space-y-4">
           {auditResult.violations.length === 0 ? (
+          {auditResult?.violations.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800">
               <CheckCircle2 size={40} className="text-emerald-400 mb-2" />
               <p className="text-sm font-semibold text-slate-200">No Regulatory Violations Detected</p>
@@ -41,6 +109,7 @@ export const ComplianceAuditDashboard: React.FC = () => {
             </div>
           ) : (
             auditResult.violations.map((v) => (
+            auditResult?.violations.map((v) => (
               <div
                 key={v.id}
                 className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
@@ -55,6 +124,7 @@ export const ComplianceAuditDashboard: React.FC = () => {
                       }`}
                     >
                       {v.category} • {v.severity}
+                      {v.category} - {v.severity}
                     </span>
                     <h4 className="text-sm font-bold text-white">{v.title}</h4>
                   </div>

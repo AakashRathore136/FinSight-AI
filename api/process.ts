@@ -65,6 +65,66 @@ function sanitizeStorageFilename(filename: string): string {
   return name;
 }
 
+
+function getAllowedOrigins(): Set<string> {
+  const isProduction = process.env.NODE_ENV === "production";
+  const origins = [
+    process.env.APP_URL,
+    process.env.FRONTEND_URL,
+    ...(isProduction
+      ? []
+      : [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:3001",
+          "http://127.0.0.1:3001",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ]),
+  ].filter((origin): origin is string => Boolean(origin) && origin !== "MY_APP_URL");
+  return new Set(origins);
+}
+
+function applyCors(req: any, res: any): void {
+  const origin = String(req.headers?.origin ?? "");
+  const allowed = getAllowedOrigins();
+  if (origin && allowed.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else if (!origin && !process.env.NODE_ENV?.includes("production")) {
+    // Non-browser / same-origin tooling in development
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
+function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
+  const mimeOk = !mimetype || mimetype === "application/pdf" || mimetype === "application/x-pdf";
+  const magicOk =
+    buffer.length >= 4 &&
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46; // %PDF
+  return Boolean(magicOk && mimeOk);
+}
+
+const processRateBuckets = new Map<string, number[]>();
+
+function acceptProcessRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
+  const now = Date.now();
+  const recent = (processRateBuckets.get(ip) || []).filter((ts) => now - ts < windowMs);
+  if (recent.length >= limit) {
+    processRateBuckets.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  processRateBuckets.set(ip, recent);
+  return true;
+}
+
+
 // ---------------------------------------------------------------------------
 // Pure-JS multipart parser — no native deps, works on Vercel
 // ---------------------------------------------------------------------------
@@ -170,11 +230,8 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     return String(result?.text ?? "").trim();
   } catch (err: any) {
     console.warn("[process] pdf-parse failed:", err?.message);
-    return buffer
-      .toString("latin1")
-      .replace(/[^\x20-\x7E\n\r\t]/g, " ")
-      .replace(/\s{4,}/g, "   ")
-      .trim();
+    // Do not feed binary garbage into the model; caller handles empty text.
+    return "";
   }
 }
 
@@ -242,11 +299,14 @@ function buildFallbackAnalysis(
   };
 }
 
-// ---------------------------------------------------------------------------
-// HuggingFace AI Analysis (identical to server.ts, dynamic import)
-// ---------------------------------------------------------------------------
+import { repairTruncatedJSON } from "../src/lib/jsonRepairEngine.js";
 
 function safeJsonParse(text: string): unknown {
+  const result = repairTruncatedJSON(text);
+  if (!result.data) {
+    throw new Error(result.error || "JSON parse failed");
+  }
+  return result.data;
   const c = (text || "").trim();
   if (!c) throw new Error("Empty response");
   let extracted = c;
@@ -416,13 +476,26 @@ async function getAdminApp(): Promise<any | null> {
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: any, res: any) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") { res.status(405).json({ error: "Method Not Allowed" }); return; }
+
+  const clientIp = String(
+    (req.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "unknown",
+  );
+  if (!acceptProcessRequest(clientIp)) {
+    res.status(429).json({
+      error: {
+        stage: "RATE_LIMIT",
+        reason: "Too many upload requests. Please try again later.",
+        recommendation: "Wait a few minutes before retrying.",
+      },
+    });
+    return;
+  }
 
   const startTime = Date.now();
 
@@ -514,6 +587,17 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    if (!isPdfBuffer(fileBuffer)) {
+      res.status(400).json({
+        error: {
+          stage: "PDF_INGESTION",
+          reason: "Uploaded file is not a valid PDF.",
+          recommendation: "Please upload a PDF that starts with %PDF magic bytes.",
+        },
+      });
+      return;
+    }
+
     // ------------------------------------------------------------------
     // Step 3: Extract PDF text
     // ------------------------------------------------------------------
@@ -551,12 +635,14 @@ export default async function handler(req: any, res: any) {
     const safeFilename = sanitizeStorageFilename(filename);
     const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
 
+    const processAppCtx = await getAdminApp();
+
     // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
     // then derive fileUrl from the real object URL instead of a placeholder domain.
     let fileUrl = "";
-    if (appCtx) {
+    if (processAppCtx) {
       try {
-        const bucket = appCtx.admin.storage().bucket();
+        const bucket = processAppCtx.admin.storage().bucket();
         const storageFile = bucket.file(storagePath);
         await storageFile.save(fileBuffer, {
           metadata: {
@@ -659,12 +745,15 @@ export default async function handler(req: any, res: any) {
     });
   } catch (err: any) {
     console.error("[process] Unhandled error:", err?.message, err?.stack);
+    const isProd = process.env.NODE_ENV === "production";
     res.status(500).json({
       error: {
         stage: err?.stage ?? "PIPELINE_ERROR",
-        reason: err?.message ?? String(err),
+        reason: isProd
+          ? "An unexpected error occurred while processing the document."
+          : (err?.message ?? String(err)),
         recommendation: "An unexpected error occurred. Please try again.",
-        stack: process.env.NODE_ENV !== "production" ? err?.stack : undefined,
+        stack: isProd ? undefined : err?.stack,
       },
     });
   }
