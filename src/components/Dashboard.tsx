@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import {
   collection,
@@ -59,6 +59,7 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
   });
   const [recentDocs, setRecentDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const latestRemoteRef = useRef<DashboardDocument[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -209,16 +210,18 @@ export function Dashboard({ user, userProfile, onAction, onDocSelect }: any) {
         const docs = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() }) as DashboardDocument,
         );
+        latestRemoteRef.current = docs;
         processDocuments(docs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, "documents");
+        latestRemoteRef.current = [];
         processDocuments([]);
       },
     );
 
     const handleLocalDocsChanged = () => {
-      processDocuments([]);
+      processDocuments(latestRemoteRef.current);
     };
     window.addEventListener("fin_local_docs_changed", handleLocalDocsChanged);
 
