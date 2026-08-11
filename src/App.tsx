@@ -257,7 +257,6 @@ export default function App() {
     uid: currentUser.uid,
     username: currentUser.displayName || "",
     email: currentUser.email,
-    emailVerified: currentUser.emailVerified,
     role: DEFAULT_ROLE,
     createdAt: new Date().toISOString(),
   });
