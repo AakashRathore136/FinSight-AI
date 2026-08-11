@@ -468,7 +468,7 @@ export default function App() {
           uid: newUser.uid,
           username: username,
           email: email,
-          emailVerified: false,
+          emailVerified: newUser.emailVerified,
           role: DEFAULT_ROLE,
           createdAt: new Date().toISOString(),
         });
