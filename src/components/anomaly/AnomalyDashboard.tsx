@@ -374,7 +374,7 @@ async function runDetection(userId: string) {
       confidence,
       transactionId: tx.id,
       dismissed: false,
-      createdAt: tx.date,
+      createdAt: new Date().toISOString(),
       date: tx.date,
       severity: confidence >= 80 ? "high" : confidence >= 60 ? "medium" : "low",
       averageAmount: catBaseline.mean,
@@ -407,9 +407,7 @@ async function runDetection(userId: string) {
       transactionId:
         spike.transactions[spike.transactions.length - 1]?.id || "",
       dismissed: false,
-      createdAt:
-        spike.transactions[spike.transactions.length - 1]?.date ||
-        new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       date: (spike.transactions[spike.transactions.length - 1]?.date as Date) || new Date(),
       severity: pctOver >= 50 ? "high" : pctOver >= 25 ? "medium" : "low",
       averageAmount: avgMonthly,
