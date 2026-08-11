@@ -31,6 +31,7 @@ function getEnv(key: string, fallback = ""): string {
 function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
+
 // Mirrors api/analyze.ts's resolution exactly, so both serverless handlers
 // agree on which Firestore database they read/write — a mismatch here would
 // mean /api/process silently persists to a different database than
@@ -42,6 +43,7 @@ function getFirestoreDatabaseId(): string {
     "(default)"
   );
 }
+
 // Strip path separators and traversal segments from client-supplied filenames
 // before they become part of a Storage object path. Without this, a raw
 // filename such as "team/Q3.pdf" or "report_.._final.pdf" produces an object
@@ -462,8 +464,10 @@ async function getAdminApp(): Promise<any | null> {
 
     _adminApp = {
       admin,
+      getFirestore: () => (admin as any).firestore(getFirestoreDatabaseId()),
       getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
+    // admin.firestore(getFirestoreDatabaseId())
     return _adminApp;
   } catch (err: any) {
     console.warn("[process] Firebase Admin init failed:", err?.message);

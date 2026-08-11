@@ -11,9 +11,11 @@ interface ApiFetchOptions {
   timeout?: number;
 }
 
+import { getValidIdToken } from "./firebase";
+
 /**
- * Standardized fetch wrapper that uses the browser's original fetch.
- * This avoids issues with getter-only fetch properties on the window object.
+ * Standardized fetch wrapper that uses the browser's original fetch
+ * with automatic 401 unauthenticated token refresh retries.
  */
 export async function apiFetch(
   input: RequestInfo | URL,
@@ -51,10 +53,27 @@ export async function apiFetch(
   }, timeout);
 
   try {
-    return await fetchImpl(input, {
+    const res = await fetchImpl(input, {
       ...init,
       signal: controller.signal,
     });
+
+    // 401 Interceptor: If 401 Unauthorized occurs, attempt silent token renewal and retry once
+    if (res.status === 401 && init?.headers) {
+      const newToken = await getValidIdToken(true);
+      if (newToken) {
+        const headers = new Headers(init.headers);
+        headers.set("Authorization", `Bearer ${newToken}`);
+        console.warn("[API Fetch] 401 Unauthorized intercepted. Retrying request with refreshed token.");
+        return await fetchImpl(input, {
+          ...init,
+          headers,
+          signal: controller.signal,
+        });
+      }
+    }
+
+    return res;
   } catch (error) {
     if (
       error instanceof DOMException &&

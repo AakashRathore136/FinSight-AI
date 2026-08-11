@@ -57,18 +57,41 @@ export function isRecurringFrequency(frequency: BillFrequency): boolean {
   return frequency === 'weekly' || frequency === 'monthly' || frequency === 'yearly';
 }
 
+export function parseUTCDate(dateStr: string): Date {
+  const dateOnly = String(dateStr || "").split("T")[0];
+  if (!dateOnly || !/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    const fallback = new Date(dateStr);
+    return Number.isNaN(fallback.getTime()) ? new Date() : fallback;
+  }
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  // Set to 12:00 UTC to completely eliminate local timezone & DST boundary shifts
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
 function advanceByFrequency(
   date: Date,
   frequency: BillFrequency,
   originalDueDay?: number
 ): Date {
-  if (frequency === 'weekly') return addWeeks(date, 1);
+  const utcYear = date.getUTCFullYear();
+  const utcMonth = date.getUTCMonth();
+  const utcDay = originalDueDay ?? date.getUTCDate();
+
+  if (frequency === 'weekly') {
+    return new Date(Date.UTC(utcYear, utcMonth, utcDay + 7, 12, 0, 0));
+  }
   if (frequency === 'monthly') {
-    const day = originalDueDay ?? date.getDate();
-    const next = addMonths(date, 1);
-    const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-    next.setDate(Math.min(day, lastDayOfNextMonth));
-    return next;
+    const nextMonthIndex = utcMonth + 1;
+    // Calculate last day of next month (UTC)
+    const lastDayOfNextMonth = new Date(Date.UTC(utcYear, nextMonthIndex + 1, 0, 12, 0, 0)).getUTCDate();
+    const safeDay = Math.min(utcDay, lastDayOfNextMonth);
+    return new Date(Date.UTC(utcYear, nextMonthIndex, safeDay, 12, 0, 0));
+  }
+  if (frequency === 'yearly') {
+    const nextYear = utcYear + 1;
+    const lastDayOfNextYearMonth = new Date(Date.UTC(nextYear, utcMonth + 1, 0, 12, 0, 0)).getUTCDate();
+    const safeDay = Math.min(utcDay, lastDayOfNextYearMonth);
+    return new Date(Date.UTC(nextYear, utcMonth, safeDay, 12, 0, 0));
   }
   if (frequency === 'yearly') {
     const day = originalDueDay ?? date.getDate();

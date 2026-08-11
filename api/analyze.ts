@@ -44,14 +44,25 @@ function getFirestoreDatabaseId(): string {
 // path that the download guard will refuse to sign, making the file
 // permanently un-downloadable.
 function sanitizeStorageFilename(filename: string): string {
-  let name =
-    String(filename || "document.pdf").replace(/\\/g, "/").split("/").pop() ||
-    "document.pdf";
+  let name = String(filename || "document.pdf");
+
+  // Iterative multi-pass URL decoding to collapse double/triple-encoded sequences
+  for (let i = 0; i < 5; i++) {
+    try {
+      const decoded = decodeURIComponent(name);
+      if (decoded === name) break;
+      name = decoded;
+    } catch {
+      break;
+    }
+  }
+
+  name = name.replace(/\\/g, "/").split("/").pop() || "document.pdf";
   name = name
     .replace(/\.\./g, "_")
-    // eslint-disable-next-line no-useless-escape
+    .replace(/%2e/gi, "_")
+    .replace(/%2f/gi, "_")
     .replace(/[\/\\]/g, "_")
-    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .trim();
   if (!name || name === "." || name === "..") name = "document.pdf";
