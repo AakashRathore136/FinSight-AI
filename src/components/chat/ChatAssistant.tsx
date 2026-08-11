@@ -45,7 +45,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { format } from 'date-fns';
+import { format, startOfMonth, subMonths } from 'date-fns';
 
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
@@ -71,7 +71,6 @@ import {
   fetchTransactionsForPeriod,
   buildPeriodConfig,
   type Transaction,
-  type TrendPeriod,
 } from '@/src/lib/trendsUtils';
 import { fetchBudgetCategories } from '@/src/lib/budgetUtils';
 
@@ -108,17 +107,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
   const currentUserId = user?.uid || '';
 
-  const period = useMemo<TrendPeriod>(() => 'month', []);
-
   const periodConfig = useMemo(
     () =>
       buildPeriodConfig(
-        period,
+        'custom',
         new Date(),
-        undefined,
-        undefined,
+        startOfMonth(subMonths(new Date(), 5)),
+        new Date(),
       ),
-    [period],
+    [],
   );
 
   useEffect(() => {

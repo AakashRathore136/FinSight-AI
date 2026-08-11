@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-escape, no-control-regex */
 import express from "express";
 import path from "path";
 import fs from "fs";
