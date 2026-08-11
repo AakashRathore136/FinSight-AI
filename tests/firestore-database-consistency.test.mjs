@@ -39,7 +39,7 @@ test("server.ts routes Firestore calls through firestoreDatabaseId", () => {
 
 test("serverless handlers persist to the configured Firestore database", () => {
   assert.ok(
-    processApi.includes("admin.firestore(getFirestoreDatabaseId())"),
+    processApi.includes("getFirestore(admin.app(), getFirestoreDatabaseId())"),
     "api/process.ts must resolve Firestore with getFirestoreDatabaseId()",
   );
   assert.ok(

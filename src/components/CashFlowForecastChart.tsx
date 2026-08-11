@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react';
 import {
   LineChart,
@@ -17,19 +18,10 @@ export default function CashFlowForecastChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch predictive data
-    fetch('/api/cash-flow-forecast')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setData(json.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to load forecast data", err);
-        setLoading(false);
-      });
+    // Demo feature without a serverless endpoint (see #895): no request is
+    // issued to the non-existent /api/cash-flow-forecast route; render empty.
+    setData([]);
+    setLoading(false);
   }, []);
 
   if (loading) {
