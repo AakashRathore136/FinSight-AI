@@ -32,6 +32,7 @@ function getFirebaseProjectId(): string {
   return getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
+
 // Mirrors api/analyze.ts's resolution exactly, so both serverless handlers
 // agree on which Firestore database they read/write — a mismatch here would
 // mean /api/process silently persists to a different database than
@@ -462,8 +463,11 @@ async function getAdminApp(): Promise<any | null> {
       }
     }
 
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const databaseId = getFirestoreDatabaseId();
     _adminApp = {
       admin,
+      getFirestore: () => getFirestore(databaseId),
       getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
       getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
