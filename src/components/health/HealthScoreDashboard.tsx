@@ -277,7 +277,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
           budgetAdherenceScore: budget,
           metrics: metricsPayload,
         });
-        const updatedScore = { ...existing, ...metricsPayload, overallScore: overall, spendingScore: spending, savingsScore: savings, budgetAdherenceScore: budget };
+        const updatedScore = { ...existing, metrics: metricsPayload, overallScore: overall, spendingScore: spending, savingsScore: savings, budgetAdherenceScore: budget };
         setHistoricalScores((prev) =>
           prev.map((s) => (s.id === existing.id ? updatedScore : s))
         );
