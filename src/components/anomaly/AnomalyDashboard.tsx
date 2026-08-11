@@ -383,17 +383,19 @@ async function runDetection(userId: string) {
   });
 
   categorySpikeAnomalies.forEach((spike) => {
+    const monthlyTotals = spike.baseline?.monthlyTotals ?? [];
     const confidence = calculateConfidenceScore(
       "category_spike",
       spike.amount,
-      spike.baseline.mean,
-      spike.baseline.stdDev,
+      spike.baseline?.mean ?? spike.amount,
+      spike.baseline?.stdDev ?? 0,
     );
     const lastMonthTotal =
-      spike.baseline.monthlyTotals[spike.baseline.monthlyTotals.length - 1];
+      monthlyTotals[monthlyTotals.length - 1] ?? spike.amount;
     const avgMonthly =
-      spike.baseline.monthlyTotals.reduce((a, b) => a + b, 0) /
-      spike.baseline.monthlyTotals.length;
+      monthlyTotals.length > 0
+        ? monthlyTotals.reduce((a, b) => a + b, 0) / monthlyTotals.length
+        : lastMonthTotal;
     const pctOver =
       avgMonthly > 0 ? Math.round((lastMonthTotal / avgMonthly - 1) * 100) : 0;
 
@@ -402,7 +404,9 @@ async function runDetection(userId: string) {
       type: "category_spike",
       category: spike.category,
       amount: spike.amount,
-      description: `${spike.category} spending is ${pctOver}% above the 3-month average.`,
+      description: spike.baseline
+        ? `${spike.category} spending is ${pctOver}% above the 3-month average.`
+        : `${spike.category} is a new spending category with ${spike.amount.toLocaleString()} this month.`,
       confidence,
       transactionId:
         spike.transactions[spike.transactions.length - 1]?.id || "",
