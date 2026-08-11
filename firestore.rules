@@ -65,8 +65,9 @@ service cloud.firestore {
       // A user can only create their own profile with the default
       // non-privileged role. Privileged roles (senior_pm, cro, compliance,
       // admin) must be granted server-side (Admin SDK) and can never be
-      // self-assigned at account creation.
+      // self-assigned at account creation. (Issues #505, #603)
       allow create: if isAuthenticatedOwner(userId) && isValidUser(incoming()) && incoming().role == 'junior_analyst';
+      // Owners may only update non-privilege fields; role changes require admin.
       allow update: if (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
@@ -219,6 +220,18 @@ service cloud.firestore {
     match /chat_messages/{messageId} {
       // Append-only chat history: clients create and read; no updates.
       allow read: if isOwner(existing().userId) || isAdmin();
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    match /activity_log/{logId} {
+      // Per-user action history. Append-only: clients create and read their
+      // own entries; no updates. Delete is owner-scoped so account erasure
+      // (deleteUserData) can purge the audit history with the rest of the
+      // user's data. Matches the userId field fetchActivityLog queries on.
+      allow get: if isOwner(existing().userId) || isAdmin();
+      allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isOwner(incoming().userId);
       allow update: if false;
       allow delete: if isOwner(existing().userId) || isAdmin();
