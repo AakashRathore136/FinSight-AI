@@ -224,7 +224,6 @@ export default function App() {
     uid: currentUser.uid,
     username: currentUser.displayName || "",
     email: currentUser.email,
-    emailVerified: currentUser.emailVerified,
     role: "junior_analyst",
     createdAt: new Date().toISOString(),
   });
@@ -439,7 +438,6 @@ export default function App() {
           uid: newUser.uid,
           username: username,
           email: email,
-          emailVerified: false,
           role: signupRole,
           createdAt: new Date().toISOString(),
         });
