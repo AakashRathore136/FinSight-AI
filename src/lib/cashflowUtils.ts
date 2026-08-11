@@ -37,11 +37,44 @@ export interface RecurringTransaction {
   category: string;
   type: "income" | "expense";
   averageAmount: number;
-  frequency: "weekly" | "monthly" | "quarterly";
+  frequency: "weekly" | "monthly" | "quarterly" | "yearly";
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function normalizeDescriptionKey(description: string | undefined): string {
+  return (description || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim();
+}
+
+function inferRecurrenceFrequency(
+  dates: Date[],
+): RecurringTransaction["frequency"] {
+  if (dates.length < 2) return "monthly";
+  const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+  const intervals: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    intervals.push((sorted[i].getTime() - sorted[i - 1].getTime()) / DAY_MS);
+  }
+  intervals.sort((a, b) => a - b);
+  const mid = Math.floor(intervals.length / 2);
+  const median =
+    intervals.length % 2 === 0
+      ? (intervals[mid - 1] + intervals[mid]) / 2
+      : intervals[mid];
+
+  if (median >= 5 && median <= 10) return "weekly";
+  if (median >= 25 && median <= 35) return "monthly";
+  if (median >= 85 && median <= 95) return "quarterly";
+  if (median >= 350 && median <= 380) return "yearly";
+  return "monthly";
 }
 
 function parseTransactionDate(raw: unknown): Date {
@@ -207,33 +240,61 @@ export function calculateBalanceProjection(
 export function identifyRecurringTransactions(
   transactions: Transaction[],
 ): RecurringTransaction[] {
-  const categoryMap: Record<
-    string,
-    { amounts: number[]; type: "income" | "expense" }
-  > = {};
+  type Group = {
+    key: string;
+    category: string;
+    type: "income" | "expense";
+    txns: Transaction[];
+  };
+  const groups: Group[] = [];
+
   transactions.forEach((t) => {
-    if (!categoryMap[t.category]) {
-      categoryMap[t.category] = { amounts: [], type: t.type };
+    const key = normalizeDescriptionKey(t.description) || t.category;
+    let group: Group | null = null;
+    for (const g of groups) {
+      if (g.type !== t.type) continue;
+      const exactMatch = g.key === key;
+      const textMatch = g.key.includes(key) || key.includes(g.key);
+      const amountMatch = g.txns.some(
+        (gt) =>
+          Math.abs(gt.amount - t.amount) <
+          0.01 * Math.max(1, Math.abs(gt.amount)),
+      );
+      if (exactMatch || (textMatch && amountMatch)) {
+        group = g;
+        break;
+      }
     }
-    categoryMap[t.category].amounts.push(t.amount);
+    if (group) {
+      group.txns.push(t);
+    } else {
+      groups.push({ key, category: t.category, type: t.type, txns: [t] });
+    }
   });
 
   const recurring: RecurringTransaction[] = [];
-  Object.entries(categoryMap).forEach(([category, data]) => {
-    if (data.amounts.length >= 3) {
-      const avg = data.amounts.reduce((a, b) => a + b, 0) / data.amounts.length;
-      const variance =
-        data.amounts.reduce((sum, amt) => sum + Math.abs(amt - avg), 0) /
-        data.amounts.length;
-      if (avg === 0 || variance / avg < 0.3) {
-        recurring.push({
-          category,
-          type: data.type,
-          averageAmount: Math.round(avg * 100) / 100,
-          frequency: "monthly",
-        });
-      }
-    }
+  groups.forEach((group) => {
+    if (group.txns.length < 3) return;
+
+    // A charge that appears once a quarter must still span distinct months.
+    // Clusters confined to a single month (e.g. three coffees in one week or
+    // a burst of purchases around a holiday) are not recurring.
+    const distinctMonths = new Set(group.txns.map((t) => getMonthKey(t.date)));
+    if (distinctMonths.size < 2) return;
+
+    const avg =
+      group.txns.reduce((sum, t) => sum + t.amount, 0) / group.txns.length;
+    const variance =
+      group.txns.reduce((sum, t) => sum + Math.abs(t.amount - avg), 0) /
+      group.txns.length;
+    if (avg === 0 || variance / Math.abs(avg) >= 0.3) return;
+
+    recurring.push({
+      category: group.category,
+      type: group.type,
+      averageAmount: Math.round(avg * 100) / 100,
+      frequency: inferRecurrenceFrequency(group.txns.map((t) => t.date)),
+    });
   });
 
   return recurring.sort((a, b) => b.averageAmount - a.averageAmount);
