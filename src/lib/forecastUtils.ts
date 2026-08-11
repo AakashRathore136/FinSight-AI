@@ -12,8 +12,10 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, addMonths, isWithinInterval } from 'date-fns';
-import { toDate, csvEscape } from './utils';
+import { format, isWithinInterval } from 'date-fns';
+import { toDate } from './utils';
+import { getForecastMonths } from './forecastMonthUtils';
+import { csvEscape } from './reportUtils';
 
 export interface ForecastData {
   id: string;
@@ -95,8 +97,9 @@ export function generateMonthlyForecast(
   const volatilityPenalty = (incomeCV + expenseCV) * 100;
 
   const forecasts: MonthlyForecast[] = [];
+  const forecastMonths = getForecastMonths(monthsAhead);
   for (let i = 0; i < monthsAhead; i++) {
-    const month = format(addMonths(new Date(), i + 1), 'yyyy-MM');
+    const month = forecastMonths[i];
     const income = avgIncome;
     const expenses = avgExpenses;
     const confidence = Math.max(
@@ -205,7 +208,7 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
     '',
     'Month,Income,Expenses,Net Balance,Confidence',
     ...data.map((d) =>
-      [csvEscape(d.month), d.income, d.expenses, d.net, `${d.confidence}%`].join(','),
+      [csvEscape(d.month), csvEscape(d.income), csvEscape(d.expenses), csvEscape(d.net), csvEscape(d.confidence + '%')].join(','),
     ),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,

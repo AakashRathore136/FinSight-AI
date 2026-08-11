@@ -9,6 +9,7 @@ import {
   orderBy,
   getDocs,
   serverTimestamp,
+  limit,
 } from 'firebase/firestore';
 import {
   Calculator,
@@ -87,7 +88,10 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
         const q = query(
           collection(db, 'tax_estimates'),
           where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc')
+          orderBy('createdAt', 'desc'),
+          // Estimates are saved a handful of times a year, so the most recent
+          // 50 records cover years of history while keeping reads bounded.
+          limit(50)
         );
         const snapshot = await getDocs(q);
         // Pick the latest record that matches the current jurisdiction
