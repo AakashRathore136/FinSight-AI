@@ -181,6 +181,7 @@ import { TaxEstimation } from './components/tax/TaxEstimation';
 import { EmergencyFundPlanner } from './components/emergency/EmergencyFundPlanner';
 import { HealthScoreDashboard } from './components/health/HealthScoreDashboard';
 import { CashFlowDashboard } from './components/cashflow/CashFlowDashboard';
+import { CurrencyManager } from './components/currency/CurrencyManager';
 import { ChatAssistant } from './components/chat/ChatAssistant';
 import { ForecastComparison } from './components/forecast/ForecastComparison';
 import { PortfolioTracker } from './components/portfolio/PortfolioTracker';
@@ -1311,6 +1312,18 @@ export default function App() {
                     setActiveTab("documents");
                   }}
                 />
+              </motion.div>
+            )}
+
+            {activeTab === 'currencies' && user && (
+              <motion.div
+                key="currencies"
+                initial={false}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <CurrencyManager user={user} />
               </motion.div>
             )}
 
