@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { toDate, normalizeTransactionType } from "@/src/lib/utils";
+import { getForecastMonths } from "@/src/lib/forecastMonthUtils";
 
 export interface Transaction {
   id: string;
@@ -90,13 +91,10 @@ function parseTransactionDate(raw: unknown): Date {
 }
 
 function getNextMonths(count: number): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    months.push(getMonthKey(d));
-  }
-  return months;
+  // Shared forecast-window convention: forecast months start at the NEXT
+  // calendar month so the cash-flow engine agrees with the Forecast
+  // Comparison engine (issue #900).
+  return getForecastMonths(count);
 }
 
 export async function fetchUserTransactions(
@@ -178,11 +176,17 @@ export function calculateMonthlyForecast(
   // Averages are computed over the full observation window: months without
   // activity are zero-filled so a charge that appears once in the window is
   // projected at its true monthly rate instead of its per-month-with-activity
-  // rate.
+  // rate. The divisor is the actual number of months observed, not the
+  // windowMonths parameter, to correctly reflect the observation period.
+  const observedMonthCount = Math.max(
+    Object.values(incomeByMonth).length,
+    Object.keys(expenseByMonth).length,
+  );
+  const divisor = observedMonthCount > 0 ? observedMonthCount : 1;
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
-        windowMonths
+        divisor
       : 0;
 
   const categoryTotals: Record<string, number> = {};
@@ -193,7 +197,7 @@ export function calculateMonthlyForecast(
   });
   const avgByCategory: Record<string, number> = {};
   Object.entries(categoryTotals).forEach(([cat, total]) => {
-    avgByCategory[cat] = total / windowMonths;
+    avgByCategory[cat] = total / divisor;
   });
 
   return months.map((month) => {
@@ -240,61 +244,49 @@ export function calculateBalanceProjection(
 export function identifyRecurringTransactions(
   transactions: Transaction[],
 ): RecurringTransaction[] {
-  type Group = {
-    key: string;
-    category: string;
-    type: "income" | "expense";
-    txns: Transaction[];
-  };
-  const groups: Group[] = [];
-
+  const categoryMap: Record<
+    string,
+    { amounts: number[]; dates: Date[]; type: "income" | "expense" }
+  > = {};
   transactions.forEach((t) => {
-    const key = normalizeDescriptionKey(t.description) || t.category;
-    let group: Group | null = null;
-    for (const g of groups) {
-      if (g.type !== t.type) continue;
-      const exactMatch = g.key === key;
-      const textMatch = g.key.includes(key) || key.includes(g.key);
-      const amountMatch = g.txns.some(
-        (gt) =>
-          Math.abs(gt.amount - t.amount) <
-          0.01 * Math.max(1, Math.abs(gt.amount)),
-      );
-      if (exactMatch || (textMatch && amountMatch)) {
-        group = g;
-        break;
-      }
+    if (!categoryMap[t.category]) {
+      categoryMap[t.category] = { amounts: [], dates: [], type: t.type };
     }
-    if (group) {
-      group.txns.push(t);
-    } else {
-      groups.push({ key, category: t.category, type: t.type, txns: [t] });
-    }
+    categoryMap[t.category].amounts.push(t.amount);
+    categoryMap[t.category].dates.push(t.date);
   });
 
+  function detectFrequency(dates: Date[]): "weekly" | "monthly" | "quarterly" {
+    if (dates.length < 2) return "monthly";
+    const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      gaps.push(sorted[i].getTime() - sorted[i - 1].getTime());
+    }
+    const medianMs = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];
+    const medianDays = medianMs / (1000 * 60 * 60 * 24);
+    if (Math.abs(medianDays - 7) <= 5) return "weekly";
+    if (Math.abs(medianDays - 30) <= 7) return "monthly";
+    if (Math.abs(medianDays - 91) <= 14) return "quarterly";
+    return "monthly";
+  }
+
   const recurring: RecurringTransaction[] = [];
-  groups.forEach((group) => {
-    if (group.txns.length < 3) return;
-
-    // A charge that appears once a quarter must still span distinct months.
-    // Clusters confined to a single month (e.g. three coffees in one week or
-    // a burst of purchases around a holiday) are not recurring.
-    const distinctMonths = new Set(group.txns.map((t) => getMonthKey(t.date)));
-    if (distinctMonths.size < 2) return;
-
-    const avg =
-      group.txns.reduce((sum, t) => sum + t.amount, 0) / group.txns.length;
-    const variance =
-      group.txns.reduce((sum, t) => sum + Math.abs(t.amount - avg), 0) /
-      group.txns.length;
-    if (avg === 0 || variance / Math.abs(avg) >= 0.3) return;
-
-    recurring.push({
-      category: group.category,
-      type: group.type,
-      averageAmount: Math.round(avg * 100) / 100,
-      frequency: inferRecurrenceFrequency(group.txns.map((t) => t.date)),
-    });
+  Object.entries(categoryMap).forEach(([category, data]) => {
+    if (data.amounts.length >= 3) {
+      const avg = data.amounts.reduce((a, b) => a + b, 0) / data.amounts.length;
+      const variance =
+        data.amounts.reduce((sum, amt) => sum + Math.abs(amt - avg), 0) /
+        data.amounts.length;
+      if (avg === 0 || variance / avg < 0.3) {
+        recurring.push({
+          category,
+          type: data.type,
+          averageAmount: Math.round(avg * 100) / 100,
+          frequency: detectFrequency(data.dates),
+        });
+      }
+    }
   });
 
   return recurring.sort((a, b) => b.averageAmount - a.averageAmount);
