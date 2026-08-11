@@ -238,6 +238,17 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
         ? payload.key_metrics
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
+    ? payload.risk_assessment.map((item: unknown) => {
+        if (typeof item === "object" && item) {
+          const obj = item as { level?: unknown; description?: unknown };
+          return {
+            level: sanitizeString(String(obj.level || "")),
+            description: sanitizeString(String(obj.description || "")),
+          };
+        }
+        return sanitizeString(String(item || ""));
+      })
+    : [],
       ? payload.risk_assessment.map((item: any) =>
           typeof item === "object" && item
             ? {
