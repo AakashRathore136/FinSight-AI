@@ -1,4 +1,4 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ----------------------------------------------------
@@ -12,6 +12,12 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
+    // Explicit affectedKeys() check: the userId owner key must be preserved on
+    // every client update. A bare equality check is silently OR-combined away
+    // by any other matching match block, while this key-based test cannot be.
+    function preservesOwnerKey() {
+      return !incoming().diff(existing()).affectedKeys().hasAny(['userId']);
+    }
 
     // ----------------------------------------------------
     // VALIDATION BLUEPRINTS
@@ -105,7 +111,8 @@ service cloud.firestore {
       allow get: if isOwner(existing().userId) || isAdmin();
       allow list: if request.auth != null && (request.query.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if isOwner(existing().userId) || isAdmin();
+      // Reports are append-only: clients may create and read, never edit.
+      allow update: if false;
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
@@ -221,14 +228,14 @@ service cloud.firestore {
     match /transactions/{txId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
     match /chat_conversations/{conversationId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
@@ -255,14 +262,14 @@ service cloud.firestore {
     match /portfolios/{portfolioId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
     match /portfolioHoldings/{holdingId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
@@ -283,44 +290,23 @@ service cloud.firestore {
     match /anomalies/{anomalyId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
     match /forecasts/{forecastId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
     match /health_scores/{scoreId} {
       allow read: if isOwner(existing().userId) || isAdmin();
       allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if (isOwner(existing().userId) && incoming().userId == existing().userId) || isAdmin();
+      allow update: if (isOwner(existing().userId) && preservesOwnerKey()) || isAdmin();
       allow delete: if isOwner(existing().userId) || isAdmin();
     }
 
-    match /reports/{reportId} {
-      allow read: if isOwner(existing().userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update: if false;
-      allow delete: if isOwner(existing().userId) || isAdmin();
-    }
-
-    // Document ID == uid for per-user singleton settings docs.
-    match /privacy_settings/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isOwner(userId) || isAdmin();
-    }
-
-    match /currencies/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isOwner(userId) || isAdmin();
-    }
   }
 }
