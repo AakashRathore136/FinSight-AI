@@ -1,4 +1,8 @@
 rules_version = '2';
+// ⚠️ IMPORTANT: This file hardcodes the Firestore database as "(default)"
+// See the isAdmin() function below for details. If FIREBASE_FIRESTORE_DATABASE_ID
+// is not "(default)", admin access will silently fail.
+// Run `npm run validate-env` to check for this mismatch.
 service firebase.storage {
   match /b/{bucket}/o {
     // Default deny all access
@@ -36,10 +40,15 @@ service firebase.storage {
         request.auth.token.email_verified == true &&
         (request.auth.uid == userId || isAdmin(request.auth.uid));
 
-      // Write: Only the owner can write to their own analysis directory
+      // Write: Only the owner can write to their own analysis directory.
+      // The object name must be a flat analyses/{uid}/{filename} path with no
+      // nested segments and no `..`, matching what the download guard and the
+      // server-side filename sanitization accept.
       allow write: if request.auth != null &&
         request.auth.token.email_verified == true &&
         request.auth.uid == userId &&
+        request.resource.name.matches('analyses/[^/]+/[^/]+') &&
+        !request.resource.name.includes('..') &&
         request.resource.size < 20 * 1024 * 1024 && // Max 20MB
         request.resource.contentType.matches('application/pdf');
 

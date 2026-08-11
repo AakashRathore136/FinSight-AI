@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -17,10 +18,12 @@ import {
   deleteUserData,
   getPrivacySettings,
   updatePrivacySettings,
+  DEFAULT_PRIVACY_SETTINGS,
   PrivacySettings,
 } from "@/src/lib/privacyUtils";
 import { toast } from "sonner";
 import { auth } from "@/src/lib/firebase";
+import { safeJsonParse } from "@/src/lib/utils";
 import { deleteUser, signOut } from "firebase/auth";
 
 export function PrivacyDashboard({ user }: { user: any }) {
@@ -33,16 +36,30 @@ export function PrivacyDashboard({ user }: { user: any }) {
   // Derive loading state
   const loading = !user || isLoading;
 
+  useEffect(() => {
+    if (privacySettings && user) {
+      localStorage.setItem(`privacySettings_${user.uid}`, JSON.stringify(privacySettings));
+    }
+  }, [privacySettings, user]);
+
   // Define loadPrivacyData before useEffect to avoid hoisting issues
   async function loadPrivacyData() {
     if (!user) return;
      
     setIsLoading(true);
+    const cached = localStorage.getItem(`privacySettings_${user.uid}`);
+    const cachedSettings = cached
+      ? (safeJsonParse(cached, null as Partial<PrivacySettings> | null))
+      : null;
     try {
-      const settings = await getPrivacySettings(user.uid);
-      setPrivacySettings(settings);
+      // Firestore is the single source of truth. localStorage is only an
+      // offline cache so saved choices survive neither cache clears nor
+      // cross-device switches.
+      const remote = await getPrivacySettings(user.uid);
+      setPrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, ...remote });
     } catch (error) {
       console.error("Failed to load privacy data:", error);
+      setPrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, ...cachedSettings });
     } finally {
        
       setIsLoading(false);

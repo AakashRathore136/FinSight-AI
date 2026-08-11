@@ -16,6 +16,13 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="mask-icon" href="/logo.png" color="#0ea5e9" />
+    <script>
+      (function() {
+        var stored = localStorage.getItem('theme');
+        var isDark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) { document.documentElement.classList.add('dark'); }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

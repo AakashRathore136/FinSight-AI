@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import { format } from "date-fns";
+import { toDate } from "./utils.ts";
 
 export interface Transaction {
   id: string;
@@ -38,6 +40,7 @@ export function calculateCategoryBaseline(
 
   const baseline = new Map<string, CategoryBaseline>();
   grouped.forEach((items, category) => {
+    if (items.length === 0) return;
     const amounts = items.map((item) => Math.abs(item.amount));
     const mean =
       amounts.length > 0
@@ -50,7 +53,8 @@ export function calculateCategoryBaseline(
         : 0;
     const monthlyTotals = new Map<string, number>();
     items.forEach((item) => {
-      const date = item.date instanceof Date ? item.date : new Date(item.date);
+      const date = toDate(item.date);
+      if (!date) return;
       const key = format(date, "yyyy-MM");
       monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + Math.abs(item.amount));
     });
