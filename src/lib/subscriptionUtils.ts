@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
 import {
+
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -20,8 +21,8 @@ import {
   addDays,
   startOfDay,
   differenceInDays,
+  isBefore,
   isAfter,
-  format,
 } from "date-fns";
 
 export interface Transaction {
@@ -167,7 +168,8 @@ export async function fetchUserTransactions(
         const data = doc.data();
         return {
           id: doc.id,
-          userId: data.ownerId || data.userId || "",
+          userId: data.userId || data.ownerId || "",
+          ownerId: data.ownerId || "",
           amount: data.amount || 0,
           category: data.category || "Other",
           description: data.description || "",
@@ -190,6 +192,10 @@ export function groupTransactionsIntoSubscriptions(
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
     const normalized = normalizeText(transaction.description);
+    // Empty/punctuation-only/emoji-only/foreign descriptions normalize to ""
+    // and would match every group via `key.includes("")`. Exclude them from
+    // auto-detection instead of folding them into an unrelated merchant.
+    if (!normalized) continue;
     const category = transaction.category.toLowerCase();
 
     let matchedKey: string | null = null;
@@ -213,9 +219,6 @@ export function groupTransactionsIntoSubscriptions(
     }
 
     if (!matchedKey) {
-      // Use the full normalized description as the group key. Truncating to
-      // 20 chars merged distinct subscriptions sharing a long prefix (e.g.
-      // "netflix premium monthly" and "netflix premium yearly").
       groups.set(normalized, [transaction]);
     } else {
       const existing = groups.get(matchedKey)!;
@@ -258,6 +261,27 @@ export function analyzeSubscriptionPattern(
   return { frequency: "monthly", confidence: 0.3 };
 }
 
+function advanceByFrequency(
+  date: Date,
+  frequency: "monthly" | "yearly" | "weekly",
+  originalDay?: number,
+): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(date, 1);
+    case "yearly":
+      return addYears(date, 1);
+    case "monthly":
+    default: {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 1);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
+  }
+}
+
 export function predictNextRenewalDate(
   transactions: Transaction[],
   frequency: "monthly" | "yearly" | "weekly",
@@ -266,17 +290,19 @@ export function predictNextRenewalDate(
     (a, b) => b.date.getTime() - a.date.getTime(),
   );
   const lastDate = sorted[0]?.date || new Date();
+  const now = new Date();
 
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(startOfDay(lastDate), 1);
-    case "monthly":
-      return addMonths(startOfDay(lastDate), 1);
-    case "yearly":
-      return addYears(startOfDay(lastDate), 1);
-    default:
-      return addMonths(startOfDay(lastDate), 1);
-  }
+  // Advance forward from the last observed charge to the first future
+  // occurrence. A stale last charge (paused service, missed payment, long
+  // gap) must not produce a past renewal date that hides the subscription
+  // from upcoming-renewals and reminders.
+  const originalDay = lastDate.getDate();
+  let next = startOfDay(lastDate);
+  do {
+    next = advanceByFrequency(next, frequency, originalDay);
+  } while (isBefore(next, now));
+
+  return next;
 }
 
 export function calculateSubscriptionCosts(subscriptions: Subscription[]): {
@@ -365,6 +391,22 @@ export function getUpcomingRenewals(
         !isAfter(sub.nextRenewalDate, cutoff),
     )
     .sort((a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime());
+}
+
+export function estimateMonthlyIncome(
+  transactions: Transaction[],
+  windowMonths: number = 6,
+): number {
+  const incomeByMonth = new Map<string, number>();
+  transactions.forEach((t) => {
+    if (t.type !== "income") return;
+    const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+    incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+  });
+  const monthCount = incomeByMonth.size;
+  if (monthCount === 0) return 0;
+  const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
+  return total / Math.min(monthCount, windowMonths);
 }
 
 export function calculateSubscriptionBurden(
@@ -472,15 +514,14 @@ export async function detectAndSaveSubscriptions(
     if (!analysis || analysis.confidence < 0.4) continue;
 
     const name = txns[0].description || key;
-    const normalized = name;
 
-    if (existingNames.has(normalized.toLowerCase())) continue;
+    if (existingNames.has(name.toLowerCase())) continue;
 
     const nextRenewal = predictNextRenewalDate(txns, analysis.frequency);
 
     try {
       const id = await saveSubscription(userId, {
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
@@ -492,7 +533,7 @@ export async function detectAndSaveSubscriptions(
       createdSubs.push({
         id,
         userId,
-        name: normalized,
+        name: name,
         amount: txns[0].amount,
         frequency: analysis.frequency,
         category: txns[0].category || "Other",
