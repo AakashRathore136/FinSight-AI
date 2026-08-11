@@ -74,8 +74,8 @@ export async function fetchTransactionsForDateRange(
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
-      where("date", ">=", startDate),
-      where("date", "<=", endDate),
+      where("date", ">=", startOfDay(startDate)),
+      where("date", "<=", endOfDay(endDate)),
       orderBy("date", "desc"),
     );
 
