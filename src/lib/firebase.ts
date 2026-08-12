@@ -12,8 +12,6 @@ import {
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
-
-
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCLwFIQVnzSlx4DDycgJhugpty2hbGMCUk",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "finsightai-5ef59.firebaseapp.com",
@@ -66,7 +64,7 @@ export interface FirestoreErrorInfo {
   code?: string;
   operationType: OperationType;
   path: string | null;
-  authInfo: {
+  authInfo?: {
     userId?: string | null;
     email?: string | null;
     emailVerified?: boolean | null;
@@ -150,29 +148,30 @@ export function handleFirestoreError(
   path: string | null,
 ) {
   const firebaseError = error instanceof FirebaseError ? error : null;
-  const errInfo: FirestoreErrorInfo = {
+  
+  // 1. Create the clean object without authInfo
+  const errInfo = {
     error: firebaseError
       ? firebaseError.message
       : error instanceof Error
         ? error.message
         : String(error),
     code: firebaseError?.code,
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
-          providerId: provider.providerId,
-          email: provider.email,
-        })) || [],
-    },
     operationType,
     path,
   };
-  console.error("Firestore Error: ", JSON.stringify(errInfo));
+
+  // 2. The new development-only safe logging logic
+  if (process.env.NODE_ENV === "development") {
+    console.error("Firestore Error: ", JSON.stringify({
+      code: firebaseError?.code,
+      operationType,
+      path,
+      hasUser: !!auth.currentUser
+    }));
+  }
+
+  // 3. Return the sanitized error
   return errInfo;
 }
 
@@ -303,4 +302,3 @@ export async function updateDocumentStateAtomic(
     return { docId, version: nextVersion };
   });
 }
-
