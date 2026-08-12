@@ -16,29 +16,6 @@ export interface ComplianceScore {
   violations: ComplianceViolation[];
 }
 
-/**
- * Scans financial transactions and documents for AML and SOX compliance issues.
- */
-export function auditFinancialData(transactions: Array<{ amount: number; description: string; date: string; category?: string }>): ComplianceScore {
-  const violations: ComplianceViolation[] = [];
-
-  // AML Rule 1: Structuring / Smurfing detection (multiple transactions just under $10,000 threshold)
-  const structuringTxns = transactions.filter((t) => Math.abs(t.amount) >= 9000 && Math.abs(t.amount) < 10000);
-  if (structuringTxns.length >= 2) {
-    violations.push({
-      id: "aml-structuring-01",
-      category: "AML",
-      severity: "high",
-      title: "Potential Transaction Structuring Detected",
-      description: `Identified ${structuringTxns.length} transactions between $9,000 and $9,999 in close succession.`,
-      recommendedAction: "File a Currency Transaction Report (CTR) / Suspicious Activity Report (SAR) with FinCEN.",
-    });
-  }
-
-  // AML Rule 2: High velocity round-trip transfers
-  const largeExpenses = transactions.filter((t) => t.amount < -25000);
-  const largeIncomes = transactions.filter((t) => t.amount > 25000);
-  if (largeExpenses.length > 0 && largeIncomes.length > 0) {
 export interface AuditTransaction {
   amount: number;
   description: string;
@@ -127,8 +104,6 @@ export function auditFinancialData(
       category: "AML",
       severity: "medium",
       title: "Rapid Round-Trip Fund Velocity",
-      description: "High-value symmetric deposits and rapid withdrawals detected within a short window.",
-      recommendedAction: "Perform Enhanced Due Diligence (EDD) on counterparty entities.",
       description: `High-value deposits and rapid withdrawals detected within ${ROUND_TRIP_WINDOW_DAYS} days of each other.`,
       recommendedAction:
         "Perform Enhanced Due Diligence (EDD) on counterparty entities.",
@@ -136,7 +111,6 @@ export function auditFinancialData(
   }
 
   // SOX Rule 1: Off-balance sheet expenditure disclosure
-  const unclassifiedLarge = transactions.filter((t) => Math.abs(t.amount) > 50000 && (!t.category || t.category.toLowerCase() === "other"));
   const unclassifiedLarge = transactions.filter(
     (t) =>
       Math.abs(t.amount) > 50000 &&
