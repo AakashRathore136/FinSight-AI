@@ -16,7 +16,7 @@
 import { HfInference } from "@huggingface/inference";
 
 import { calculateMonthlyForecast, identifyRecurringTransactions } from "./cashflowUtils";
-import { detectAnomalies } from "./insightsUtils";
+import { detectAnomalies as detectAnomaliesCore, type Anomaly } from "./anomalyUtils";
 import {
   calculateSpendingScore,
   calculateSavingsScore,
@@ -78,8 +78,33 @@ export const TOOL_CATALOGUE: AgentTool[] = [
     description:
       "Find unusual transactions (spending spikes/outliers) per category. Answers 'why was last month so expensive?'",
     parameters: { threshold: "z-score threshold (default 2)" },
-    run: (args, ctx) =>
-      detectAnomalies(ctx.transactions, undefined, toNumber(args.threshold, 2)),
+    run: (args, ctx) => {
+      const coreTxns = ctx.transactions.map((tx) => ({
+        id: tx.id,
+        userId: tx.userId,
+        amount: tx.amount,
+        category: tx.category,
+        description: tx.description,
+        merchant: tx.merchant,
+        date: tx.date,
+        type: tx.type,
+      } as any));
+      const threshold = toNumber(args.threshold, 2);
+      const anomalies: Anomaly[] = detectAnomaliesCore(coreTxns);
+      // Convert to Insight-like format for the chat response
+      return anomalies
+        .filter((a) => a.type === "large_transaction")
+        .map((a) => ({
+          category: a.category,
+          amount: a.amount,
+          averageAmount: a.averageAmount,
+          deviation: a.deviation,
+          description: a.description,
+          severity: a.severity,
+          date: a.date,
+        }))
+        .sort((a, b) => b.amount - a.amount);
+    },
   },
   {
     name: "identify_recurring_transactions",
