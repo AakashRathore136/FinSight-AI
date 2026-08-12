@@ -1093,6 +1093,10 @@ CRITICAL RULES:
         // Signed URLs will be generated on-demand with short expiration (15 minutes)
         const safeFilename = sanitizeStorageFilename(file.originalname);
         const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+        // Real Storage object URL, derived after upload. Included in docData and
+        // every response record so client-side Firestore fallback writes pass
+        // firestore.rules isValidDocument (requires a https `fileUrl`).
+        let fileUrl = "";
 
         // Upload file to Firebase Storage before writing document metadata
         if (admin.apps.length) {
@@ -1111,6 +1115,11 @@ CRITICAL RULES:
             console.log(
               `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
             );
+            // Derive the real object URL so every returned record (including
+            // local-fallback records) carries a valid `fileUrl`. Without it a
+            // client-side Firestore fallback write is rejected by
+            // firestore.rules isValidDocument (requires `fileUrl`). (Issue #1028)
+            fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media`;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (storageError: any) {
             console.error(
@@ -1138,6 +1147,7 @@ CRITICAL RULES:
           fileName: file.originalname,
           fileType: file.mimetype,
           fileSize: file.size,
+          fileUrl,
           storagePath,
           status: "completed",
           riskLevel,
