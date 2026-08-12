@@ -178,6 +178,8 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   const confidenceValue = normalizeConfidence(
     analysisData?.sentiment_score ?? 0,
   );
+  const confidenceLabel =
+    confidenceValue === null ? "n/a" : `${confidenceValue}%`;
   const fileName = record?.fileName || "Untitled Document";
   const fileType = getFileTypeLabel(record?.fileType);
   const fileSize = formatBytes(record?.fileSize);
@@ -316,7 +318,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         [`File Type:`, fileType],
         [`File Size:`, fileSize],
         [`Risk Level:`, riskLevel.toUpperCase()],
-        [`Confidence:`, `${confidenceValue}%`],
+        [`Confidence:`, confidenceLabel],
       ];
 
       docInfo.forEach(([label, value]) => {
@@ -637,7 +639,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   <div className="grid gap-4 md:grid-cols-3">
                     <StatusTile
                       label="Confidence"
-                      value={`${confidenceValue}%`}
+                      value={confidenceLabel}
                       tone="emerald"
                     />
                     <StatusTile
@@ -822,11 +824,11 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                     <div
                       className="grid h-20 w-20 place-items-center rounded-full text-lg font-black text-white"
                       style={{
-                        background: `conic-gradient(#38bdf8 ${Math.max(6, confidenceValue)}%, #1e293b 0)`,
+                        background: `conic-gradient(#38bdf8 ${Math.max(6, confidenceValue ?? 0)}%, #1e293b 0)`,
                       }}
                     >
                       <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-900">
-                        {confidenceValue}
+                        {confidenceValue === null ? "n/a" : confidenceValue}
                       </div>
                     </div>
                   </div>
@@ -834,7 +836,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                   <div className="mt-6 space-y-3">
                     <StatusTile
                       label="Confidence Score"
-                      value={`${confidenceValue} / 100`}
+                      value={confidenceValue === null ? "n/a" : `${confidenceValue} / 100`}
                       tone="emerald"
                     />
                     <StatusTile
@@ -1329,10 +1331,13 @@ function formatBytes(bytes?: number) {
   return `${kb.toFixed(1)} KB`;
 }
 
-function normalizeConfidence(value: any) {
+function normalizeConfidence(value: any): number | null {
   const n = Number(value ?? 0);
-  if (isNaN(n) || n === 0) return 92;
-  if (n <= 1) return Math.round(Math.abs(n) * 100 + Number.EPSILON) || 92;
+  // Missing, non-numeric, or zero scores carry no confidence signal: exclude
+  // them instead of fabricating a value (a real 0 is the most negative
+  // sentiment, not a 92%).
+  if (isNaN(n) || n === 0) return null;
+  if (n <= 1) return Math.round(Math.abs(n) * 100);
   return Math.round(Math.min(100, Math.abs(n)));
 }
 
@@ -1385,10 +1390,10 @@ function buildAnalysisShareText({
 }: {
   fileName: string;
   riskLevel: string;
-  confidenceValue: number;
+  confidenceValue: number | null;
   refId: string;
 }) {
-  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- Confidence: ${confidenceValue}/100\n- Ref: ${refId || "N/A"}\n\nReview the analysis here:`;
+  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- Confidence: ${confidenceValue === null ? "n/a" : `${confidenceValue}/100`}\n- Ref: ${refId || "N/A"}\n\nReview the analysis here:`;
 }
 
 function buildWhatsAppUrl(text: string, url: string): string {
