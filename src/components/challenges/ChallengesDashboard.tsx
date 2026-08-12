@@ -191,7 +191,10 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
   const handleComplete = useCallback(
     async (challenge: Challenge) => {
       const updatedProgress = Math.max(challenge.currentProgress, challenge.targetAmount);
-      const badge = awardBadge(challenge);
+      // Keep the badge shown on the challenge card instead of recomputing a
+      // different tier from the difficulty-scaled target. awardBadge is only a
+      // fallback for legacy challenges that never stored a badge.
+      const badge = challenge.badge ?? awardBadge(challenge);
       try {
         await updateChallengeProgress(challenge.id, updatedProgress);
         await completeChallenge(challenge.id, badge);

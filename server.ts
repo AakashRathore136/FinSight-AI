@@ -793,12 +793,7 @@ async function startServer() {
   // `upload.single` runs before `analyzeRateLimiter` so multer-rejected
   // uploads (400 bad MIME, 413 LIMIT_FILE_SIZE) don't burn a daily analysis
   // slot either — only valid files count toward the quota.
-  app.post(
-    "/api/analyze",
-    concurrentAnalyzeLimiter,
-    upload.single("file"),
-    analyzeRateLimiter,
-    async (req: any, res) => {
+  const analyzePipelineHandler = async (req: any, res: any) => {
       try {
 
         const file = req.file;
@@ -1295,7 +1290,25 @@ CRITICAL RULES:
         // a client disconnects mid-analysis.
         res.locals?.releaseAnalyzeSlot?.();
       }
-    },
+  };
+
+  app.post(
+    "/api/analyze",
+    concurrentAnalyzeLimiter,
+    upload.single("file"),
+    analyzeRateLimiter,
+    (req: any, res: any) => { return analyzePipelineHandler(req, res); },
+  );
+  // Client uploads target /api/process (the serverless route in api/process.ts)
+  // to avoid ad-blocker false positives on the word "analyze"; mirror it here so
+  // the self-hosted/dev Express backend serves the same pipeline with the same
+  // concurrency + daily-quota wiring.
+  app.post(
+    "/api/process",
+    concurrentAnalyzeLimiter,
+    upload.single("file"),
+    analyzeRateLimiter,
+    analyzePipelineHandler,
   );
 
   // Generate short-lived signed URL for secure document download
