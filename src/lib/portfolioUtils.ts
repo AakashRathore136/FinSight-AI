@@ -20,6 +20,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { toDate } from './utils';
 
 export type AssetClass = 'equities' | 'fixed_income' | 'real_estate' | 'commodities' | 'crypto' | 'cash';
 
@@ -254,12 +255,12 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             userId,
             symbol,
             name: symbol,
-            assetClass: 'equities',
+            assetClass: input.assetClass || inferAssetClass(symbol),
             quantity,
             avgCost,
             currentPrice: input.price,
             currency: 'USD',
-            createdAt: now,
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
         } else {
@@ -369,8 +370,11 @@ function mapHoldingData(id: string, data: Record<string, unknown>, fallbackUserI
     avgCost: (data.avgCost as number) || 0,
     currentPrice: (data.currentPrice as number) || 0,
     currency: (data.currency as string) || 'USD',
-    createdAt: (data.createdAt as string) || '',
-    updatedAt: (data.updatedAt as string) || '',
+    // Holdings store createdAt/updatedAt as Firestore serverTimestamp(). Normalize
+    // via toDate() so both Timestamp and legacy ISO-string values parse to a
+    // consistent ISO string. (Issue #1031)
+    createdAt: toDate(data.createdAt)?.toISOString() || '',
+    updatedAt: toDate(data.updatedAt)?.toISOString() || '',
   };
 }
 
