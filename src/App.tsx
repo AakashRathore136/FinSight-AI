@@ -1394,15 +1394,12 @@ export default function App() {
             )}
 
             {activeTab === 'currencies' && user && (
-            {activeTab === 'currencies' && (
               <motion.div
                 key="currencies"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 className="space-y-6"
-              >
-                <CurrencyManager user={user} />
               >
                 <div className="space-y-6">
                   {user ? (
