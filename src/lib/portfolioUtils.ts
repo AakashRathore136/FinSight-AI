@@ -107,6 +107,24 @@ export interface TransactionInput {
   fees: number;
   notes?: string;
   date: string;
+  /** Optional asset class for the new holding created by a first buy. When
+   * omitted, addTransaction infers it from the symbol. (Issue #1030) */
+  assetClass?: AssetClass;
+}
+
+// Well-known symbols that are not equities. Anything unrecognized defaults to
+// 'equities' so stock buys keep working without an explicit asset class.
+const CRYPTO_SYMBOLS = new Set([
+  'BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'LINK', 'AVAX', 'MATIC',
+  'LTC', 'BNB', 'USDT', 'USDC', 'UNI', 'AAVE', 'SHIB', 'XLM', 'TRX', 'TON',
+]);
+
+/** Infers an asset class for a symbol (e.g. BTC → crypto) when a transaction
+ * does not provide one. Defaults to 'equities'. (Issue #1030) */
+export function inferAssetClass(symbol: string): AssetClass {
+  const upper = (symbol || '').trim().toUpperCase();
+  if (CRYPTO_SYMBOLS.has(upper)) return 'crypto';
+  return 'equities';
 }
 
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -254,7 +272,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             userId,
             symbol,
             name: symbol,
-            assetClass: 'equities',
+            assetClass: input.assetClass || inferAssetClass(symbol),
             quantity,
             avgCost,
             currentPrice: input.price,
