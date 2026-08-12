@@ -662,16 +662,6 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                     empty="No action items were found in the current analysis payload."
                   />
                 </ReportPanel>
-
-                <ReportPanel
-                  title="Strategic Directives"
-                  description="Recommended follow-up actions for the financial review cycle."
-                >
-                  <NumberedList
-                    items={actionItems}
-                    empty="No strategic directives were returned by the model."
-                  />
-                </ReportPanel>
               </TabsContent>
 
               <TabsContent value="findings" className="mt-0 space-y-6">
