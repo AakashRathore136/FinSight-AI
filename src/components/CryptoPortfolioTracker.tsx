@@ -1,8 +1,10 @@
 import React from 'react';
 import { useCryptoPrices } from './CryptoWebSocketProvider';
 
-// Mock user portfolio
-const USER_PORTFOLIO = [
+// Sample portfolio used for demo purposes only. It is not the user's real
+// holdings, so the widget is labeled as sample data instead of presenting it
+// as an actual portfolio.
+const SAMPLE_PORTFOLIO = [
   { symbol: 'BTC', amount: 0.15 },
   { symbol: 'ETH', amount: 2.5 },
   { symbol: 'SOL', amount: 45.0 }
@@ -11,7 +13,7 @@ const USER_PORTFOLIO = [
 export default function CryptoPortfolioTracker() {
   const { prices, connectionStatus } = useCryptoPrices();
 
-  const totalValue = USER_PORTFOLIO.reduce((acc, asset) => {
+  const totalValue = SAMPLE_PORTFOLIO.reduce((acc, asset) => {
     const currentPrice = prices[asset.symbol] || 0;
     return acc + (currentPrice * asset.amount);
   }, 0);
@@ -32,6 +34,9 @@ export default function CryptoPortfolioTracker() {
               }`}></span>
             </span>
           </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Sample/demo holdings shown for illustration — not your actual portfolio.
+          </p>
         </div>
         <div className="text-right">
           <p className="text-sm text-slate-400 uppercase tracking-wider font-semibold">Total Value</p>
@@ -40,7 +45,7 @@ export default function CryptoPortfolioTracker() {
       </div>
 
       <div className="space-y-3">
-        {USER_PORTFOLIO.map(asset => {
+        {SAMPLE_PORTFOLIO.map(asset => {
           const price = prices[asset.symbol];
           const value = price ? price * asset.amount : 0;
           
