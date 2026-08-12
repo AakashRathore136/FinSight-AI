@@ -4,7 +4,10 @@ import { Globe, DollarSign, ArrowUpRight } from "lucide-react";
 import { HedgingRecommendations, HedgingRecommendation } from "./HedgingRecommendations";
 
 export const FxExposureMatrix: React.FC = () => {
-  const mockRecommendations: HedgingRecommendation[] = [
+  // Sample recommendations used for demo purposes only. They are not derived
+  // from the user's holdings, so the widget is labeled as sample data instead
+  // of presenting them as personalized hedging advice.
+  const sampleRecommendations: HedgingRecommendation[] = [
     {
       id: "fx-01",
       currencyPair: "EUR/USD",
@@ -52,7 +55,11 @@ export const FxExposureMatrix: React.FC = () => {
           </div>
         </div>
 
-        <HedgingRecommendations recommendations={mockRecommendations} />
+        <HedgingRecommendations recommendations={sampleRecommendations} />
+        <p className="text-xs text-slate-500">
+          Sample/demo exposure figures shown for illustration — not derived from
+          your actual holdings or currency positions.
+        </p>
       </CardContent>
     </Card>
   );

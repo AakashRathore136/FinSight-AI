@@ -182,8 +182,10 @@ export function RolloverManager({ user }: RolloverManagerProps) {
     if (!user) return;
     const ok = await resetAllRollovers(user.uid);
     if (ok) {
-      const defaults = initializeDefaultCategories(user.uid);
-      setCategories(defaults.map((c) => ({ ...c, id: c.id })));
+      // Re-fetch the persisted categories instead of swapping in locally-built
+      // defaults whose synthetic `<uid>_<name>` IDs don't exist in Firestore —
+      // any subsequent updateBudgetCategory call on them would fail.
+      setCategories(await fetchBudgetCategories(user.uid));
       toast.success('All rollovers have been reset');
     } else {
       toast.error('Failed to reset rollovers');
