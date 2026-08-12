@@ -200,7 +200,6 @@ import { clearAllLocalData } from '@/src/lib/storageUtils';
 // Feature screens that were implemented but never mounted (issue #897)
 import { ReportExport } from "./components/reports/ReportExport";
 import { InsightsDashboard } from "./components/insights/InsightsDashboard";
-import { CurrencyManager } from "./components/currency/CurrencyManager";
 import { CurrencyConverter } from "./components/currency/CurrencyConverter";
 import MultiCurrencyNetWorth from "./components/MultiCurrencyNetWorth";
 import { FxExposureMatrix } from "./components/currency/FxExposureMatrix";
@@ -216,6 +215,7 @@ import OptionsStrategyBuilder from "./components/OptionsStrategyBuilder";
 import PlaidLinkConnect from "./components/PlaidLinkConnect";
 import RealEstateTracker from "./components/RealEstateTracker";
 import CryptoPortfolioTracker from "./components/CryptoPortfolioTracker";
+import { CryptoWebSocketProvider } from "./components/CryptoWebSocketProvider";
 import EsgDashboard from "./components/EsgDashboard";
 import PeerSpendingComparison from "./components/PeerSpendingComparison";
 import { MultiScenarioMatrix } from "./components/forecast/MultiScenarioMatrix";
@@ -1401,6 +1401,7 @@ export default function App() {
                 exit={{ opacity: 0, x: -10 }}
                 className="space-y-6"
               >
+                <CurrencyManager user={user} />
                 <div className="space-y-6">
                   {user ? (
                     <>
@@ -1515,7 +1516,9 @@ export default function App() {
                 <MultiScenarioMatrix />
                 <PlaidLinkConnect />
                 <RealEstateTracker />
-                <CryptoPortfolioTracker />
+                <CryptoWebSocketProvider>
+                  <CryptoPortfolioTracker />
+                </CryptoWebSocketProvider>
                 <ReceiptUploader />
                 <SmsOptInSettings />
                 <VoiceExpenseLogger />

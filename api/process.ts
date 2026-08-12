@@ -478,18 +478,10 @@ async function getAdminApp(): Promise<any | null> {
       }
     }
 
-    const { getFirestore } = await import("firebase-admin/firestore");
-    const databaseId = getFirestoreDatabaseId();
     _adminApp = {
       admin,
-<<<<<<< HEAD
-      getFirestore: () => getFirestore(databaseId),
-      getFirestore: () => admin.firestore(getFirestoreDatabaseId()),
-=======
->>>>>>> feature/protected-production-deployment-v2
       getFirestore: () => getFirestore(admin.app(), getFirestoreDatabaseId()),
     };
-    // admin.firestore(getFirestoreDatabaseId())
     return _adminApp;
   } catch (err: any) {
     console.warn("[process] Firebase Admin init failed:", err?.message);

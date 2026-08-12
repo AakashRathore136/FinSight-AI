@@ -384,10 +384,14 @@ async function runDetection(userId: string) {
 
   categorySpikeAnomalies.forEach((spike) => {
     const monthlyTotals = spike.baseline?.monthlyTotals ?? [];
+    // For brand-new categories (no baseline) there is no per-category history to
+    // compare against, so score against the average of all categories — otherwise
+    // the mean degenerates to the spike's own amount and confidence/severity are
+    // pinned to a constant regardless of how large the spike is.
     const confidence = calculateConfidenceScore(
       "category_spike",
       spike.amount,
-      spike.baseline?.mean ?? spike.amount,
+      spike.baseline?.mean ?? spike.averageAllCategories,
       spike.baseline?.stdDev ?? 0,
     );
     const lastMonthTotal =
@@ -396,8 +400,13 @@ async function runDetection(userId: string) {
       monthlyTotals.length > 0
         ? monthlyTotals.reduce((a, b) => a + b, 0) / monthlyTotals.length
         : lastMonthTotal;
-    const pctOver =
-      avgMonthly > 0 ? Math.round((lastMonthTotal / avgMonthly - 1) * 100) : 0;
+    const pctOver = spike.baseline
+      ? avgMonthly > 0
+        ? Math.round((lastMonthTotal / avgMonthly - 1) * 100)
+        : 0
+      : spike.averageAllCategories > 0
+        ? Math.round((spike.amount / spike.averageAllCategories - 1) * 100)
+        : 0;
 
     newAnomalies.push({
       userId,
@@ -413,7 +422,9 @@ async function runDetection(userId: string) {
       dismissed: false,
       createdAt: new Date().toISOString(),
       date: (spike.transactions[spike.transactions.length - 1]?.date as Date) || new Date(),
-      severity: pctOver >= 50 ? "high" : pctOver >= 25 ? "medium" : "low",
+      severity: spike.baseline
+        ? pctOver >= 50 ? "high" : pctOver >= 25 ? "medium" : "low"
+        : confidence >= 80 ? "high" : confidence >= 60 ? "medium" : "low",
       averageAmount: avgMonthly,
       deviation: avgMonthly > 0 ? (lastMonthTotal - avgMonthly) : 0,
     });

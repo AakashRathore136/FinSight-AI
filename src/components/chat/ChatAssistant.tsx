@@ -282,64 +282,70 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
       timestamp: new Date().toISOString(),
     };
 
-    const savedUserMessage = await saveMessage(userMessage);
-    if (savedUserMessage) {
-      setMessages((prev) => [...prev, savedUserMessage]);
-    }
+    try {
+      const savedUserMessage = await saveMessage(userMessage);
+      if (savedUserMessage) {
+        setMessages((prev) => [...prev, savedUserMessage]);
+      }
 
-    setInput('');
-    setIsTyping(true);
-    setChartData(null);
-    setSuggestions([]);
+      setInput('');
+      setIsTyping(true);
+      setChartData(null);
+      setSuggestions([]);
 
-    // The agentic copilot calls real analysis tools (and the model) instead of
-    // returning a hardcoded template after a fake delay. It falls back to the
-    // deterministic keyword router when no model/token is configured.
-    const response: ChatResponse = await generateAgentChatResponse(
-      content,
-      context,
-      generateChatResponse,
-    );
-    const assistantMessage: ChatMessage = {
-      id: '',
-      conversationId: currentConversationId,
-      userId: currentUserId,
-      role: 'assistant',
-      content: response.message,
-      timestamp: new Date().toISOString(),
-      metadata: response.chartData ? { chartData: response.chartData } : undefined,
-    };
-
-    const savedAssistantMessage = await saveMessage(assistantMessage);
-    if (savedAssistantMessage) {
-      setMessages((prev) => [...prev, savedAssistantMessage]);
-    }
-
-    setIsTyping(false);
-    setChartData(response.chartData || null);
-    setSuggestions(response.suggestions || []);
-
-    const conversation = conversations.find((c) => c.id === currentConversationId);
-    const isDefaultTitle = !conversation?.title || conversation.title === 'New Chat';
-    const derivedTitle = isDefaultTitle
-      ? content.trim().slice(0, 50) + (content.trim().length > 50 ? '...' : '')
-      : conversation.title;
-    if (conversation) {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === currentConversationId
-            ? {
-                ...c,
-                ...(isDefaultTitle ? { title: derivedTitle } : {}),
-                updatedAt: new Date().toISOString(),
-                lastMessageAt: new Date().toISOString(),
-              }
-            : c
-        )
+      // The agentic copilot calls real analysis tools (and the model) instead of
+      // returning a hardcoded template after a fake delay. It falls back to the
+      // deterministic keyword router when no model/token is configured.
+      const response: ChatResponse = await generateAgentChatResponse(
+        content,
+        context,
+        generateChatResponse,
       );
-      const patch: Record<string, string> = { lastMessageAt: new Date().toISOString() };
-      if (isDefaultTitle) patch.title = derivedTitle;
-      await updateConversation(currentConversationId, patch);
+      const assistantMessage: ChatMessage = {
+        id: '',
+        conversationId: currentConversationId,
+        userId: currentUserId,
+        role: 'assistant',
+        content: response.message,
+        timestamp: new Date().toISOString(),
+        metadata: response.chartData ? { chartData: response.chartData } : undefined,
+      };
+
+      const savedAssistantMessage = await saveMessage(assistantMessage);
+      if (savedAssistantMessage) {
+        setMessages((prev) => [...prev, savedAssistantMessage]);
+      }
+
+      setChartData(response.chartData || null);
+      setSuggestions(response.suggestions || []);
+
+      const conversation = conversations.find((c) => c.id === currentConversationId);
+      const isDefaultTitle = !conversation?.title || conversation.title === 'New Chat';
+      const derivedTitle = isDefaultTitle
+        ? content.trim().slice(0, 50) + (content.trim().length > 50 ? '...' : '')
+        : conversation.title;
+      if (conversation) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === currentConversationId
+              ? {
+                  ...c,
+                  ...(isDefaultTitle ? { title: derivedTitle } : {}),
+                  updatedAt: new Date().toISOString(),
+                  lastMessageAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+        const patch: Record<string, string> = { lastMessageAt: new Date().toISOString() };
+        if (isDefaultTitle) patch.title = derivedTitle;
+        await updateConversation(currentConversationId, patch);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast.error('Something went wrong while analyzing your finances. Please try again.');
+    } finally {
+      setIsTyping(false);
     }
   };
 

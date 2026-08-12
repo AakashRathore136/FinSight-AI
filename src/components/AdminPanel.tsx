@@ -11,7 +11,6 @@ import {
 import {
   Users,
   Files,
-  ShieldAlert,
   Activity,
   MoreVertical,
   Database,
@@ -134,7 +133,7 @@ export function AdminPanel() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
-        <Card className="lg:col-span-8 bg-slate-900 border-slate-800 rounded-2xl overflow-hidden">
+        <Card className="lg:col-span-12 bg-slate-900 border-slate-800 rounded-2xl overflow-hidden">
           <CardHeader className="p-8 border-b border-slate-800">
             <CardTitle className="text-xl font-bold text-white tracking-tight">
               Security Directory
@@ -216,43 +215,6 @@ export function AdminPanel() {
             </Table>
           </CardContent>
         </Card>
-
-        <Card className="lg:col-span-4 bg-slate-900 border-slate-800 rounded-2xl shadow-2xl overflow-hidden border-t-2 border-t-indigo-600">
-          <CardHeader className="p-8">
-            <CardTitle className="text-lg font-bold text-white flex items-center gap-3">
-              <ShieldAlert className="text-indigo-400" size={20} />
-              System Integrity Logs
-            </CardTitle>
-            <CardDescription className="text-slate-500">
-              Active threat detections and non-compliance flags across the
-              platform.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-8 pt-0 space-y-6">
-            <div className="space-y-4">
-              <AlertItem
-                title="Policy Flag"
-                desc="Unencrypted sensitive key identified in 'Q3_Tax_Return.pdf'"
-                time="2h ago"
-                type="danger"
-              />
-              <AlertItem
-                title="Volume Anomaly"
-                desc="High frequency ingest cycle (120+ requests) from single node"
-                time="6h ago"
-                type="warning"
-              />
-              <AlertItem
-                title="Protocol failure"
-                desc="Multiple failed authentication attempts on administrative shard"
-                time="1d ago"
-              />
-            </div>
-            <Button className="w-full mt-6 bg-slate-800 border border-slate-700 text-white font-bold h-12 rounded-xl shadow-lg hover:bg-slate-700 transition-all">
-              Access Audit Logs
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
@@ -275,46 +237,5 @@ function AdminStatCard({ title, value, icon }: any) {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function AlertItem({ title, desc, time, type = "normal" }: any) {
-  return (
-    <div
-      className={`rounded-xl p-4 space-y-2 border ${
-        type === "danger"
-          ? "bg-red-500/5 border-red-500/20"
-          : type === "warning"
-            ? "bg-amber-500/5 border-amber-500/20"
-            : "bg-slate-800/30 border-slate-700/50"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span
-          className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-2 ${
-            type === "danger"
-              ? "text-red-500 bg-red-500/10"
-              : type === "warning"
-                ? "text-amber-500 bg-amber-500/10"
-                : "text-indigo-400 bg-indigo-500/10"
-          }`}
-        >
-          <div
-            className={`w-1 h-1 rounded-full ${
-              type === "danger"
-                ? "bg-red-500 animate-pulse"
-                : type === "warning"
-                  ? "bg-amber-500"
-                  : "bg-indigo-500"
-            }`}
-          />
-          {title}
-        </span>
-        <span className="text-[10px] font-bold text-slate-500">{time}</span>
-      </div>
-      <p className="text-xs text-slate-300 font-medium leading-relaxed">
-        {desc}
-      </p>
-    </div>
   );
 }
