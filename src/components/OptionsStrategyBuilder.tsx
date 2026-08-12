@@ -40,11 +40,13 @@ export default function OptionsStrategyBuilder() {
   // Generate PnL curve data points
   const chartData = useMemo(() => {
     const data = [];
+    if (legs.length === 0) return data;
     const minStrike = Math.min(...legs.map(l => l.strike)) * 0.7;
     const maxStrike = Math.max(...legs.map(l => l.strike)) * 1.3;
     
     // Generate 50 points between min and max
     const step = (maxStrike - minStrike) / 50;
+    if (step <= 0) return data;
 
     for (let price = minStrike; price <= maxStrike; price += step) {
       let netPnL = 0;
