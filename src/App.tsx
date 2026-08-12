@@ -200,7 +200,6 @@ import { clearAllLocalData } from '@/src/lib/storageUtils';
 // Feature screens that were implemented but never mounted (issue #897)
 import { ReportExport } from "./components/reports/ReportExport";
 import { InsightsDashboard } from "./components/insights/InsightsDashboard";
-import { CurrencyManager } from "./components/currency/CurrencyManager";
 import { CurrencyConverter } from "./components/currency/CurrencyConverter";
 import MultiCurrencyNetWorth from "./components/MultiCurrencyNetWorth";
 import { FxExposureMatrix } from "./components/currency/FxExposureMatrix";
@@ -1394,7 +1393,6 @@ export default function App() {
             )}
 
             {activeTab === 'currencies' && user && (
-            {activeTab === 'currencies' && (
               <motion.div
                 key="currencies"
                 initial={false}
@@ -1403,7 +1401,6 @@ export default function App() {
                 className="space-y-6"
               >
                 <CurrencyManager user={user} />
-              >
                 <div className="space-y-6">
                   {user ? (
                     <>
