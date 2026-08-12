@@ -295,8 +295,13 @@ export function detectAnomalies(
     }
   });
 
-  const thisMonth = format(new Date(), "yyyy-MM");
+  // Category spike detection compares two COMPLETE calendar months: the last
+  // fully-elapsed month against the one before it. Comparing against the
+  // current, still-running month would flag false spikes at month boundaries,
+  // when the current month has little or no data yet (e.g. on the 1st the
+  // current month is nearly empty while last month is full). (Issue #1034)
   const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+  const priorMonth = format(subMonths(new Date(), 2), "yyyy-MM");
   const monthlySpend = new Map<string, Map<string, number>>();
   transactions.forEach((t) => {
     if (normalizeTransactionType(t.type) !== "expense") return;
@@ -310,41 +315,41 @@ export function detectAnomalies(
     catMap.set(cat, (catMap.get(cat) || 0) + Math.abs(t.amount));
   });
 
-  const thisMonthData = monthlySpend.get(thisMonth);
   const lastMonthData = monthlySpend.get(lastMonth);
-  if (thisMonthData && lastMonthData) {
-    thisMonthData.forEach((amount, cat) => {
-      const lastAmount = lastMonthData.get(cat) || 0;
-      const minDelta = Math.max(50, lastAmount * 0.5);
+  const priorMonthData = monthlySpend.get(priorMonth);
+  if (lastMonthData && priorMonthData) {
+    lastMonthData.forEach((amount, cat) => {
+      const priorAmount = priorMonthData.get(cat) || 0;
+      const minDelta = Math.max(50, priorAmount * 0.5);
       if (
-        lastAmount > 0 &&
-        amount > lastAmount * 1.5 &&
-        amount - lastAmount > minDelta
+        priorAmount > 0 &&
+        amount > priorAmount * 1.5 &&
+        amount - priorAmount > minDelta
       ) {
         anomalies.push({
           userId: transactions[0]?.userId || "",
           transactionId: "",
           type: "category_spike",
-          severity: amount > lastAmount * 2.5 ? "critical" : "medium",
+          severity: amount > priorAmount * 2.5 ? "critical" : "medium",
           category: cat,
           amount: Math.round(amount * 100) / 100,
-          averageAmount: Math.round(lastAmount * 100) / 100,
-          deviation: Math.round((amount / lastAmount) * 100) / 100,
+          averageAmount: Math.round(priorAmount * 100) / 100,
+          deviation: Math.round((amount / priorAmount) * 100) / 100,
           description:
             cat +
             " spending spike: " +
             formatCurrency(amount) +
-            " this month vs " +
-            formatCurrency(lastAmount) +
-            " last month (" +
-            Math.round(((amount - lastAmount) / lastAmount) * 100) +
+            " last month vs " +
+            formatCurrency(priorAmount) +
+            " the month before (" +
+            Math.round(((amount - priorAmount) / priorAmount) * 100) +
             "% increase)",
           date: new Date(),
           dismissed: false,
-          comparisonPeriod: "vs " + lastMonth,
+          comparisonPeriod: "vs " + priorMonth,
           confidence: Math.min(
             90,
-            Math.round((amount / lastAmount - 1) * 30 + 60),
+            Math.round((amount / priorAmount - 1) * 30 + 60),
           ),
         });
       }
