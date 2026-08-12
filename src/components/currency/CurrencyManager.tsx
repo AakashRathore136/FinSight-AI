@@ -42,6 +42,7 @@ import {
   formatCurrencyDisplay,
   type CurrencySettings,
   type ExchangeRates,
+  type ConversionHistoryEntry,
 } from '@/src/lib/currencyUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
@@ -178,7 +179,10 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
       const data = await fetchExchangeRates(settings?.baseCurrency || 'USD');
       setRates(data);
       if (settings) {
-        const historyEntry: Record<string, number> = { ...data.rates };
+        const historyEntry: ConversionHistoryEntry = {
+          baseCurrency: data.base,
+          rates: { ...data.rates },
+        };
         const updatedHistory = {
           ...settings.conversionHistory,
           [data.date]: historyEntry,
@@ -281,7 +285,10 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
     : { totalBase: 0, byCurrency: {} };
 
   const historyDates = settings?.conversionHistory
-    ? Object.keys(settings.conversionHistory).sort((a: any, b: any) => Number(a) - Number(b)).reverse().slice(0, 10)
+    ? Object.keys(settings.conversionHistory)
+        .sort((a: any, b: any) => Date.parse(a) - Date.parse(b))
+        .reverse()
+        .slice(0, 10)
     : [];
 
   const categories = ['General', 'Food', 'Transport', 'Utilities', 'Entertainment', 'Healthcare', 'Travel', 'Income'];
@@ -760,41 +767,50 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {historyDates.map((date) => (
-                    <div
-                      key={date}
-                      className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={14} className="text-slate-500" />
-                          <span className="text-sm font-bold text-white">{date}</span>
+                  {historyDates.map((date) => {
+                    const entry = settings?.conversionHistory[date];
+                    const entryRates =
+                      entry && 'rates' in entry ? entry.rates : entry;
+                    const entryBase =
+                      entry && 'baseCurrency' in entry
+                        ? entry.baseCurrency
+                        : settings?.baseCurrency;
+                    return (
+                      <div
+                        key={date}
+                        className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} className="text-slate-500" />
+                            <span className="text-sm font-bold text-white">{date}</span>
+                          </div>
+                          <Badge className="bg-slate-800 text-slate-400 border-slate-700 text-[10px] font-bold">
+                            {entryBase} base
+                          </Badge>
                         </div>
-                        <Badge className="bg-slate-800 text-slate-400 border-slate-700 text-[10px] font-bold">
-                          {settings?.baseCurrency} base
-                        </Badge>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {(entryRates
+                            ? Object.entries(entryRates)
+                            : []
+                          )
+                            .filter(([code]) => (settings?.supportedCurrencies || []).includes(code))
+                            .slice(0, 8)
+                            .map(([code, rate]) => (
+                              <div
+                                key={code}
+                                className="rounded-lg bg-slate-800/30 border border-slate-700/50 px-3 py-2"
+                              >
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                  {code}
+                                </p>
+                                <p className="text-sm font-bold text-white tabular-nums">{rate.toFixed(4)}</p>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {(settings?.conversionHistory[date]
-                          ? Object.entries(settings.conversionHistory[date])
-                          : []
-                        )
-                          .filter(([code]) => (settings?.supportedCurrencies || []).includes(code))
-                          .slice(0, 8)
-                          .map(([code, rate]) => (
-                            <div
-                              key={code}
-                              className="rounded-lg bg-slate-800/30 border border-slate-700/50 px-3 py-2"
-                            >
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                                {code}
-                              </p>
-                              <p className="text-sm font-bold text-white tabular-nums">{rate.toFixed(4)}</p>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

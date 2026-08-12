@@ -52,12 +52,19 @@ export interface ExchangeRates {
   rates: Record<string, number>;
 }
 
+export interface ConversionHistoryEntry {
+  baseCurrency: string;
+  rates: Record<string, number>;
+}
+
 export interface CurrencySettings {
   userId: string;
   baseCurrency: string;
   supportedCurrencies: string[];
   lastRateUpdate: string;
-  conversionHistory: Record<string, Record<string, number>>;
+  // Entries may still be the legacy flat { [currency]: rate } shape for docs
+  // written before per-entry base currencies were stored.
+  conversionHistory: Record<string, Record<string, number> | ConversionHistoryEntry>;
 }
 
 /**
