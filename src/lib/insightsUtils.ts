@@ -13,7 +13,7 @@
  *  - Generating plain-language summaries of spending behaviour
  *  - Calculating category trends (week-over-week, month-over-month)
  */
-
+import { detectAnomalies as detectAnomaliesCanonical } from './anomalyUtils';
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
@@ -227,58 +227,24 @@ export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
-  ignoredTransactionIds?: Set<string>,
+  ignoredTransactionIds?: Set<string>
 ): Insight[] {
-  const byCategory = new Map<string, Transaction[]>();
-  for (const tx of transactions) {
-    if (normalizeTransactionType(tx.type) !== "expense") continue;
-    if (ignoredTransactionIds?.has(tx.id)) continue;
-    const key = tx.category || "Uncategorized";
-    const list = byCategory.get(key) || [];
-    list.push(tx);
-    byCategory.set(key, list);
-  }
+  const rawAnomalies = detectAnomaliesCanonical(transactions);
 
-  const anomalies: Insight[] = [];
-  for (const [category, list] of byCategory.entries()) {
-    if (list.length < 3) continue; // need a meaningful baseline
-
-    for (const tx of list) {
-      const amount = normalizeAmount(tx.amount);
-      // Leave-one-out baseline: the candidate transaction is excluded from the
-      // average it is compared against, so a dominant expense is not judged
-      // against a baseline it inflated itself.
-      const avg = (total(list) - amount) / (list.length - 1);
-      if (avg <= 0) continue;
-      const ratio = amount / avg;
-      if (ratio >= threshold) {
-        const severity: Severity =
-          ratio >= 4 ? "high" : ratio >= 3 ? "medium" : "low";
-        const d = toDate(tx.date);
-        const label = tx.merchant || tx.description || category;
-        anomalies.push({
-          id: uid(),
-          userId,
-          type: "anomaly",
-          category,
-          title: `Unusual ${category} charge`,
-          description:
-            `A ${formatCurrency(amount)} transaction${
-              tx.merchant ? ` at ${tx.merchant}` : ""
-            } is ${ratio.toFixed(1)}x your typical ${category} spend of ` +
-            `${formatCurrency(avg)}. Review "${label}" to confirm it's expected.`,
-          severity,
-          amount,
-          period: d ? format(d, "MMM d, yyyy") : "Recent",
-          createdAt: new Date().toISOString(),
-        });
-      }
-    }
-  }
-
-  return anomalies.sort((a, b) => b.amount - a.amount);
+  return rawAnomalies.map((item, idx) => {
+    const anomalyId = `anomaly-${idx}-${Date.now()}`;
+    return {
+      id: anomalyId,
+      type: 'anomaly' as const,
+      title: 'description' in item && typeof item.description === 'string'
+        ? item.description
+        : 'Transaction Anomaly Detected',
+      description: item.description || 'Anomalous financial pattern detected.',
+      severity: (item.severity as 'low' | 'medium' | 'high') || 'medium',
+      date: item.date ? new Date(item.date) : new Date(),
+    };
+  }).filter((item) => !ignoredTransactionIds?.has(item.id));
 }
-
 // ---------------------------------------------------------------------------
 // 3. Savings opportunities
 // ---------------------------------------------------------------------------
