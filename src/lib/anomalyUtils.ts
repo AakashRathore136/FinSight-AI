@@ -264,9 +264,10 @@ export function detectAnomalies(
       // Exclude the current transaction from the baseline so it cannot inflate the mean
       const baselineCount = avg.count - 1;
       const baselineTotal = avg.total - Math.abs(t.amount);
-      const mean = baselineCount > 0 ? baselineTotal / baselineCount : 0;
+      if (baselineTotal <= 0) return;
+      const mean = baselineTotal / baselineCount;
       const amount = Math.abs(t.amount);
-      if (mean > 0 && amount > mean * 3 && amount > 1000) {
+      if (amount > mean * 3 && amount > 1000) {
         anomalies.push({
           userId: t.userId,
           transactionId: t.id,
