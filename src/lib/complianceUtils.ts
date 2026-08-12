@@ -16,29 +16,6 @@ export interface ComplianceScore {
   violations: ComplianceViolation[];
 }
 
-/**
- * Scans financial transactions and documents for AML and SOX compliance issues.
- */
-export function auditFinancialData(transactions: Array<{ amount: number; description: string; date: string; category?: string }>): ComplianceScore {
-  const violations: ComplianceViolation[] = [];
-
-  // AML Rule 1: Structuring / Smurfing detection (multiple transactions just under $10,000 threshold)
-  const structuringTxns = transactions.filter((t) => Math.abs(t.amount) >= 9000 && Math.abs(t.amount) < 10000);
-  if (structuringTxns.length >= 2) {
-    violations.push({
-      id: "aml-structuring-01",
-      category: "AML",
-      severity: "high",
-      title: "Potential Transaction Structuring Detected",
-      description: `Identified ${structuringTxns.length} transactions between $9,000 and $9,999 in close succession.`,
-      recommendedAction: "File a Currency Transaction Report (CTR) / Suspicious Activity Report (SAR) with FinCEN.",
-    });
-  }
-
-  // AML Rule 2: High velocity round-trip transfers
-  const largeExpenses = transactions.filter((t) => t.amount < -25000);
-  const largeIncomes = transactions.filter((t) => t.amount > 25000);
-  if (largeExpenses.length > 0 && largeIncomes.length > 0) {
 export interface AuditTransaction {
   amount: number;
   description: string;
@@ -127,8 +104,6 @@ export function auditFinancialData(
       category: "AML",
       severity: "medium",
       title: "Rapid Round-Trip Fund Velocity",
-      description: "High-value symmetric deposits and rapid withdrawals detected within a short window.",
-      recommendedAction: "Perform Enhanced Due Diligence (EDD) on counterparty entities.",
       description: `High-value deposits and rapid withdrawals detected within ${ROUND_TRIP_WINDOW_DAYS} days of each other.`,
       recommendedAction:
         "Perform Enhanced Due Diligence (EDD) on counterparty entities.",
@@ -136,7 +111,6 @@ export function auditFinancialData(
   }
 
   // SOX Rule 1: Off-balance sheet expenditure disclosure
-  const unclassifiedLarge = transactions.filter((t) => Math.abs(t.amount) > 50000 && (!t.category || t.category.toLowerCase() === "other"));
   const unclassifiedLarge = transactions.filter(
     (t) =>
       Math.abs(t.amount) > 50000 &&
@@ -153,11 +127,22 @@ export function auditFinancialData(
     });
   }
 
-  // FINRA Rule: Weekend and after-hours transaction flag
+  // FINRA Rule: Weekend and after-hours transaction flag. The app's
+  // transaction data is date-only (no time-of-day), so the after-hours clause
+  // must not be assumed: it only applies when the raw value actually carries an
+  // HH:mm time. Previously `new Date(t.date + 'T00:00:00')` flagged every
+  // date-only row as after-hours (midnight hours < 9), while `Date` objects
+  // stringified to an Invalid Date and never fired. Weekend detection works on
+  // the date alone.
   const suspiciousDates = transactions.filter((t) => {
-    const d = new Date(t.date + 'T00:00:00');
+    const d = auditDate(t.date);
     const day = d.getDay();
     if (day === 0 || day === 6) return true; // weekend
+    const hasExplicitTime =
+      typeof t.date === "string"
+        ? /\d{1,2}:\d{2}/.test(t.date)
+        : d.getHours() !== 0 || d.getMinutes() !== 0;
+    if (!hasExplicitTime) return false; // no time-of-day in the data
     const hours = d.getHours();
     if (hours < 9 || hours >= 17) return true; // outside business hours
     return false;
