@@ -664,10 +664,11 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(expenseTransactions, userId),
+    // Pass the expense-only slice (both functions filter internally anyway) so
+    // `ignoredTransactionIds` from the caller is applied and no duplicate call
+    // overwrites the result. (Issue #1035)
+    anomalies: detectAnomalies(expenseTransactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(expenseTransactions, userId),
-    anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
-    opportunities: identifyOpportunities(transactions, userId),
     trends,
     trendCategories: categories,
     transactionCount: expenseTransactions.length,
