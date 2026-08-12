@@ -215,6 +215,7 @@ import OptionsStrategyBuilder from "./components/OptionsStrategyBuilder";
 import PlaidLinkConnect from "./components/PlaidLinkConnect";
 import RealEstateTracker from "./components/RealEstateTracker";
 import CryptoPortfolioTracker from "./components/CryptoPortfolioTracker";
+import { CryptoWebSocketProvider } from "./components/CryptoWebSocketProvider";
 import EsgDashboard from "./components/EsgDashboard";
 import PeerSpendingComparison from "./components/PeerSpendingComparison";
 import { MultiScenarioMatrix } from "./components/forecast/MultiScenarioMatrix";
@@ -1515,7 +1516,9 @@ export default function App() {
                 <MultiScenarioMatrix />
                 <PlaidLinkConnect />
                 <RealEstateTracker />
-                <CryptoPortfolioTracker />
+                <CryptoWebSocketProvider>
+                  <CryptoPortfolioTracker />
+                </CryptoWebSocketProvider>
                 <ReceiptUploader />
                 <SmsOptInSettings />
                 <VoiceExpenseLogger />

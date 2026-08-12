@@ -24,7 +24,7 @@ export const CryptoWebSocketProvider: React.FC<{ children: React.ReactNode }> = 
   useEffect(() => {
     // Connect to Binance WebSocket for real-time trade streams
     // We listen to BTC, ETH, and SOL for this example
-    const wsUrl = 'wss://stream.binance.com:9443/ws/btcusdt@trade/ethusdt@trade/solusdt@trade';
+    const wsUrl = 'wss://stream.binance.com:9443/stream?streams=btcusdt@trade/ethusdt@trade/solusdt@trade';
     
     const connect = () => {
       setConnectionStatus('connecting');
