@@ -210,6 +210,19 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
 
   const metricsEntries = Object.entries(keyMetrics);
   const hasMetrics = metricsEntries.length > 0;
+  // Coverage reflects how much of the report payload is actually populated
+  // (summary, full report, metrics, action items, risks, entities).
+  const reportSections = [
+    { label: "Summary", populated: Boolean(analysisData?.summary) },
+    { label: "Full Report", populated: Boolean(analysisData?.full_report) },
+    { label: "Key Metrics", populated: metricsEntries.length > 0 },
+    { label: "Action Items", populated: actionItems.length > 0 },
+    { label: "Risk Assessment", populated: riskItems.length > 0 },
+    { label: "Entities", populated: entities.length > 0 },
+  ];
+  const coveragePct = Math.round(
+    (reportSections.filter((s) => s.populated).length / reportSections.length) * 100,
+  );
   const shareText = buildAnalysisShareText({
     fileName,
     riskLevel,
@@ -851,7 +864,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                     />
                     <StatusTile
                       label="Coverage"
-                      value={analysisData ? "94%" : "0%"}
+                      value={`${coveragePct}%`}
                       tone="emerald"
                     />
                     <StatusTile
