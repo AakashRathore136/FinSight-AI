@@ -152,6 +152,7 @@ export function detectCategorySpikes(
   amount: number;
   baseline: CategoryBaseline | null;
   transactions: Transaction[];
+  averageAllCategories: number;
 }> {
   const currentMonth = format(new Date(), "yyyy-MM");
   const byCategory = new Map<string, Transaction[]>();
@@ -183,7 +184,7 @@ export function detectCategorySpikes(
     .map(([category, items]) => {
       const categoryBaseline = baseline.get(category) || null;
       const amount = items.reduce((sum, item) => sum + Math.abs(item.amount), 0);
-      return { category, amount, baseline: categoryBaseline, transactions: items };
+      return { category, amount, baseline: categoryBaseline, transactions: items, averageAllCategories };
     })
     .filter((item) => {
       if (!item.baseline) {
