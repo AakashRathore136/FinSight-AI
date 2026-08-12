@@ -22,7 +22,7 @@ const transformed = esbuild.transformSync(rawSource, { loader: "ts" }).code
   )
   .replace(
     /import\s*\{[^}]*\}\s*from\s*["']\.\/utils["'];?/,
-    'function formatCurrency(n) { return "$" + Number(n).toLocaleString(); } function toDate(d) { return d instanceof Date ? d : new Date(d); }',
+    'function formatCurrency(n) { return "$" + Number(n).toLocaleString(); } function toDate(d) { return d instanceof Date ? d : new Date(d); } function normalizeTransactionType(t) { return t === "income" ? "income" : "expense"; }',
   )
   .replace(
     /import\s*\{[^}]*\}\s*from\s*["']date-fns["'];?/,
@@ -59,12 +59,13 @@ test("source code specifies percentage increase over baseline formula ((amount -
   );
 });
 
-test("large_transaction description computes percentage increase over baseline (248% for 4000 vs 1150 mean)", () => {
-  // Baseline mean calculation:
+test("large_transaction description computes percentage increase over baseline (1900% for 4000 vs 200 leave-one-out mean)", () => {
+  // Baseline mean calculation (leave-one-out, the current transaction is
+  // excluded so a dominant amount cannot inflate its own baseline):
   // tx1: 200, tx2: 200, tx3: 200, tx4: 4000
-  // total = 4600, count = 4, mean = 1150
+  // mean excluding tx4 = 600 / 3 = 200
   // amount = 4000
-  // (4000 - 1150) / 1150 * 100 = 247.8% -> 248% above average (Not 348%)
+  // (4000 - 200) / 200 * 100 = 1900% above average (Not 2000% ratio of baseline)
   const transactions = [
     createTx("1", 200, "Travel"),
     createTx("2", 200, "Travel"),
@@ -78,13 +79,13 @@ test("large_transaction description computes percentage increase over baseline (
 
   assert.match(
     largeTx.description,
-    /248% above average/,
-    "Description should report 248% above average increase over baseline, not ratio of baseline",
+    /1900% above average/,
+    "Description should report 1900% above average increase over the leave-one-out baseline, not ratio of baseline",
   );
   assert.doesNotMatch(
     largeTx.description,
-    /348% above average/,
-    "Description should not report 348% (ratio of baseline)",
+    /2000% above average/,
+    "Description should not report 2000% (ratio of baseline)",
   );
 });
 
