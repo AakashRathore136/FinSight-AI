@@ -10,6 +10,89 @@ const MAX_LOCAL_DOCS = 50;
 // oldest entries before writing so new analyses keep being cached locally.
 const QUOTA_PRESSURE_RATIO = 0.9;
 
+/**
+ * SECURITY: financial-document analyses (extracted entities/amounts from the
+ * user's statements, invoices, filings) must never sit in `localStorage` as
+ * plaintext — any script on the origin (e.g. via XSS) could read a user's full
+ * financial history, and the data would survive logout.
+ *
+ * We therefore keep a decrypted, in-memory mirror for the active session and
+ * persist only an AES-GCM-encrypted blob to `localStorage`. The encryption key
+ * is generated once per page session and lives only in memory, so:
+ *   - the at-rest data is unreadable by other scripts / after an XSS, and
+ *   - it does not survive logout or a page reload (a fresh session cannot
+ *     decrypt the previous blob), which bounds the exposure window.
+ */
+const memoryCache: Record<string, CachedAnalysisPayload> = {};
+
+let sessionCacheKey: CryptoKey | null = null;
+
+async function getSessionCacheKey(): Promise<CryptoKey> {
+  if (sessionCacheKey) return sessionCacheKey;
+  sessionCacheKey = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+  return sessionCacheKey;
+}
+
+function bufToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBuf(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function encryptString(plain: string): Promise<string> {
+  const key = await getSessionCacheKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plain),
+  );
+  const combined = new Uint8Array(iv.length + ct.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ct), iv.length);
+  return "v1:" + bufToBase64(combined.buffer);
+}
+
+async function decryptString(cipher: string): Promise<string | null> {
+  try {
+    if (!cipher || !cipher.startsWith("v1:")) return null;
+    const combined = base64ToBuf(cipher.slice(3));
+    const iv = combined.slice(0, 12);
+    const ct = combined.slice(12);
+    const key = await getSessionCacheKey();
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  } catch {
+    return null;
+  }
+}
+
+/** Persists the (session-only) decrypted mirror as an encrypted blob. */
+async function persistEncryptedCache(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const enc: Record<string, { __enc: string }> = {};
+    for (const [id, payload] of Object.entries(memoryCache)) {
+      enc[id] = { __enc: await encryptString(JSON.stringify(payload)) };
+    }
+    window.localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(enc));
+  } catch {
+    // Storage unavailable/quota — the in-memory mirror is unaffected.
+  }
+}
+
 export interface CachedAnalysisPayload {
   documentId: string;
   record: any;
@@ -25,34 +108,23 @@ export interface LocalSaveResult {
   quotaExceeded: boolean;
 }
 
-function isQuotaError(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as any)?.name === "QuotaExceededError"
-  );
-}
-
 function epochOf(entry?: CachedAnalysisPayload): number {
   const ms = entry?.storedAt ? new Date(entry.storedAt).getTime() : 0;
   return Number.isFinite(ms) ? ms : 0;
 }
 
 function readLocalDocMap(): Record<string, CachedAnalysisPayload> {
-  try {
-    const raw = window.localStorage.getItem(LOCAL_DOCS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    console.error("Error reading local documents from localStorage", err);
-    return {};
-  }
+  // The decrypted mirror is session-only and is the source of truth for reads;
+  // it is never exposed as plaintext in localStorage.
+  return { ...memoryCache };
 }
 
-function writeLocalDocMap(
+async function writeLocalDocMap(
   map: Record<string, CachedAnalysisPayload>,
   documentId?: string,
-): void {
-  window.localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(map));
+): Promise<void> {
+  // Persist only the encrypted form; never the plaintext payload.
+  await persistEncryptedCache();
   if (documentId) {
     window.dispatchEvent(
       new CustomEvent("fin_local_docs_changed", { detail: { documentId } }),
@@ -103,13 +175,8 @@ export async function saveLocalAnalysis(
     if (navigator.storage?.estimate) {
       const { usage, quota } = await navigator.storage.estimate();
       if (quota && usage && usage / quota >= QUOTA_PRESSURE_RATIO) {
-        const docMap = readLocalDocMap();
-        evictOldest(docMap, Math.max(1, Math.floor(MAX_LOCAL_DOCS / 2)));
-        try {
-          writeLocalDocMap(docMap);
-        } catch (err) {
-          if (!isQuotaError(err)) console.warn("Could not compact local cache", err);
-        }
+        evictOldest(memoryCache, Math.max(1, Math.floor(MAX_LOCAL_DOCS / 2)));
+        await writeLocalDocMap(memoryCache);
       }
     }
   } catch (err) {
@@ -117,32 +184,13 @@ export async function saveLocalAnalysis(
     console.warn("Could not estimate storage quota", err);
   }
 
-  // 3. Store in localStorage documents map (bounded + evicting)
-  try {
-    const docMap = readLocalDocMap();
-    docMap[payload.documentId] = cached;
-    evictOldest(docMap, MAX_LOCAL_DOCS);
-    writeLocalDocMap(docMap, payload.documentId);
-    return { ok: true, quotaExceeded: false };
-  } catch (err) {
-    if (isQuotaError(err)) {
-      // Drop the oldest entry and retry once so the newest analysis still
-      // gets an offline copy.
-      try {
-        const docMap = readLocalDocMap();
-        delete docMap[payload.documentId];
-        evictOldest(docMap, Math.max(1, MAX_LOCAL_DOCS - 1));
-        docMap[payload.documentId] = cached;
-        evictOldest(docMap, MAX_LOCAL_DOCS);
-        writeLocalDocMap(docMap, payload.documentId);
-        return { ok: true, quotaExceeded: true };
-      } catch {
-        return { ok: false, quotaExceeded: true };
-      }
-    }
-    console.warn("Could not cache in localStorage", err);
-    return { ok: false, quotaExceeded: false };
-  }
+  // 3. Store in the session-only decrypted mirror (bounded + evicting). The
+  // encrypted blob is persisted asynchronously; the in-memory value is the
+  // source of truth for the rest of the session.
+  memoryCache[payload.documentId] = cached;
+  evictOldest(memoryCache, MAX_LOCAL_DOCS);
+  await writeLocalDocMap(memoryCache, payload.documentId);
+  return { ok: true, quotaExceeded: false };
 }
 
 /**
@@ -152,10 +200,7 @@ export function getLocalDocuments(ownerId?: string): any[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
-    if (!rawMap) return [];
-
-    const docMap: Record<string, CachedAnalysisPayload> = JSON.parse(rawMap);
+    const docMap = readLocalDocMap();
     const docs: any[] = [];
 
     for (const key of Object.keys(docMap)) {
@@ -176,30 +221,17 @@ export function getLocalDocuments(ownerId?: string): any[] {
 
     return docs;
   } catch (err) {
-    console.error("Error reading local documents from localStorage", err);
+    console.error("Error reading local documents", err);
     return [];
   }
 }
 
 /**
- * Retrieves a single cached analysis by documentId from the localStorage map.
+ * Retrieves a single cached analysis by documentId from the session mirror.
  */
 export function getLocalDocumentById(documentId: string): CachedAnalysisPayload | null {
   if (typeof window === "undefined" || !documentId) return null;
-
-  try {
-    const rawMap = window.localStorage.getItem(LOCAL_DOCS_KEY);
-    if (rawMap) {
-      const docMap: Record<string, CachedAnalysisPayload> = JSON.parse(rawMap);
-      if (docMap[documentId]) {
-        return docMap[documentId];
-      }
-    }
-  } catch (err) {
-    console.error("Error reading local document by id", err);
-  }
-
-  return null;
+  return readLocalDocMap()[documentId] ?? null;
 }
 
 /**
@@ -209,10 +241,9 @@ export function deleteLocalDocument(documentId: string): void {
   if (typeof window === "undefined" || !documentId) return;
 
   try {
-    const docMap = readLocalDocMap();
-    if (docMap[documentId]) {
-      delete docMap[documentId];
-      writeLocalDocMap(docMap, documentId);
+    if (memoryCache[documentId]) {
+      delete memoryCache[documentId];
+      void writeLocalDocMap(memoryCache, documentId);
     }
   } catch (err) {
     console.error("Error removing local document", err);
@@ -233,6 +264,12 @@ export function clearAllLocalData(): void {
   } catch {
     // ignore
   }
+
+  // Wipe the in-memory decrypted mirror and the session encryption key so no
+  // financial data (or the means to decrypt the persisted blob) survives
+  // logout / account erasure.
+  for (const key of Object.keys(memoryCache)) delete memoryCache[key];
+  sessionCacheKey = null;
 
   try {
     const session = window.sessionStorage;
