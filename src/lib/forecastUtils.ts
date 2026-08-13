@@ -217,8 +217,8 @@ export function exportForecastChart(data: MonthlyForecast[]): string {
 }
 
 export function calculateTrend(data: { month: string; value: number }[]): 'up' | 'down' | 'stable' {
-  if (data.length < 2) return 'stable';
-  // Need at least 4 data points to split into two meaningful windows
+  // Need at least 4 data points to compare two meaningful windows; otherwise
+  // the "older" window would be empty (or 1 point) and diff would be biased.
   if (data.length < 4) return 'stable';
   const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / 3;
   const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / (data.length - 3);
