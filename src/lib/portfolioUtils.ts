@@ -9,6 +9,7 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   query,
   where,
   setDoc,
@@ -16,6 +17,7 @@ import {
   serverTimestamp,
   orderBy,
   deleteDoc,
+  writeBatch,
   runTransaction,
   limit,
 } from 'firebase/firestore';
@@ -30,6 +32,7 @@ export type TransactionType = 'buy' | 'sell' | 'dividend' | 'deposit' | 'withdra
 export interface Holding {
   id: string;
   userId: string;
+  portfolioId?: string;
   symbol: string;
   name: string;
   assetClass: AssetClass;
@@ -44,6 +47,7 @@ export interface Holding {
 export interface Transaction {
   id: string;
   userId: string;
+  portfolioId?: string;
   holdingId: string;
   symbol: string;
   type: TransactionType;
@@ -98,11 +102,13 @@ export interface HoldingInput {
   avgCost: number;
   currentPrice: number;
   currency?: string;
+  portfolioId?: string;
 }
 
 export interface TransactionInput {
   holdingId: string;
   symbol: string;
+  portfolioId: string;
   type: TransactionType;
   quantity: number;
   price: number;
@@ -321,6 +327,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             quantity > 0 ? (input.quantity * input.price + input.fees) / quantity : input.price;
           tx.set(holdingRef, {
             userId,
+            portfolioId: input.portfolioId,
             symbol,
             name: symbol,
             assetClass: input.assetClass || inferAssetClass(symbol),
@@ -352,6 +359,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
           tx.update(holdingRef, {
             quantity,
             avgCost,
+            portfolioId: input.portfolioId,
             currentPrice: input.price,
             updatedAt: serverTimestamp(),
           });
@@ -362,6 +370,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
 
       const ledgerTransaction: Omit<Transaction, 'id'> = {
         userId,
+        portfolioId: input.portfolioId,
         holdingId: resolvedHoldingId,
         symbol,
         type: input.type,
@@ -390,6 +399,7 @@ export async function addHolding(userId: string, input: HoldingInput): Promise<H
     const now = new Date().toISOString();
     const holding: Omit<Holding, 'id'> = {
       userId,
+      portfolioId: input.portfolioId,
       symbol: input.symbol.trim().toUpperCase(),
       name: input.name.trim() || input.symbol.trim().toUpperCase(),
       assetClass: input.assetClass,
@@ -431,6 +441,7 @@ function mapHoldingData(id: string, data: Record<string, unknown>, fallbackUserI
   return {
     id,
     userId: (data.userId as string) || fallbackUserId,
+    portfolioId: (data.portfolioId as string) || '',
     symbol: (data.symbol as string) || '',
     name: (data.name as string) || '',
     assetClass: (data.assetClass as AssetClass) || 'equities',
@@ -558,6 +569,7 @@ export async function fetchUserTransactions(userId: string): Promise<Transaction
       transactions.push({
         id: docSnap.id,
         userId: data.userId || '',
+        portfolioId: data.portfolioId || '',
         holdingId: data.holdingId || '',
         symbol: data.symbol || '',
         type: data.type || 'buy',
@@ -649,7 +661,48 @@ export async function updatePortfolio(userId: string, portfolioId: string, updat
 
 export async function deletePortfolio(userId: string, portfolioId: string): Promise<boolean> {
   try {
-    await deleteDoc(doc(db, 'portfolios', portfolioId));
+    const portfolioRef = doc(db, 'portfolios', portfolioId);
+    const batch = writeBatch(db);
+
+    // Cascade-delete every holding and transaction that belongs to this
+    // portfolio, keyed by the portfolioId stamped on each document.
+    const holdingsSnap = await getDocs(
+      query(
+        collection(db, 'portfolioHoldings'),
+        where('userId', '==', userId),
+        where('portfolioId', '==', portfolioId),
+      ),
+    );
+    holdingsSnap.forEach((d) => batch.delete(d.ref));
+
+    const transactionsSnap = await getDocs(
+      query(
+        collection(db, 'portfolioTransactions'),
+        where('userId', '==', userId),
+        where('portfolioId', '==', portfolioId),
+      ),
+    );
+    transactionsSnap.forEach((d) => batch.delete(d.ref));
+
+    // Backstop for legacy docs that predate the portfolioId field: delete any
+    // holding/transaction ids still referenced by the portfolio's own arrays.
+    const portfolioSnap = await getDoc(portfolioRef);
+    const portfolioData = (portfolioSnap.data() || {}) as Record<string, unknown>;
+    const embeddedHoldings = Array.isArray(portfolioData.holdings) ? portfolioData.holdings : [];
+    embeddedHoldings.forEach((h: unknown) => {
+      const hid = (h as Record<string, unknown>)?.id;
+      if (hid) batch.delete(doc(db, 'portfolioHoldings', String(hid)));
+    });
+    const embeddedTransactions = Array.isArray(portfolioData.transactions)
+      ? portfolioData.transactions
+      : [];
+    embeddedTransactions.forEach((t: unknown) => {
+      const tid = (t as Record<string, unknown>)?.id;
+      if (tid) batch.delete(doc(db, 'portfolioTransactions', String(tid)));
+    });
+
+    batch.delete(portfolioRef);
+    await batch.commit();
     return true;
   } catch (error) {
     console.error('Error deleting portfolio:', error);

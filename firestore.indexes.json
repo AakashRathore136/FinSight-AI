@@ -42,11 +42,27 @@
       ]
     },
     {
+      "collectionGroup": "portfolioHoldings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "portfolioId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "portfolioTransactions",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "portfolioTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "portfolioId", "order": "ASCENDING" }
       ]
     },
     {
