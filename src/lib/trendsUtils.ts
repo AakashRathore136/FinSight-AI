@@ -377,7 +377,12 @@ export async function saveTrendAnalysis(
     };
   });
 
-  const periodKey = config.type === 'month' ? formatMonthKey(config.startDate) : formatWeekKey(config.startDate);
+  const periodKey =
+    config.type === 'month'
+      ? formatMonthKey(config.startDate)
+      : config.type === 'week'
+        ? formatWeekKey(config.startDate)
+        : `${formatMonthKey(config.startDate)}_${formatMonthKey(config.endDate)}`;
 
   try {
     await setDoc(doc(db, 'trend_analysis', `${userId}_${periodKey}`), {
