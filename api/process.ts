@@ -320,16 +320,6 @@ function safeJsonParse(text: string): unknown {
     throw new Error(result.error || "JSON parse failed");
   }
   return result.data;
-  const c = (text || "").trim();
-  if (!c) throw new Error("Empty response");
-  let extracted = c;
-  const fo = c.indexOf("{"), lo = c.lastIndexOf("}");
-  const fa = c.indexOf("["), la = c.lastIndexOf("]");
-  if (fo !== -1 && lo !== -1 && (fa === -1 || fo < fa)) extracted = c.slice(fo, lo + 1);
-  else if (fa !== -1 && la !== -1) extracted = c.slice(fa, la + 1);
-  try { return JSON.parse(extracted); } catch { /* ignore - extracted text is not valid JSON */ }
-  const rep = extracted.replace(/,\s*([}\]])/g, "$1");
-  try { return JSON.parse(rep); } catch (e: any) { throw new Error(`JSON parse failed: ${e.message}`); }
 }
 
 function validatePayload(p: any) {

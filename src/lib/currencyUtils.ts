@@ -46,10 +46,18 @@ export const FALLBACK_RATES: Record<string, number> = {
   TRY: 30.25,
 };
 
+// Snapshot date of FALLBACK_RATES above. Fallback responses report this date
+// (NOT today) so stale data is never presented as fresh, and the UI can warn
+// the user. Update it whenever FALLBACK_RATES is refreshed. (Issue #1037)
+export const FALLBACK_RATES_DATE = '2024-11-01';
+
 export interface ExchangeRates {
   base: string;
   date: string;
   rates: Record<string, number>;
+  /** 'live' when fetched from the Frankfurter API, 'fallback' when the static
+   * table was returned after retries were exhausted. (Issue #1037) */
+  source: 'live' | 'fallback';
 }
 
 export interface ConversionHistoryEntry {
@@ -120,18 +128,20 @@ export async function fetchExchangeRates(
         base: data.base || base,
         date: data.date || new Date().toISOString().split('T')[0],
         rates: { [data.base || base]: 1, ...(data.rates || {}) },
+        source: 'live',
       };
     } catch (error) {
       const isLastAttempt = attempt === maxRetries;
       if (isLastAttempt) {
         console.warn(
           `[currencyUtils] All ${maxRetries + 1} attempts to fetch live exchange rates failed. ` +
-          `Falling back to static rates. Last error: ${error instanceof Error ? error.message : String(error)}`,
+          `Falling back to static rates (snapshot ${FALLBACK_RATES_DATE}). Last error: ${error instanceof Error ? error.message : String(error)}`,
         );
         return {
           base,
-          date: new Date().toISOString().split('T')[0],
+          date: FALLBACK_RATES_DATE,
           rates: buildFallbackRates(),
+          source: 'fallback',
         };
       }
       // Wait before retrying
@@ -142,8 +152,9 @@ export async function fetchExchangeRates(
   // Safety fallback — should never reach here but satisfies TypeScript
   return {
     base,
-    date: new Date().toISOString().split('T')[0],
+    date: FALLBACK_RATES_DATE,
     rates: buildFallbackRates(),
+    source: 'fallback',
   };
 }
 

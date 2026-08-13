@@ -48,10 +48,54 @@ Output valid JSON only with keys: "collection", "where", "orderBy", "limit".`;
       return res.status(500).json({ error: "Failed to parse LLM response into a valid query" });
     }
 
-    // Attach user constraint for multi-tenant data isolation
-    if (parsedQuery && typeof parsedQuery === 'object') {
-      (parsedQuery as any).tenantId = user?.uid || "unauthenticated";
+    // --- Harden the LLM-produced query before it is returned for execution ---
+    // The model is never trusted to author tenant scoping. We validate the
+    // shape against a strict schema and force the authenticated user's tenant
+    // id into the `where` clause, rejecting any caller/model-supplied tenantId
+    // and any NoSQL-injection operators (keys starting with `$`).
+
+    if (!parsedQuery || typeof parsedQuery !== "object" || Array.isArray(parsedQuery)) {
+      return res.status(422).json({ error: "Model did not return a valid query object" });
     }
+
+    const ALLOWED_KEYS = new Set(["collection", "where", "orderBy", "limit"]);
+    for (const key of Object.keys(parsedQuery)) {
+      if (!ALLOWED_KEYS.has(key)) {
+        delete (parsedQuery as Record<string, unknown>)[key];
+      }
+    }
+
+    if (typeof (parsedQuery as any).collection !== "string") {
+      (parsedQuery as any).collection = "transactions";
+    }
+    if (
+      (parsedQuery as any).limit != null &&
+      (typeof (parsedQuery as any).limit !== "number" || (parsedQuery as any).limit < 0)
+    ) {
+      delete (parsedQuery as any).limit;
+    }
+
+    if (!user?.uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const where =
+      (parsedQuery as any).where && typeof (parsedQuery as any).where === "object" && !(parsedQuery as any).where instanceof Array
+        ? (parsedQuery as any).where
+        : {};
+
+    // Strip any tenant scoping or injection operators the model tried to inject.
+    for (const key of Object.keys(where)) {
+      if (key === "tenantId" || key.startsWith("$")) {
+        delete where[key];
+      }
+    }
+    // Force the authenticated user's tenant id — multi-tenant isolation is
+    // guaranteed here, regardless of what the model emitted.
+    where.tenantId = user.uid;
+    (parsedQuery as any).where = where;
+    // Ensure no top-level tenantId override leaks through either.
+    delete (parsedQuery as any).tenantId;
 
     res.json({
       success: true,

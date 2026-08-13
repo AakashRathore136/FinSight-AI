@@ -191,6 +191,33 @@ export async function saveLocalAnalysis(
   evictOldest(memoryCache, MAX_LOCAL_DOCS);
   await writeLocalDocMap(memoryCache, payload.documentId);
   return { ok: true, quotaExceeded: false };
+  // 3. Store in localStorage documents map (bounded + evicting)
+  try {
+    const docMap = readLocalDocMap();
+    docMap[payload.documentId] = cached;
+    evictOldest(docMap, MAX_LOCAL_DOCS);
+    writeLocalDocMap(docMap, payload.documentId);
+    return { ok: true, quotaExceeded: false };
+  } catch (err) {
+    if (isQuotaError(err)) {
+      // Drop the oldest entry and retry once so the newest analysis still
+      // gets an offline copy.
+      try {
+        const docMap = readLocalDocMap();
+        delete docMap[payload.documentId];
+        evictOldest(docMap, Math.max(1, MAX_LOCAL_DOCS - 1));
+        docMap[payload.documentId] = cached;
+        evictOldest(docMap, MAX_LOCAL_DOCS);
+        writeLocalDocMap(docMap, payload.documentId);
+        return { ok: true, quotaExceeded: true };
+      } catch (err) {
+        console.warn("[FinSight] storeLocalDocument failed:", err);
+        return { ok: false, quotaExceeded: true };
+      }
+    }
+    console.warn("Could not cache in localStorage", err);
+    return { ok: false, quotaExceeded: false };
+  }
 }
 
 /**
@@ -261,8 +288,8 @@ export function clearAllLocalData(): void {
 
   try {
     window.localStorage.removeItem(LOCAL_DOCS_KEY);
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to clear localStorage:", err);
   }
 
   // Wipe the in-memory decrypted mirror and the session encryption key so no
@@ -279,15 +306,15 @@ export function clearAllLocalData(): void {
       if (key && key.startsWith("fin_local_doc_")) doomed.push(key);
     }
     doomed.forEach((key) => session.removeItem(key));
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to clear sessionStorage:", err);
   }
 
   try {
     window.dispatchEvent(
       new CustomEvent("fin_local_docs_changed", { detail: { cleared: true } }),
     );
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to dispatch fin_local_docs_changed event:", err);
   }
 }
