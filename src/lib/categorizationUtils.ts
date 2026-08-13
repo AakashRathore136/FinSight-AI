@@ -38,7 +38,9 @@ export function applyCategorizationRules(
     if (!rule.isActive) continue;
 
     const normalizedKeyword = rule.keyword.trim().toLowerCase();
-    if (normalizedKeyword.length > 0 && normalizedDesc.includes(normalizedKeyword)) {
+    if (normalizedKeyword.length === 0) continue;
+    const escaped = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}\\b`).test(normalizedDesc)) {
       return rule.assignedCategory;
     }
   }
