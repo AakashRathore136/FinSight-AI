@@ -1,9 +1,13 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import path from "path";
 import util from "util";
 import logger from "../lib/logger.js";
 
-const execPromise = util.promisify(exec);
+// Use execFile (argument vector) instead of exec (shell string) so user-derived
+// values such as user.uid are passed as process arguments and never interpreted
+// by a shell. This closes the command-injection vector and is portable across
+// Windows/non-shell environments.
+const execFilePromise = util.promisify(execFile);
 
 export async function detectAnomalies(req: any, res: any) {
   try {
@@ -18,9 +22,14 @@ export async function detectAnomalies(req: any, res: any) {
     
     // Stub: Passing user ID to the python script
     const scriptPath = path.resolve(process.cwd(), "scripts/anomaly_model.py");
-    
+
     // Note: Python script must be executed in an environment with scikit-learn installed.
-    const { stdout, stderr } = await execPromise(`python3 ${scriptPath} --uid ${user.uid}`);
+    // Pass the uid as a discrete argument — never interpolate it into a shell string.
+    const { stdout, stderr } = await execFilePromise("python3", [
+      scriptPath,
+      "--uid",
+      user.uid,
+    ]);
     
     if (stderr) {
       logger.warn("Anomaly detection script stderr:", stderr);

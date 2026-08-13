@@ -30,6 +30,7 @@ import {
   History,
   DollarSign,
   Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
@@ -187,9 +188,15 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
           ...settings.conversionHistory,
           [data.date]: historyEntry,
         };
+        // Only advance lastRateUpdate when the rates are live. Fallback rates
+        // are a static snapshot, so lastRateUpdate keeps reflecting the last
+        // successful live fetch and the UI can warn the user when it is old.
+        // (Issue #1037)
         const updatedSettings = {
           ...settings,
-          lastRateUpdate: new Date().toISOString(),
+          ...(data.source === 'live'
+            ? { lastRateUpdate: new Date().toISOString() }
+            : {}),
           conversionHistory: updatedHistory,
         };
         await setDoc(doc(db, 'currencies', user.uid), updatedSettings);
@@ -284,6 +291,17 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
     ? aggregateMultiCurrencyTotals(filteredTransactions, settings.baseCurrency, rates.rates)
     : { totalBase: 0, byCurrency: {} };
 
+  // Fallback rates are a static snapshot (source: 'fallback') and must not be
+  // presented as live. Also warn when the last successful live fetch is more
+  // than a week old, so stale rates are never silently used in financial
+  // calculations. (Issue #1037)
+  const lastUpdateAgeDays = settings?.lastRateUpdate
+    ? (Date.now() - new Date(settings.lastRateUpdate).getTime()) / (24 * 60 * 60 * 1000)
+    : null;
+  const showStaleWarning =
+    rates?.source === 'fallback' ||
+    (lastUpdateAgeDays !== null && lastUpdateAgeDays > 7);
+
   const historyDates = settings?.conversionHistory
     ? Object.keys(settings.conversionHistory)
         .sort((a: any, b: any) => Date.parse(a) - Date.parse(b))
@@ -354,6 +372,20 @@ export function CurrencyManager({ user }: CurrencyManagerProps) {
           </button>
         ))}
       </div>
+
+      {showStaleWarning && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-400">
+          <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">Rates may be stale</p>
+            <p className="text-amber-500/80 mt-1">
+              {rates?.source === 'fallback'
+                ? 'Live rate lookup failed and static fallback rates are currently in use. Currency conversions may not reflect current market values.'
+                : `Rates were last refreshed more than a week ago (${settings?.lastRateUpdate ? new Date(settings.lastRateUpdate).toLocaleDateString() : 'unknown'}). Click "Refresh Rates" to update.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {activeView === 'overview' && (
         <motion.div

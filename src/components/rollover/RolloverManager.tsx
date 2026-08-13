@@ -342,6 +342,14 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 </div>
                               </div>
                             )}
+                            {category.rolloverEnabled && category.rolledOverAmount > 0 && category.monthlyLimit > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="uppercase tracking-wider font-semibold">Effective Limit</span>
+                                <span className="text-emerald-400 font-medium tabular-nums">
+                                  {formatCurrency(category.monthlyLimit + category.rolledOverAmount)}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

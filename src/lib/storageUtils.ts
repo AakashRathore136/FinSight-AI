@@ -136,7 +136,8 @@ export async function saveLocalAnalysis(
         evictOldest(docMap, MAX_LOCAL_DOCS);
         writeLocalDocMap(docMap, payload.documentId);
         return { ok: true, quotaExceeded: true };
-      } catch {
+      } catch (err) {
+        console.warn("[FinSight] storeLocalDocument failed:", err);
         return { ok: false, quotaExceeded: true };
       }
     }
@@ -230,8 +231,8 @@ export function clearAllLocalData(): void {
 
   try {
     window.localStorage.removeItem(LOCAL_DOCS_KEY);
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to clear localStorage:", err);
   }
 
   try {
@@ -242,15 +243,15 @@ export function clearAllLocalData(): void {
       if (key && key.startsWith("fin_local_doc_")) doomed.push(key);
     }
     doomed.forEach((key) => session.removeItem(key));
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to clear sessionStorage:", err);
   }
 
   try {
     window.dispatchEvent(
       new CustomEvent("fin_local_docs_changed", { detail: { cleared: true } }),
     );
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("[FinSight] Failed to dispatch fin_local_docs_changed event:", err);
   }
 }
