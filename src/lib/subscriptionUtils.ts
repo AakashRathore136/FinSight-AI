@@ -426,15 +426,29 @@ export function estimateMonthlyIncome(
   windowMonths: number = 6,
 ): number {
   const incomeByMonth = new Map<string, number>();
+  let minKey: { year: number; month: number } | null = null;
+  let maxKey: { year: number; month: number } | null = null;
   transactions.forEach((t) => {
     if (t.type !== "income") return;
-    const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+    const year = t.date.getFullYear();
+    const month = t.date.getMonth();
+    const key = `${year}-${month}`;
     incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+    if (!minKey || year < minKey.year || (year === minKey.year && month < minKey.month)) {
+      minKey = { year, month };
+    }
+    if (!maxKey || year > maxKey.year || (year === maxKey.year && month > maxKey.month)) {
+      maxKey = { year, month };
+    }
   });
   const monthCount = incomeByMonth.size;
   if (monthCount === 0) return 0;
   const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
-  return total / Math.min(monthCount, windowMonths);
+  const span =
+    minKey && maxKey
+      ? (maxKey.year - minKey.year) * 12 + (maxKey.month - minKey.month) + 1
+      : monthCount;
+  return total / Math.max(1, Math.min(span, windowMonths));
 }
 
 export function calculateSubscriptionBurden(
