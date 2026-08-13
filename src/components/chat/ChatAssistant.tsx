@@ -164,12 +164,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
   useEffect(() => {
     if (!currentUserId) return;
-    const unsubscribe = loadConversations(currentUserId).then((convs) => {
-      if (!currentUserId) return;
+    let cancelled = false;
+
+    loadConversations(currentUserId).then((convs) => {
+      if (cancelled) return;
       setConversations(convs);
     });
+
     return () => {
-      unsubscribe.then(() => {});
+      cancelled = true;
     };
   }, [currentUserId]);
 
