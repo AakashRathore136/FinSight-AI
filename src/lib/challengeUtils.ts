@@ -314,6 +314,11 @@ export function generateRecommendations(spending: SpendingPattern): ChallengeRec
 }
 
 export function awardBadge(challenge: Challenge): BadgeTier {
+  // Respect the badge stored on the challenge (templates hardcode their own
+  // tier) so the badge shown during the challenge is the one awarded on
+  // completion. Only derive a tier from targetAmount for legacy challenges
+  // that never stored a badge. (Issue #1039)
+  if (challenge.badge) return challenge.badge;
   if (challenge.targetAmount >= 300) return 'platinum';
   if (challenge.targetAmount >= 150) return 'gold';
   if (challenge.targetAmount >= 50) return 'silver';
