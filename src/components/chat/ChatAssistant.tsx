@@ -158,7 +158,15 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
   useEffect(() => {
     if (!currentUserId) return;
-    const ctx = buildFinancialContext(currentUserId, transactions, budgetCategories);
+    const ctx = buildFinancialContext(
+      currentUserId,
+      transactions,
+      budgetCategories.map((c) => ({
+        name: c.name,
+        monthlyLimit: c.monthlyLimit,
+        rolledOverAmount: c.rolledOverAmount,
+      }))
+    );
     setContext(ctx);
   }, [transactions, budgetCategories, currentUserId]);
 

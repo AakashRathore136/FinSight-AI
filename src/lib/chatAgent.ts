@@ -124,7 +124,11 @@ export const TOOL_CATALOGUE: AgentTool[] = [
       const savings = calculateSavingsScore(ctx.transactions);
       const adherence = calculateBudgetAdherence(
         ctx.transactions,
-        ctx.budgetCategories,
+        ctx.budgetCategories.map((c) => ({
+          name: c.name,
+          monthlyLimit: c.monthlyLimit,
+          rolledOverAmount: c.rolledOverAmount,
+        })),
       );
       return {
         overall: calculateOverallScore(spending, savings, adherence),
