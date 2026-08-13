@@ -109,7 +109,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   }, [subscriptions, estimatedMonthlyIncome]);
 
   const filteredSubscriptions = useMemo(() => {
-    let result = subscriptions;
+    let result = [...subscriptions];
 
     if (filter !== "all") {
       result = result.filter((s) => s.frequency === filter);
