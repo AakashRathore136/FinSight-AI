@@ -169,7 +169,7 @@ export function generateIncomeSummary(
   return Array.from(map.entries())
     .map(([source, values]) => ({
       source,
-      total: Math.round(values.total * 100) / 100,
+      total: Math.round(values.total * 100 + Number.EPSILON) / 100,
       count: values.count,
     }))
     .sort((a, b) => b.total - a.total);
