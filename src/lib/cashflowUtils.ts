@@ -172,8 +172,15 @@ export function calculateMonthlyForecast(
   const incomeByMonth: Record<string, number> = {};
   const expenseByMonth: Record<string, Record<string, number>> = {};
 
+  const currentMonth = getMonthKey(new Date());
+
   transactions.forEach((t) => {
     const monthKey = getMonthKey(t.date);
+    // Exclude the current (still-running) month from the average: only fully
+    // elapsed months count, so a recurring item posted earlier this month is
+    // not double-counted as a full month. This also makes the forecast
+    // independent of `now` (deterministic for a given history).
+    if (monthKey === currentMonth) return;
     if (t.type === "income") {
       incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + t.amount;
     } else {
@@ -183,24 +190,11 @@ export function calculateMonthlyForecast(
     }
   });
 
-  // Averages are computed over the full observation window: months without
-  // activity are zero-filled so a charge that appears once in the window is
-  // projected at its true monthly rate instead of its per-month-with-activity
-  // rate.
-  //
-  // The current (still-running) month is part of the observation window but is
-  // only partially elapsed. Weighting it by elapsedDays/daysInMonth stops a
-  // partial month from being counted as a full month in the divisor, which
-  // would inflate/deflate the projected monthly rate. (Issue #1033)
-  const now = new Date();
-  const currentMonthDays = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    0,
-  ).getDate();
-  const elapsedDays = Math.min(Math.max(now.getDate(), 1), currentMonthDays);
-  const currentMonthWeight = elapsedDays / currentMonthDays;
-  const divisor = Math.max(windowMonths - 1 + currentMonthWeight, 1);
+  // Averages are computed over the completed months of the observation window.
+  // Months without activity are zero-filled (the divisor is a fixed number of
+  // months) so a charge that appears once in the window is projected at its
+  // true monthly rate instead of its per-month-with-activity rate.
+  const divisor = Math.max(windowMonths - 1, 1);
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
