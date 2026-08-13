@@ -663,6 +663,11 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
+    // Pass the expense-only slice (both functions filter internally anyway) so
+    // `ignoredTransactionIds` from the caller is applied and no duplicate call
+    // overwrites the result. (Issue #1035)
+    anomalies: detectAnomalies(expenseTransactions, userId, undefined, ignoredTransactionIds),
+    opportunities: identifyOpportunities(expenseTransactions, userId),
     // Detect over the full transaction set (not just expenses) so ignored
     // transactions are excluded consistently. The earlier expense-scoped pair
     // was dead code: duplicate keys in an object literal keep only the last
