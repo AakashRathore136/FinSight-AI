@@ -1333,7 +1333,25 @@ CRITICAL RULES:
 
   // Generate short-lived signed URL for secure document download
   // Prevents permanent URL access to sensitive financial documents
-  app.post("/api/document-download-url", async (req: any, res) => {
+  // Rate limiting for /api/document-download-url to prevent signed-URL
+  // quota abuse (repeated Firestore reads + crypto signing) and mass parallel
+  // issuance for the same object. Limits: 60 requests per user per 15 minutes.
+  const downloadUrlRateLimiter = rateLimit({
+    keyGenerator: (req: any) => req.ownerId || req.ip,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 60, // 60 requests per user per 15 minutes
+    message: {
+      error: {
+        stage: "RATE_LIMIT",
+        reason:
+          "Too many document download URL requests (max 60 per 15 minutes per user)",
+        recommendation: "Please slow down and try again later.",
+      },
+    },
+    standardHeaders: false,
+  });
+
+  app.post("/api/document-download-url", downloadUrlRateLimiter, async (req: any, res) => {
     try {
       const { storagePath, documentId } = req.body;
 
