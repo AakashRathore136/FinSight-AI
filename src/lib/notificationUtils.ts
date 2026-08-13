@@ -82,26 +82,25 @@ export async function showNotification(options: NotificationOptions): Promise<No
 export async function scheduleSubscriptionReminder(
   subscriptionName: string,
   renewalDate: Date,
-  amount: number
+  amount: number,
+  reminderDaysBefore: number = 1
 ): Promise<void> {
-  const now = new Date();
-  const daysUntilRenewal = Math.ceil((renewalDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const daysUntilRenewal = (renewalDate.getTime() - Date.now()) / msPerDay;
+  if (daysUntilRenewal < 0) return; // already passed
 
-  // Show reminder 1 day before
-  if (daysUntilRenewal === 1) {
-    await showNotification({
-      title: '📅 Subscription Renewal Tomorrow',
-      body: `${subscriptionName} renews tomorrow for ${formatCurrency(amount)}`,
-      tag: `subscription-${subscriptionName}`,
-      requireInteraction: true,
-    });
-  }
-
-  // Show reminder on the day
-  if (daysUntilRenewal === 0) {
+  const days = Math.floor(daysUntilRenewal);
+  if (days === 0) {
     await showNotification({
       title: '🔔 Subscription Due Today',
       body: `${subscriptionName} renews today for ${formatCurrency(amount)}`,
+      tag: `subscription-${subscriptionName}`,
+      requireInteraction: true,
+    });
+  } else if (days <= reminderDaysBefore) {
+    await showNotification({
+      title: '📅 Subscription Renewal Soon',
+      body: `${subscriptionName} renews in ${days} day${days === 1 ? '' : 's'} for ${formatCurrency(amount)}`,
       tag: `subscription-${subscriptionName}`,
       requireInteraction: true,
     });
