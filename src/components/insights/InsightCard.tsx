@@ -7,15 +7,17 @@
  * icon, title, plain-language description, and a severity/impact badge.
  */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
-  AlertTriangle,
+    AlertTriangle,
   PiggyBank,
   CalendarDays,
   CalendarRange,
   TrendingUp,
   TrendingDown,
   Sparkles,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Card } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
@@ -76,8 +78,23 @@ interface InsightCardProps {
 }
 
 export function InsightCard({ insight, icon, className, baseCurrency }: InsightCardProps) {
+  const [copied, setCopied] = useState(false);
+
   const styles = SEVERITY_STYLES[insight.severity] ?? SEVERITY_STYLES.low;
   const typeIcon = icon ?? TYPE_ICON[insight.type] ?? <Sparkles size={18} />;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(insight.description);
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy insight:", error);
+    }
+  };
 
   const amountLabel =
     insight.type === "opportunity"
@@ -123,10 +140,21 @@ export function InsightCard({ insight, icon, className, baseCurrency }: InsightC
         </Badge>
       </div>
 
-      <p className="text-xs leading-relaxed text-slate-400">
-        {insight.description}
-      </p>
+      <div className="space-y-2">
+  <p className="text-xs leading-relaxed text-slate-400">
+    {insight.description}
+  </p>
 
+  <button
+    type="button"
+    onClick={handleCopy}
+    className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+    aria-label={copied ? "Insight copied" : "Copy insight"}
+  >
+    {copied ? <Check size={13} /> : <Copy size={13} />}
+    {copied ? "Copied!" : "Copy"}
+  </button>
+</div>
       <div className="mt-auto flex items-center justify-between pt-1">
         <span className="text-[11px] font-medium text-slate-500">
           {insight.period}
