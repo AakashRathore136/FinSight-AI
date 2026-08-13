@@ -71,7 +71,7 @@ async function persistGeneratedForecasts(
   if (!generated.length) return;
   const existing = await getForecasts(userId);
   const byMonth = new Map(existing.map((f) => [f.month, f]));
-  for (const m of generated.slice(0, 6)) {
+  for (const m of generated) {
     const payload = {
       month: m.month,
       projectedIncome: m.income,
