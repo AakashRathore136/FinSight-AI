@@ -89,6 +89,10 @@ export class RAGEngine {
       })
       .join("\n\n");
 
+    if (relevantChunks.length === 0) {
+      return { contextText: "", relevantChunks: [] };
+    }
+
     return { contextText, relevantChunks };
   }
 

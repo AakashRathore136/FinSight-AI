@@ -68,7 +68,7 @@ export class InMemoryVectorStore {
   /**
    * Performs Similarity Search and retrieves top-k relevant chunks for a query.
    */
-  public similaritySearch(query: string, topK: number = 3): ScoredChunk[] {
+  public similaritySearch(query: string, topK: number = 3, minScore = 1e-6): ScoredChunk[] {
     if (this.chunks.length === 0 || this.vocabulary.length === 0) return [];
 
     const queryEmbedding = generateSparseEmbedding(query, this.vocabulary);
@@ -79,6 +79,7 @@ export class InMemoryVectorStore {
     });
 
     return scored
+      .filter((s) => s.score > minScore)
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   }
