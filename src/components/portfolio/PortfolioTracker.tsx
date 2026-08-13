@@ -186,9 +186,17 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       }, 0),
     [holdings, rates, baseCurrency],
   );
-  const profitLoss = useMemo(() => {
-    return holdings.reduce((sum, h) => sum + calculateProfitLoss(h).value, 0);
-  }, [holdings]);
+  const profitLoss = useMemo(
+    () =>
+      holdings.reduce((sum, h) => {
+        const local = (h.currentPrice - h.avgCost) * h.quantity;
+        if (!rates || !h.currency || h.currency === baseCurrency)
+          return sum + local;
+        const converted = convertAmount(local, h.currency, baseCurrency, rates);
+        return sum + (converted == null ? local : converted);
+      }, 0),
+    [holdings, rates, baseCurrency],
+  );
   const allocation = useMemo(
     () => calculateAllocation(holdings, rates ?? undefined, baseCurrency),
     [holdings, rates, baseCurrency],
