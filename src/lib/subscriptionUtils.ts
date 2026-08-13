@@ -35,12 +35,20 @@ export interface Transaction {
   type: "income" | "expense";
 }
 
+export type SubscriptionFrequency =
+  | "weekly"
+  | "bi-weekly"
+  | "monthly"
+  | "quarterly"
+  | "semi-annual"
+  | "yearly";
+
 export interface Subscription {
   id: string;
   userId: string;
   name: string;
   amount: number;
-  frequency: "monthly" | "yearly" | "weekly";
+  frequency: SubscriptionFrequency;
   category: string;
   nextRenewalDate: Date;
   isActive: boolean;
@@ -240,7 +248,7 @@ export function groupTransactionsIntoSubscriptions(
 export function analyzeSubscriptionPattern(
   transactions: Transaction[],
 ): {
-  frequency: "monthly" | "yearly" | "weekly";
+  frequency: SubscriptionFrequency;
   confidence: number;
   /** Observed average interval between charges, in days. Cost annualization is
    * derived from this so it reflects the actual cadence (e.g. bi-weekly at
@@ -265,26 +273,40 @@ export function analyzeSubscriptionPattern(
   const stdDev = Math.sqrt(variance);
   const consistency = stdDev < avgInterval * 0.3 ? 1 : 0.5;
 
-  if (avgInterval >= 25 && avgInterval <= 35) {
+  if (avgInterval >= 5 && avgInterval <= 10) {
+    return { frequency: "weekly", confidence: consistency, avgIntervalDays: avgInterval };
+  } else if (avgInterval > 10 && avgInterval <= 18) {
+    return { frequency: "bi-weekly", confidence: consistency, avgIntervalDays: avgInterval };
+  } else if (avgInterval >= 25 && avgInterval <= 35) {
     return { frequency: "monthly", confidence: consistency, avgIntervalDays: avgInterval };
+  } else if (avgInterval >= 80 && avgInterval <= 100) {
+    return { frequency: "quarterly", confidence: consistency, avgIntervalDays: avgInterval };
+  } else if (avgInterval >= 170 && avgInterval <= 190) {
+    return { frequency: "semi-annual", confidence: consistency, avgIntervalDays: avgInterval };
   } else if (avgInterval >= 350 && avgInterval <= 380) {
     return { frequency: "yearly", confidence: consistency, avgIntervalDays: avgInterval };
-  } else if (avgInterval >= 5 && avgInterval <= 10) {
-    return { frequency: "weekly", confidence: consistency, avgIntervalDays: avgInterval };
   }
 
   return { frequency: "monthly", confidence: 0.3, avgIntervalDays: avgInterval };
 }
 
-/** Default annualization factor (charges per year) per declared frequency. */
+/** Default annualization factor (charges per year) per declared frequency.
+ * Only used as a fallback when a subscription has no stored annualizationFactor;
+ * detected subscriptions always store the observed-interval factor instead. */
 function defaultAnnualizationFactor(
-  frequency: Subscription["frequency"],
+  frequency: SubscriptionFrequency,
 ): number {
   switch (frequency) {
     case "weekly":
       return 52;
+    case "bi-weekly":
+      return 26;
     case "monthly":
       return 12;
+    case "quarterly":
+      return 4;
+    case "semi-annual":
+      return 2;
     case "yearly":
       return 1;
   }
@@ -306,14 +328,30 @@ export function getAnnualizationFactor(sub: Subscription): number {
 
 function advanceByFrequency(
   date: Date,
-  frequency: "monthly" | "yearly" | "weekly",
+  frequency: SubscriptionFrequency,
   originalDay?: number,
 ): Date {
   switch (frequency) {
     case "weekly":
       return addWeeks(date, 1);
+    case "bi-weekly":
+      return addWeeks(date, 2);
     case "yearly":
       return addYears(date, 1);
+    case "quarterly": {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 3);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
+    case "semi-annual": {
+      const day = originalDay ?? date.getDate();
+      const next = addMonths(date, 6);
+      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, lastDayOfNextMonth));
+      return next;
+    }
     case "monthly":
     default: {
       const day = originalDay ?? date.getDate();
@@ -327,7 +365,7 @@ function advanceByFrequency(
 
 export function predictNextRenewalDate(
   transactions: Transaction[],
-  frequency: "monthly" | "yearly" | "weekly",
+  frequency: SubscriptionFrequency,
 ): Date {
   const sorted = [...transactions].sort(
     (a, b) => b.date.getTime() - a.date.getTime(),
