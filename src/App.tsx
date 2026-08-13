@@ -1402,18 +1402,9 @@ export default function App() {
                 className="space-y-6"
               >
                 <CurrencyManager user={user} />
-                <div className="space-y-6">
-                  {user ? (
-                    <>
-                      <CurrencyManager user={user} />
-                      <CurrencyConverter />
-                      <MultiCurrencyNetWorth />
-                      <FxExposureMatrix />
-                    </>
-                  ) : (
-                    <CurrencyConverter />
-                  )}
-                </div>
+                <CurrencyConverter />
+                <MultiCurrencyNetWorth />
+                <FxExposureMatrix />
               </motion.div>
             )}
 

@@ -44,7 +44,7 @@ export interface Conversation {
 
 export interface FinancialContext {
   transactions: Transaction[];
-  budgetCategories: { name: string; monthlyLimit: number }[];
+  budgetCategories: { name: string; monthlyLimit: number; rolledOverAmount?: number }[];
   totalSpending: number;
   totalIncome: number;
   monthlySpending: Record<string, number>;
@@ -207,7 +207,7 @@ export async function loadMessages(conversationId: string, userId: string, limit
 export function buildFinancialContext(
   userId: string,
   transactions: Transaction[],
-  budgetCategories: { name: string; monthlyLimit: number }[]
+  budgetCategories: { name: string; monthlyLimit: number; rolledOverAmount?: number }[]
 ): FinancialContext {
   const expenses = transactions.filter(
     (t) => normalizeTransactionType(t.type) === 'expense',
@@ -246,7 +246,10 @@ export function buildFinancialContext(
 
   const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalSpending) / totalIncome) * 100) : 0;
 
-  const monthlyBudget = budgetCategories.reduce((sum, c) => sum + c.monthlyLimit, 0);
+  const monthlyBudget = budgetCategories.reduce(
+    (sum, c) => sum + c.monthlyLimit + Math.max(0, c.rolledOverAmount || 0),
+    0
+  );
   const budgetUtilization = monthlyBudget > 0 ? Math.round((totalSpending / monthlyBudget) * 100) : 0;
 
   return {
@@ -328,7 +331,10 @@ export function generateSpendingSummary(context: FinancialContext): ChatResponse
 
 export function generateBudgetAdvice(context: FinancialContext): ChatResponse {
   const { totalSpending, totalIncome, savingsRate, budgetUtilization, topCategories, budgetCategories } = context;
-  const monthlyBudget = budgetCategories.reduce((sum, c) => sum + c.monthlyLimit, 0);
+  const monthlyBudget = budgetCategories.reduce(
+    (sum, c) => sum + c.monthlyLimit + Math.max(0, c.rolledOverAmount || 0),
+    0
+  );
   let response = '';
 
   if (monthlyBudget <= 0) {

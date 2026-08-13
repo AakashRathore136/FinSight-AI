@@ -175,9 +175,12 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
   )
     .toString()
     .toLowerCase();
-  const confidenceValue = normalizeConfidence(
-    analysisData?.sentiment_score ?? 0,
-  );
+  const confidenceValue = useMemo(() => {
+    if (analysisData?.grounding && typeof analysisData.grounding.ratio === "number") {
+      return Math.round(analysisData.grounding.ratio * 100);
+    }
+    return normalizeConfidence(analysisData?.sentiment_score ?? 0);
+  }, [analysisData]);
   const confidenceLabel =
     confidenceValue === null ? "n/a" : `${confidenceValue}%`;
   const fileName = record?.fileName || "Untitled Document";
@@ -230,6 +233,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
     riskLevel,
     confidenceValue,
     refId,
+    isGrounding: Boolean(analysisData?.grounding),
   });
 
   useEffect(() => {
@@ -318,7 +322,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
         [`File Type:`, fileType],
         [`File Size:`, fileSize],
         [`Risk Level:`, riskLevel.toUpperCase()],
-        [`Confidence:`, confidenceLabel],
+        [analysisData?.grounding ? `Grounding Ratio:` : `Confidence:`, confidenceLabel],
       ];
 
       docInfo.forEach(([label, value]) => {
@@ -374,7 +378,11 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
           }
           const metricLabel = key.replace(/_/g, " ");
           const metricValue = String(value);
-          pdf.text(`${metricLabel}: ${metricValue}`, margin + 5, yPosition);
+          const claim = (analysisData?.claims as any[])?.find(
+            (c) => c.label === `key_metrics.${key}`
+          );
+          const statusText = claim ? ` [${claim.status.toUpperCase()}]` : "";
+          pdf.text(`${metricLabel}: ${metricValue}${statusText}`, margin + 5, yPosition);
           yPosition += lineHeight;
         });
 
@@ -638,7 +646,7 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                 >
                   <div className="grid gap-4 md:grid-cols-3">
                     <StatusTile
-                      label="Confidence"
+                      label={analysisData?.grounding ? "Grounding Ratio" : "Confidence"}
                       value={confidenceLabel}
                       tone="emerald"
                     />
@@ -744,13 +752,19 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                 >
                   {hasMetrics ? (
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      {metricsEntries.map(([key, value]) => (
-                        <MetricCard
-                          key={key}
-                          label={key.replace(/_/g, " ")}
-                          value={formatMetricValue(value)}
-                        />
-                      ))}
+                      {metricsEntries.map(([key, value]) => {
+                        const claim = (analysisData?.claims as any[])?.find(
+                          (c) => c.label === `key_metrics.${key}`
+                        );
+                        return (
+                          <MetricCard
+                            key={key}
+                            label={key.replace(/_/g, " ")}
+                            value={formatMetricValue(value)}
+                            claim={claim}
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <EmptyState text="No structured metrics could be derived from the target dataset." />
@@ -826,17 +840,18 @@ export function AnalysisDetail({ docId, user, onBack }: AnalysisDetailProps) {
                       style={{
                         background: `conic-gradient(#38bdf8 ${Math.max(6, confidenceValue ?? 0)}%, #1e293b 0)`,
                       }}
+                      title={analysisData?.grounding ? "Grounding Ratio: the percentage of financial metrics verified against source text" : "Confidence Score: sentiment-based metric value"}
                     >
                       <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-900">
-                        {confidenceValue === null ? "n/a" : confidenceValue}
+                        {confidenceValue === null ? "n/a" : `${confidenceValue}%`}
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-6 space-y-3">
                     <StatusTile
-                      label="Confidence Score"
-                      value={confidenceValue === null ? "n/a" : `${confidenceValue} / 100`}
+                      label={analysisData?.grounding ? "Grounding Ratio" : "Confidence Score"}
+                      value={confidenceValue === null ? "n/a" : `${confidenceValue}%`}
                       tone="emerald"
                     />
                     <StatusTile
@@ -1222,15 +1237,90 @@ function MiniStat({
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  claim,
+}: {
+  label: string;
+  value: string;
+  claim?: {
+    status: "verified" | "derived" | "unverified";
+    citation?: {
+      page: number;
+      snippet: string;
+      charOffset: number;
+      matchType: string;
+    };
+    reason?: string;
+  };
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  let statusBadge = null;
+  if (claim) {
+    if (claim.status === "verified") {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-400 border border-emerald-500/20">
+          ● Verified
+        </span>
+      );
+    } else if (claim.status === "derived") {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-400 border border-amber-500/20">
+          ▲ Derived
+        </span>
+      );
+    } else {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-400 border border-rose-500/20">
+          × Unverified
+        </span>
+      );
+    }
+  }
+
+  const hasCitation = claim?.citation;
+
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 transition-colors hover:bg-slate-900">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-        {label}
-      </p>
+    <div className="flex flex-col rounded-2xl border border-slate-800 bg-slate-950/60 p-5 transition-colors hover:bg-slate-900">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+          {label}
+        </p>
+        {statusBadge}
+      </div>
       <p className="mt-3 break-words text-2xl font-extrabold tracking-tight text-white">
         {value}
       </p>
+
+      {hasCitation && (
+        <div className="mt-4 border-t border-slate-800/80 pt-3">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300 transition-colors uppercase tracking-wider"
+          >
+            {expanded ? "Hide Source" : "View Source Citation"}
+          </button>
+
+          {expanded && (
+            <div className="mt-2 space-y-2 rounded-xl bg-slate-900/40 p-3 border border-slate-800/40">
+              <div className="flex items-center justify-between text-[9px] text-slate-400">
+                <span>Page {claim.citation.page}</span>
+                <span>Offset: {claim.citation.charOffset}</span>
+              </div>
+              <p className="text-xs text-slate-300 italic leading-relaxed break-words bg-slate-950/40 p-2 rounded border border-slate-800/40">
+                "...{claim.citation.snippet}..."
+              </p>
+              {claim.reason && (
+                <p className="text-[10px] text-sky-300/80 leading-normal">
+                  <span className="font-bold">Reason:</span> {claim.reason}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1387,13 +1477,16 @@ function buildAnalysisShareText({
   riskLevel,
   confidenceValue,
   refId,
+  isGrounding,
 }: {
   fileName: string;
   riskLevel: string;
   confidenceValue: number | null;
   refId: string;
+  isGrounding: boolean;
 }) {
-  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- Confidence: ${confidenceValue === null ? "n/a" : `${confidenceValue}/100`}\n- Ref: ${refId || "N/A"}\n\nReview the analysis here:`;
+  const metricLabel = isGrounding ? "Grounding Ratio" : "Confidence";
+  return `FinSight AI financial intelligence report:\n- Document: ${fileName}\n- Risk Level: ${riskLevel}\n- ${metricLabel}: ${confidenceValue === null ? "n/a" : `${confidenceValue}%`}\n- Ref: ${refId || "N/A"}\n\nReview the analysis here:`;
 }
 
 function buildWhatsAppUrl(text: string, url: string): string {

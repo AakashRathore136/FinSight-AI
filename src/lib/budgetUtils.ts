@@ -275,6 +275,20 @@ export function calculateRolloverAmount(unusedBudget: number, percentage: number
   return Math.round(unusedBudget * (percentage / 100) * 100) / 100;
 }
 
+/**
+ * The amount of budget actually available in the active month is the configured
+ * `monthlyLimit` plus any surplus rolled forward from the previous month. The
+ * rollover feature persists `rolledOverAmount` on the category, but the rest of
+ * the app must consume it — this helper is the single source of truth for the
+ * effective limit so spending/health calculations don't silently drop carry-over.
+ */
+export function getEffectiveMonthlyLimit(
+  category: Pick<BudgetCategory, 'monthlyLimit' | 'rolledOverAmount' | 'rolloverEnabled'>
+): number {
+  if (!category.rolloverEnabled) return category.monthlyLimit;
+  return category.monthlyLimit + Math.max(0, category.rolledOverAmount || 0);
+}
+
 export function getRolloverStats(entries: RolloverEntry[], category?: string) {
   const filtered = category ? entries.filter((e) => e.category === category) : entries;
   const totalRolledOver = filtered.reduce((sum, e) => sum + e.amount, 0);

@@ -22,12 +22,14 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-FLDV1FCY1G",
 };
 
-console.log("[Firebase] Config loaded:", {
-  apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 8) + "..." : "MISSING",
-  authDomain: firebaseConfig.authDomain || "MISSING",
-  projectId: firebaseConfig.projectId || "MISSING",
-  appId: firebaseConfig.appId ? "set" : "MISSING",
-});
+if (process.env.NODE_ENV !== "production") {
+  console.log("[Firebase] Config loaded:", {
+    apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 8) + "..." : "MISSING",
+    authDomain: firebaseConfig.authDomain || "MISSING",
+    projectId: firebaseConfig.projectId || "MISSING",
+    appId: firebaseConfig.appId ? "set" : "MISSING",
+  });
+}
 
 const firestoreDatabaseId = String(
   import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || "(default)",
