@@ -65,6 +65,23 @@ export function aggregateTransactionsByMonth(
     else byMonth[key].expenses += t.amount;
   }
 
+  // Zero-fill every month across the observed span so months without activity
+  // are represented (and counted in the averaging divisor) rather than dropped.
+  // This keeps the projected monthly rate correct when history has gaps.
+  const keys = Object.keys(byMonth).sort();
+  if (keys.length > 1) {
+    const [firstY, firstM] = keys[0].split('-').map(Number);
+    const [lastY, lastM] = keys[keys.length - 1].split('-').map(Number);
+    const startIdx = firstY * 12 + (firstM - 1);
+    const endIdx = lastY * 12 + (lastM - 1);
+    for (let idx = startIdx; idx <= endIdx; idx++) {
+      const y = Math.floor(idx / 12);
+      const m = (idx % 12) + 1;
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      if (!byMonth[key]) byMonth[key] = { income: 0, expenses: 0 };
+    }
+  }
+
   return Object.entries(byMonth)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({ month, ...v }));
@@ -78,13 +95,24 @@ export function generateMonthlyForecast(
     return [];
   }
 
-  const avgIncome = historicalData.reduce((s, d) => s + d.income, 0) / historicalData.length;
-  const avgExpenses = historicalData.reduce((s, d) => s + d.expenses, 0) / historicalData.length;
+  // Exclude the partial current month and divide by the full calendar span
+  // (gap months are zero-filled by aggregateTransactionsByMonth) instead of the
+  // count of active months. This matches the cashflow forecast path and keeps
+  // the projected monthly rate consistent and not over-stated.
+  const currentMonth = format(new Date(), 'yyyy-MM');
+  const completed = historicalData.filter((d) => d.month !== currentMonth);
+  if (!completed.length) {
+    return [];
+  }
+  const span = completed.length;
+
+  const avgIncome = completed.reduce((s, d) => s + d.income, 0) / span;
+  const avgExpenses = completed.reduce((s, d) => s + d.expenses, 0) / span;
   const incomeVariance = Math.sqrt(
-    historicalData.reduce((s, d) => s + Math.pow(d.income - avgIncome, 2), 0) / historicalData.length
+    completed.reduce((s, d) => s + Math.pow(d.income - avgIncome, 2), 0) / span
   );
   const expenseVariance = Math.sqrt(
-    historicalData.reduce((s, d) => s + Math.pow(d.expenses - avgExpenses, 2), 0) / historicalData.length
+    completed.reduce((s, d) => s + Math.pow(d.expenses - avgExpenses, 2), 0) / span
   );
 
   // Deterministic forecast: identical history always produces the same
