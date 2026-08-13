@@ -1212,9 +1212,11 @@ CRITICAL RULES:
             writeErrorMessage.includes("missing or insufficient permissions");
 
           // The PDF was already uploaded to Storage before these writes began.
-          // Delete it on ANY Firestore write failure so a failed pipeline never
-          // leaves a permanent orphaned object (with uploadedBy metadata) that
-          // cannot be downloaded (no owning Firestore record) or swept later.
+          // On a non-permission Firestore failure the pipeline fails, so the
+          // object is deleted to avoid a permanent orphan. On a permission-
+          // denied failure we fall back to a local-fallback record instead and
+          // intentionally keep the Storage object so the owner can still
+          // download their source PDF (see /api/document-download-url).
           const cleanupUploadedPdf = async () => {
             try {
               const bucket = getStorage().bucket();
@@ -1234,7 +1236,9 @@ CRITICAL RULES:
           };
 
           if (isPermissionDenied) {
-            await cleanupUploadedPdf();
+            // Local-fallback: keep the uploaded Storage object so the owner can
+            // download the source PDF (Issue #1029). Orphan cleanup for these
+            // records is handled when the local document is deleted.
             documentId = `local-${ownerId}-${now.getTime()}`;
             console.warn(
               "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
@@ -1321,7 +1325,7 @@ CRITICAL RULES:
   // Prevents permanent URL access to sensitive financial documents
   app.post("/api/document-download-url", async (req: any, res) => {
     try {
-      const { storagePath } = req.body;
+      const { storagePath, documentId } = req.body;
 
       if (!storagePath || typeof storagePath !== "string") {
         return res.status(400).json({
@@ -1399,23 +1403,33 @@ CRITICAL RULES:
         // A purged record must not keep yielding working signed URLs, so the
         // storage object must have a live Firestore document (with a matching
         // owner) before we issue a URL.
-        const ownerDocs = await getFirestore(firestoreDatabaseId)
-          .collection("documents")
-          .where("storagePath", "==", normalizedPath)
-          .limit(1)
-          .get();
-        const ownerDoc = ownerDocs.docs[0];
-        if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
-          console.warn(
-            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
-          );
-          return res.status(403).json({
-            error: {
-              stage: "AUTHORIZATION",
-              reason: "You do not have access to this document",
-              recommendation: "Verify the document belongs to your account.",
-            },
-          });
+        //
+        // Local-fallback documents (created when a server Firestore write was
+        // permission-denied) intentionally have no Firestore record, so the
+        // owning-record check cannot apply to them. Ownership is already proven
+        // above via the storagePath namespace and the storage object's
+        // uploadedBy metadata. (Issue #1029)
+        const isLocalFallbackDoc =
+          typeof documentId === "string" && documentId.startsWith("local-");
+        if (!isLocalFallbackDoc) {
+          const ownerDocs = await getFirestore(firestoreDatabaseId)
+            .collection("documents")
+            .where("storagePath", "==", normalizedPath)
+            .limit(1)
+            .get();
+          const ownerDoc = ownerDocs.docs[0];
+          if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
+            console.warn(
+              `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
+            );
+            return res.status(403).json({
+              error: {
+                stage: "AUTHORIZATION",
+                reason: "You do not have access to this document",
+                recommendation: "Verify the document belongs to your account.",
+              },
+            });
+          }
         }
 
         const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);
