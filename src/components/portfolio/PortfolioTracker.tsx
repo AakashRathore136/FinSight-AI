@@ -212,6 +212,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
         avgCost: cost,
         currentPrice: price,
         currency: currency || 'USD',
+        portfolioId: portfolioId || undefined,
       });
       if (holding) {
         setHoldings((prev) => [holding, ...prev]);
@@ -242,6 +243,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       const result = await addTransaction(user.uid, {
         holdingId,
         symbol: holdings.find((h) => h.id === holdingId)?.symbol || '',
+        portfolioId,
         assetClass: holdings.find((h) => h.id === holdingId)?.assetClass,
         type: txType,
         quantity: q,
