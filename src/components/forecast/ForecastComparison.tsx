@@ -167,18 +167,30 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
   }, [filteredMonthly]);
 
   const totalProjectedIncome = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.income, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.income, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const totalProjectedExpenses = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.expenses, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.expenses, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const totalNet = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.net, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.net, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const handleExport = () => {
