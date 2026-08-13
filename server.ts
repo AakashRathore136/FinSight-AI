@@ -234,7 +234,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     summary: sanitizeString(String(payload.summary || "")),
     key_metrics:
       typeof payload.key_metrics === "object" && payload.key_metrics
-        ? payload.key_metrics
+        ? sanitizeDeep(payload.key_metrics)
         : {},
     risk_assessment: Array.isArray(payload.risk_assessment)
       ? payload.risk_assessment.map((item: any) => {
@@ -389,6 +389,19 @@ function buildFallbackAnalysis(
 
 function sanitizeString(text: string): string {
   return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
+
+/** Recursively sanitize string leaves of an arbitrary value (objects/arrays)
+ * so untrusted model output rendered in the UI cannot carry HTML/script. */
+function sanitizeDeep(value: any): any {
+  if (typeof value === "string") return sanitizeString(value);
+  if (Array.isArray(value)) return value.map(sanitizeDeep);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [sanitizeString(k), sanitizeDeep(v)]),
+    );
+  }
+  return value;
 }
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
