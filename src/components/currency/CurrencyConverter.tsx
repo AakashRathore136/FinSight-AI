@@ -46,6 +46,7 @@ export function CurrencyConverter({
           base: 'USD',
           date: new Date().toISOString().split('T')[0],
           rates: {},
+          source: 'fallback',
         });
       } finally {
         setLoading(false);
@@ -177,7 +178,9 @@ export function CurrencyConverter({
           </div>
           {rates && (
             <p className="text-[10px] text-slate-500 mt-3 font-medium">
-              Rates updated: {rates.date} via Frankfurter API
+              {rates.source === 'fallback'
+                ? `Using fallback rates (snapshot ${rates.date}) — live fetch failed`
+                : `Rates updated: ${rates.date} via Frankfurter API`}
             </p>
           )}
         </div>

@@ -126,7 +126,12 @@ export interface ContributionResult {
 export function trackContribution(
   fund: EmergencyFund,
   amount: number,
-  note?: string
+  note?: string,
+  /** Optional override for monthlyContribution. Optimistic callers should pass
+   * the freshest value known to them so the estimated completion date computed
+   * here matches what the server transaction (`addContribution`) will compute
+   * from the latest Firestore snapshot. (Issue #1038) */
+  monthlyContributionOverride?: number,
 ): ContributionResult {
   if (!fund || Number.isNaN(amount) || amount <= 0) {
     return { fund: null, contribution: null };
@@ -140,7 +145,10 @@ export function trackContribution(
   };
 
   const currentAmount = Math.max(0, fund.currentAmount + contribution.amount);
-  const monthlyContribution = fund.monthlyContribution || 0;
+  const monthlyContribution =
+    typeof monthlyContributionOverride === "number" && !Number.isNaN(monthlyContributionOverride)
+      ? monthlyContributionOverride
+      : fund.monthlyContribution || 0;
   const estimatedCompletionDate = estimateCompletionDate(
     fund.targetAmount,
     currentAmount,

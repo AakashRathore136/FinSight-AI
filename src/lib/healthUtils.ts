@@ -121,7 +121,12 @@ export function calculateSavingsScore(transactions: Transaction[]): number {
 
 export function calculateBudgetAdherence(
   transactions: Transaction[],
-  budgetCategories: { name: string; monthlyLimit: number }[]
+  budgetCategories: Array<{
+    name: string;
+    monthlyLimit: number;
+    rolledOverAmount?: number;
+    rolloverEnabled?: boolean;
+  }>
 ): number {
   if (budgetCategories.length === 0) return 70;
 
@@ -138,8 +143,14 @@ export function calculateBudgetAdherence(
 
   budgetCategories.forEach((cat) => {
     const spent = categorySpend.get(cat.name) || 0;
-    if (cat.monthlyLimit <= 0) return;
-    const ratio = spent / cat.monthlyLimit;
+    // The effective limit includes any surplus carried over from a previous month.
+    // Without this, rolled-over funds are persisted but never counted as available
+    // budget, so the rollover feature becomes a no-op for adherence scoring.
+    const effectiveLimit = cat.rolloverEnabled
+      ? cat.monthlyLimit + Math.max(0, cat.rolledOverAmount || 0)
+      : cat.monthlyLimit;
+    if (effectiveLimit <= 0) return;
+    const ratio = spent / effectiveLimit;
     // Monotonic adherence: every step over budget must strictly lower the
     // score. A single linear penalty (100 - ratio * 20, capped at 0) keeps
     // the curve continuous and monotonically decreasing, so spending 105% of
