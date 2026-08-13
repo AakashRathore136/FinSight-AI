@@ -38,6 +38,13 @@ const DEFAULT_AGENT_MODEL =
 
 const MAX_ITERATIONS = 4;
 
+// Time budgets so a hung/slow HF Inference API can never block the agent loop
+// indefinitely (matching the AbortController pattern used in server.ts and
+// api/process.ts). On timeout the model call resolves to null and callers fall
+// back to the deterministic keyword router in chatUtils.ts. (Issue #1036)
+const MODEL_CALL_TIMEOUT_MS = 30_000;
+const AGENT_LOOP_DEADLINE_MS = 45_000;
+
 export interface AgentStep {
   thought: string;
   tool?: string;
@@ -264,20 +271,31 @@ async function callModel(
 ): Promise<string | null> {
   const token = getHfToken();
   if (!token) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const hf = new HfInference(token);
-    const completion = await hf.chatCompletion({
-      model: DEFAULT_AGENT_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ] as any,
-      max_tokens: 800,
-      temperature: 0.2,
-    });
+    // Abort the HF request if the model does not respond within the per-call
+    // budget. Without this a hung API call would block the agent loop until
+    // the platform function/request timeout. (Issue #1036)
+    const controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), MODEL_CALL_TIMEOUT_MS);
+    const completion = await hf.chatCompletion(
+      {
+        model: DEFAULT_AGENT_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ] as any,
+        max_tokens: 800,
+        temperature: 0.2,
+      },
+      { signal: controller.signal },
+    );
     return (completion as any)?.choices?.[0]?.message?.content ?? null;
   } catch {
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -307,7 +325,12 @@ export async function runAgentLoop(
   const steps: AgentStep[] = [];
   let chartData: any[] | undefined;
 
+  // Whole-loop deadline: even if every call stays within its own budget, the
+  // sequence of tool calls must not run forever. (Issue #1036)
+  const deadline = Date.now() + AGENT_LOOP_DEADLINE_MS;
+
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    if (Date.now() > deadline) return null;
     const reply = await callModel(systemPrompt, messages);
     if (!reply) return null;
 
