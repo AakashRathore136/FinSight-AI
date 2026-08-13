@@ -770,6 +770,7 @@ full_report MUST be at least 300 words.`;
     };
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
+    let firestorePersisted = false;
 
     if (admin.apps.length) {
       try {
@@ -795,10 +796,33 @@ full_report MUST be at least 300 words.`;
           latestAnalysis: analysisPayload,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        firestorePersisted = true;
       } catch (writeErr: any) {
         console.warn("[analyze] Firestore server write skipped:", writeErr?.message);
         documentId = `local-${ownerId}-${now.getTime()}`;
+        // The PDF was already uploaded to Storage above, but without a
+        // Firestore record it can never be downloaded, so clean it up.
+        if (storagePath) {
+          try {
+            await admin.storage().bucket().file(storagePath).delete();
+            console.log(`STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted ${storagePath}`);
+          } catch (cleanupErr: any) {
+            if (cleanupErr?.code !== 404) console.error("Cleanup failed:", cleanupErr);
+          }
+        }
       }
+    }
+
+    if (!firestorePersisted) {
+      res.status(500).json({
+        error: {
+          stage: "FIRESTORE_WRITE_FAILED",
+          reason:
+            "Document could not be persisted to Firestore. The uploaded PDF was removed from Storage.",
+          recommendation: "Please try again. If the problem persists, contact support.",
+        },
+      });
+      return;
     }
 
     res.status(200).json({
