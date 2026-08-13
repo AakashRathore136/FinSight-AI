@@ -25,8 +25,15 @@ export function calculateMonthlyContribution(
   const remaining = targetAmount - currentAmount;
   if (remaining <= 0) return 0;
 
+  // Guard against empty/invalid deadlines so we never return NaN downstream.
+  if (!deadline) return NaN;
   const deadlineDate = new Date(deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return NaN;
+
   const now = new Date();
+  // A past-due deadline is "overdue": no monthly contribution applies.
+  if (differenceInDays(deadlineDate, now) <= 0) return 0;
+
   const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
 
   return Math.ceil(remaining / monthsRemaining);
@@ -53,8 +60,18 @@ export function generateContributionSuggestions(
   const remaining = targetAmount - currentAmount;
   if (remaining <= 0) return [{ label: 'Goal reached', amount: 0 }];
 
+  // Guard against empty/invalid deadlines; return a NaN sentinel (consistent
+  // with calculateMonthlyContribution) instead of poisoning formatCurrency.
+  if (!deadline) return [{ label: 'No deadline set', amount: NaN }];
   const deadlineDate = new Date(deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return [{ label: 'No deadline set', amount: NaN }];
+
   const now = new Date();
+  if (differenceInDays(deadlineDate, now) <= 0) {
+    // Overdue: suggest a one-time lump sum distinct from a monthly figure.
+    return [{ label: 'Overdue — lump sum', amount: Math.ceil(remaining) }];
+  }
+
   const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
   const baseMonthly = Math.ceil(remaining / monthsRemaining);
 
