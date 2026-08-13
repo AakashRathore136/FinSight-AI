@@ -40,7 +40,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/ta
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
 import { Select } from '@/src/components/ui/select';
 import { cn, formatCurrency } from '@/src/lib/utils';
-import { formatCurrencyDisplay } from '@/src/lib/currencyUtils';
+import { formatCurrencyDisplay, fetchExchangeRates, convertAmount } from '@/src/lib/currencyUtils';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import { handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   type Holding,
@@ -75,6 +76,23 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [performanceHistory, setPerformanceHistory] = useState<PortfolioSnapshot[]>([]);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+
+  const baseCurrency = useBaseCurrency(user);
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchExchangeRates(baseCurrency)
+      .then((res) => {
+        if (!cancelled) setRates(res.rates);
+      })
+      .catch(() => {
+        /* keep rates null → totals fall back to local-currency values */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseCurrency]);
 
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
@@ -152,12 +170,29 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     return () => { active = false; };
   }, [user, portfolioId, activeTab, transactions, holdings]);
 
-  const totalValue = useMemo(() => calculateTotalValue(holdings), [holdings]);
-  const totalCost = useMemo(() => holdings.reduce((s, h) => s + h.quantity * h.avgCost, 0), [holdings]);
+  const totalValue = useMemo(
+    () => calculateTotalValue(holdings, rates ?? undefined, baseCurrency),
+    [holdings, rates, baseCurrency],
+  );
+  const totalCost = useMemo(
+    () =>
+      holdings.reduce((s, h) => {
+        const local = h.quantity * h.avgCost;
+        if (!rates || h.currency === baseCurrency) return s + local;
+        const converted = h.currency
+          ? convertAmount(local, h.currency, baseCurrency, rates)
+          : null;
+        return s + (converted == null ? local : converted);
+      }, 0),
+    [holdings, rates, baseCurrency],
+  );
   const profitLoss = useMemo(() => {
     return holdings.reduce((sum, h) => sum + calculateProfitLoss(h).value, 0);
   }, [holdings]);
-  const allocation = useMemo(() => calculateAllocation(holdings), [holdings]);
+  const allocation = useMemo(
+    () => calculateAllocation(holdings, rates ?? undefined, baseCurrency),
+    [holdings, rates, baseCurrency],
+  );
 
   const handleAddHolding = async () => {
     if (!user) return;
@@ -207,6 +242,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       const result = await addTransaction(user.uid, {
         holdingId,
         symbol: holdings.find((h) => h.id === holdingId)?.symbol || '',
+        assetClass: holdings.find((h) => h.id === holdingId)?.assetClass,
         type: txType,
         quantity: q,
         price,

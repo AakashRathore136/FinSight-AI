@@ -69,6 +69,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [selectedSuggestionLevel, setSelectedSuggestionLevel] = useState<'Recommended' | 'Conservative' | 'Aggressive'>('Recommended');
   const notifiedGoalIds = useRef(new Set<string>());
   const updatingGoalIds = useRef(new Set<string>());
 
@@ -287,15 +288,19 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
           selectedGoal.currentAmount,
           selectedGoal.deadline
         ),
-        timeline: generateTimelineProjection(
-          selectedGoal.targetAmount,
-          selectedGoal.currentAmount,
-          calculateMonthlyContribution(
+        timeline: (() => {
+          const suggestions = generateContributionSuggestions(
             selectedGoal.targetAmount,
             selectedGoal.currentAmount,
             selectedGoal.deadline
-          )
-        ),
+          );
+          const selected = suggestions.find((s) => s.label === selectedSuggestionLevel) ?? suggestions[0];
+          return generateTimelineProjection(
+            selectedGoal.targetAmount,
+            selectedGoal.currentAmount,
+            selected.amount
+          );
+        })(),
       }
     : null;
 
@@ -671,9 +676,14 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                 </h4>
                 <div className="grid grid-cols-3 gap-3">
                   {goalDetail.suggestions.map((suggestion) => (
-                    <div
+                    <button
                       key={suggestion.label}
-                      className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-3 text-center"
+                      onClick={() => setSelectedSuggestionLevel(suggestion.label)}
+                      className={`rounded-xl p-3 text-center transition-all ${
+                        selectedSuggestionLevel === suggestion.label
+                          ? 'bg-indigo-500/20 border-indigo-500 shadow-[0_0_0_1px]_indigo-500/50'
+                          : 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600/50'
+                      }`}
                     >
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
                         {suggestion.label}
@@ -682,7 +692,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                         {formatCurrency(suggestion.amount, baseCurrency)}
                       </p>
                       <p className="text-[10px] text-slate-500">/month</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

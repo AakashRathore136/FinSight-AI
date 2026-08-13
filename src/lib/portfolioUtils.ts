@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { toDate } from './utils';
+import { convertAmount } from './currencyUtils';
 
 export type AssetClass = 'equities' | 'fixed_income' | 'real_estate' | 'commodities' | 'crypto' | 'cash';
 
@@ -108,6 +109,24 @@ export interface TransactionInput {
   fees: number;
   notes?: string;
   date: string;
+  /** Optional asset class for the new holding created by a first buy. When
+   * omitted, addTransaction infers it from the symbol. (Issue #1030) */
+  assetClass?: AssetClass;
+}
+
+// Well-known symbols that are not equities. Anything unrecognized defaults to
+// 'equities' so stock buys keep working without an explicit asset class.
+const CRYPTO_SYMBOLS = new Set([
+  'BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'LINK', 'AVAX', 'MATIC',
+  'LTC', 'BNB', 'USDT', 'USDC', 'UNI', 'AAVE', 'SHIB', 'XLM', 'TRX', 'TON',
+]);
+
+/** Infers an asset class for a symbol (e.g. BTC → crypto) when a transaction
+ * does not provide one. Defaults to 'equities'. (Issue #1030) */
+export function inferAssetClass(symbol: string): AssetClass {
+  const upper = (symbol || '').trim().toUpperCase();
+  if (CRYPTO_SYMBOLS.has(upper)) return 'crypto';
+  return 'equities';
 }
 
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -135,19 +154,53 @@ export function calculateTotalValue(holdings: Holding[]): number {
   return holdings.reduce((sum, h) => sum + h.quantity * h.currentPrice, 0);
 }
 
+/**
+ * Value of a single holding expressed in the user's base currency. When
+ * `rates` and `baseCurrency` are supplied each holding is converted via
+ * `convertAmount` (USD-base FX table) before it is summed, so multi-currency
+ * portfolios no longer treat every local-currency amount as if it were the
+ * base currency. Holdings whose currency is missing from the rate table fall
+ * back to their raw local value rather than being dropped, so totals stay
+ * stable when a rate is temporarily unavailable.
+ */
+function holdingBaseValue(
+  holding: Holding,
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): number {
+  const local = holding.quantity * holding.currentPrice;
+  if (!rates || !baseCurrency || !holding.currency || holding.currency === baseCurrency) {
+    return local;
+  }
+  const converted = convertAmount(local, holding.currency, baseCurrency, rates);
+  return converted == null ? local : converted;
+}
+
+export function calculateTotalValue(
+  holdings: Holding[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): number {
+  return holdings.reduce((sum, h) => sum + holdingBaseValue(h, rates, baseCurrency), 0);
+}
+
 export function calculateProfitLoss(holding: Holding): { value: number; percent: number } {
   const value = (holding.currentPrice - holding.avgCost) * holding.quantity;
   const percent = holding.avgCost > 0 ? ((holding.currentPrice - holding.avgCost) / holding.avgCost) * 100 : 0;
   return { value, percent };
 }
 
-export function calculateAllocation(holdings: Holding[]): AssetAllocation[] {
-  const totalValue = calculateTotalValue(holdings);
+export function calculateAllocation(
+  holdings: Holding[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): AssetAllocation[] {
+  const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
   if (totalValue === 0) return [];
 
   const classMap = new Map<AssetClass, number>();
   holdings.forEach((h) => {
-    const value = h.quantity * h.currentPrice;
+    const value = holdingBaseValue(h, rates, baseCurrency);
     classMap.set(h.assetClass, (classMap.get(h.assetClass) || 0) + value);
   });
 
@@ -160,9 +213,16 @@ export function calculateAllocation(holdings: Holding[]): AssetAllocation[] {
     .sort((a, b) => b.value - a.value);
 }
 
-export function calculatePerformance(holdings: Holding[]): PerformanceMetrics {
-  const totalValue = calculateTotalValue(holdings);
-  const totalCost = holdings.reduce((sum, h) => sum + h.avgCost * h.quantity, 0);
+export function calculatePerformance(
+  holdings: Holding[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): PerformanceMetrics {
+  const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
+  const totalCost = holdings.reduce(
+    (sum, h) => sum + holdingBaseValue({ ...h, currentPrice: h.avgCost }, rates, baseCurrency),
+    0,
+  );
   const totalProfitLoss = totalValue - totalCost;
   const totalProfitLossPercent = totalCost > 0 ? (totalProfitLoss / totalCost) * 100 : 0;
 
@@ -191,17 +251,25 @@ export function calculatePerformance(holdings: Holding[]): PerformanceMetrics {
   };
 }
 
-export function generatePortfolioSummary(holdings: Holding[], transactions: Transaction[]): PortfolioSummary {
-  const metrics = calculatePerformance(holdings);
-  const allocation = calculateAllocation(holdings);
+export function generatePortfolioSummary(
+  holdings: Holding[],
+  transactions: Transaction[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): PortfolioSummary {
+  const metrics = calculatePerformance(holdings, rates, baseCurrency);
+  const allocation = calculateAllocation(holdings, rates, baseCurrency);
 
   const topHoldings = holdings
-    .map((h) => ({
-      symbol: h.symbol,
-      name: h.name,
-      value: h.quantity * h.currentPrice,
-      weight: metrics.totalValue > 0 ? (h.quantity * h.currentPrice) / metrics.totalValue : 0,
-    }))
+    .map((h) => {
+      const value = holdingBaseValue(h, rates, baseCurrency);
+      return {
+        symbol: h.symbol,
+        name: h.name,
+        value,
+        weight: metrics.totalValue > 0 ? value / metrics.totalValue : 0,
+      };
+    })
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 

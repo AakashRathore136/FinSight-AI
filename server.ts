@@ -87,6 +87,8 @@ type AnalysisResponse = {
   sentiment_score: number;
   entities: string[];
   full_report: string;
+  citations?: Record<string, any>;
+  grounding?: any;
 };
 
 const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
@@ -821,47 +823,22 @@ async function startServer() {
         const ownerId = req.ownerId as string;
 
         // Extract text from PDF buffer
-
         let extractedText = "";
-        {
-          const parser = new PDFParse({ data: file.buffer });
-          const parserDestroyTimeout = setTimeout(() => {
-            console.warn(
-              "PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing",
-            );
-          }, 5000);
-
-          try {
-            const parsed = await parser.getText();
-            extractedText = (parsed?.text || "").trim();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (extractError: any) {
-            console.error(
-              "PDF_EXTRACTION_ERROR: Failed to parse PDF",
-              extractError?.message || extractError,
-            );
-            throw new PipelineError(
-              "PDF_EXTRACTION",
-              `Failed to parse PDF: ${extractError?.message || "Unknown error"}`,
-              "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF.",
-            );
-          } finally {
-            clearTimeout(parserDestroyTimeout);
-            try {
-              await Promise.race([
-                parser.destroy(),
-                new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error("destroy timeout")), 5000),
-                ),
-              ]);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (destroyError: any) {
-              console.warn(
-                "PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser",
-                destroyError?.message || destroyError,
-              );
-            }
-          }
+        let extractedDoc;
+        try {
+          const { extractPages } = await import("./src/lib/verification/extractPages.js");
+          extractedDoc = await extractPages(file.buffer);
+          extractedText = extractedDoc.fullText;
+        } catch (extractError: any) {
+          console.error(
+            "PDF_EXTRACTION_ERROR: Failed to parse PDF",
+            extractError?.message || extractError,
+          );
+          throw new PipelineError(
+            "PDF_EXTRACTION",
+            `Failed to parse PDF: ${extractError?.message || "Unknown error"}`,
+            "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF.",
+          );
         }
 
 
@@ -971,7 +948,7 @@ CRITICAL RULES:
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
-            const timeoutMs = 60_000;
+            const timeoutMs = 120_000;
             timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
@@ -1093,6 +1070,10 @@ CRITICAL RULES:
         // Signed URLs will be generated on-demand with short expiration (15 minutes)
         const safeFilename = sanitizeStorageFilename(file.originalname);
         const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+        // Real Storage object URL, derived after upload. Included in docData and
+        // every response record so client-side Firestore fallback writes pass
+        // firestore.rules isValidDocument (requires a https `fileUrl`).
+        let fileUrl = "";
 
         // Upload file to Firebase Storage before writing document metadata
         if (admin.apps.length) {
@@ -1111,6 +1092,11 @@ CRITICAL RULES:
             console.log(
               `FIREBASE_STORAGE_UPLOAD_COMPLETE: storagePath=${storagePath}, fileSize=${file.size}`,
             );
+            // Derive the real object URL so every returned record (including
+            // local-fallback records) carries a valid `fileUrl`. Without it a
+            // client-side Firestore fallback write is rejected by
+            // firestore.rules isValidDocument (requires `fileUrl`). (Issue #1028)
+            fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media`;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (storageError: any) {
             console.error(
@@ -1133,11 +1119,38 @@ CRITICAL RULES:
 
 
 
+        // Run grounding analysis if enabled or by default
+        let citations: any = {};
+        let grounding: any = null;
+        let claims: any[] = [];
+        try {
+          const { getPageOffsets } = await import("./src/lib/verification/extractPages.js");
+          const { chunkFinancialDocument } = await import("./src/lib/rag/textChunker.js");
+          const { verifyDocumentAnalysis } = await import("./src/lib/verification/index.js");
+
+          const pageOffsets = getPageOffsets(extractedDoc?.pages || [""]);
+          const chunks = chunkFinancialDocument(extractedText, { pageOffsets });
+
+          const groundingResult = await verifyDocumentAnalysis(
+            validPayload,
+            file.buffer,
+            chunks,
+            { hfClient, enableAdjudication: true }
+          );
+
+          citations = groundingResult.citations || {};
+          grounding = groundingResult.grounding || null;
+          claims = groundingResult.claims || [];
+        } catch (groundErr: any) {
+          console.error("Grounding analysis failed, proceeding without verification metadata:", groundErr?.message || groundErr);
+        }
+
         const docData: any = {
           ownerId,
           fileName: file.originalname,
           fileType: file.mimetype,
           fileSize: file.size,
+          fileUrl,
           storagePath,
           status: "completed",
           riskLevel,
@@ -1147,6 +1160,9 @@ CRITICAL RULES:
 
         const analysisDoc = {
           ...validPayload,
+          citations,
+          grounding,
+          claims,
           documentId: "",
           ownerId,
           riskLevel,
@@ -1206,9 +1222,11 @@ CRITICAL RULES:
             writeErrorMessage.includes("missing or insufficient permissions");
 
           // The PDF was already uploaded to Storage before these writes began.
-          // Delete it on ANY Firestore write failure so a failed pipeline never
-          // leaves a permanent orphaned object (with uploadedBy metadata) that
-          // cannot be downloaded (no owning Firestore record) or swept later.
+          // On a non-permission Firestore failure the pipeline fails, so the
+          // object is deleted to avoid a permanent orphan. On a permission-
+          // denied failure we fall back to a local-fallback record instead and
+          // intentionally keep the Storage object so the owner can still
+          // download their source PDF (see /api/document-download-url).
           const cleanupUploadedPdf = async () => {
             try {
               const bucket = getStorage().bucket();
@@ -1228,7 +1246,9 @@ CRITICAL RULES:
           };
 
           if (isPermissionDenied) {
-            await cleanupUploadedPdf();
+            // Local-fallback: keep the uploaded Storage object so the owner can
+            // download the source PDF (Issue #1029). Orphan cleanup for these
+            // records is handled when the local document is deleted.
             documentId = `local-${ownerId}-${now.getTime()}`;
             console.warn(
               "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
@@ -1315,7 +1335,7 @@ CRITICAL RULES:
   // Prevents permanent URL access to sensitive financial documents
   app.post("/api/document-download-url", async (req: any, res) => {
     try {
-      const { storagePath } = req.body;
+      const { storagePath, documentId } = req.body;
 
       if (!storagePath || typeof storagePath !== "string") {
         return res.status(400).json({
@@ -1393,23 +1413,33 @@ CRITICAL RULES:
         // A purged record must not keep yielding working signed URLs, so the
         // storage object must have a live Firestore document (with a matching
         // owner) before we issue a URL.
-        const ownerDocs = await getFirestore(firestoreDatabaseId)
-          .collection("documents")
-          .where("storagePath", "==", normalizedPath)
-          .limit(1)
-          .get();
-        const ownerDoc = ownerDocs.docs[0];
-        if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
-          console.warn(
-            `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
-          );
-          return res.status(403).json({
-            error: {
-              stage: "AUTHORIZATION",
-              reason: "You do not have access to this document",
-              recommendation: "Verify the document belongs to your account.",
-            },
-          });
+        //
+        // Local-fallback documents (created when a server Firestore write was
+        // permission-denied) intentionally have no Firestore record, so the
+        // owning-record check cannot apply to them. Ownership is already proven
+        // above via the storagePath namespace and the storage object's
+        // uploadedBy metadata. (Issue #1029)
+        const isLocalFallbackDoc =
+          typeof documentId === "string" && documentId.startsWith("local-");
+        if (!isLocalFallbackDoc) {
+          const ownerDocs = await getFirestore(firestoreDatabaseId)
+            .collection("documents")
+            .where("storagePath", "==", normalizedPath)
+            .limit(1)
+            .get();
+          const ownerDoc = ownerDocs.docs[0];
+          if (!ownerDoc || ownerDoc.data()?.ownerId !== req.ownerId) {
+            console.warn(
+              `UNAUTHORIZED_DOWNLOAD_ATTEMPT: userId=${req.ownerId}, path=${normalizedPath}, reason=no owning record`,
+            );
+            return res.status(403).json({
+              error: {
+                stage: "AUTHORIZATION",
+                reason: "You do not have access to this document",
+                recommendation: "Verify the document belongs to your account.",
+              },
+            });
+          }
         }
 
         const signedUrl = await generateShortLivedSignedUrl(normalizedPath, 15 * 60 * 1000);

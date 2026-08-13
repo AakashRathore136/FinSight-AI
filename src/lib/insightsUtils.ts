@@ -13,7 +13,7 @@
  *  - Generating plain-language summaries of spending behaviour
  *  - Calculating category trends (week-over-week, month-over-month)
  */
-
+import { detectAnomalies as detectAnomaliesCanonical } from './anomalyUtils';
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
@@ -28,6 +28,7 @@ import {
 } from "date-fns";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { getDefaultCurrency, normalizeTransactionType, toDate } from "@/src/lib/utils";
+import { detectAnomalies as detectAnomaliesCore, type Anomaly } from "./anomalyUtils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -223,62 +224,60 @@ export function filterByPeriod(
  * own threshold. Categories need a minimum sample size to avoid flagging
  * noise. Returns anomaly `Insight` objects.
  */
+// Thin wrapper around the canonical anomaly detection in anomalyUtils.ts.
+// Converts Anomaly[] (with transactionId, comparisonPeriod, confidence, etc.)
+// to the Insight[] format used by the insights dashboard. (Issue #1041)
 export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
-  ignoredTransactionIds?: Set<string>,
+  ignoredTransactionIds?: Set<string>
 ): Insight[] {
-  const byCategory = new Map<string, Transaction[]>();
-  for (const tx of transactions) {
-    if (normalizeTransactionType(tx.type) !== "expense") continue;
-    if (ignoredTransactionIds?.has(tx.id)) continue;
-    const key = tx.category || "Uncategorized";
-    const list = byCategory.get(key) || [];
-    list.push(tx);
-    byCategory.set(key, list);
-  }
+  // Convert insights Transaction[] to anomalyUtils Transaction[] (compatible shape)
+  const coreTransactions = transactions.map((tx) => ({
+    id: tx.id,
+    userId: tx.userId,
+    amount: normalizeAmount(tx.amount),
+    category: tx.category,
+    description: tx.description,
+    merchant: tx.merchant,
+    date: tx.date,
+    type: tx.type,
+  } as any));
 
-  const anomalies: Insight[] = [];
-  for (const [category, list] of byCategory.entries()) {
-    if (list.length < 3) continue; // need a meaningful baseline
+  const anomalies = detectAnomaliesCore(coreTransactions);
+  const insights: Insight[] = anomalies
+    .filter((a) => a.type === "large_transaction") // insights only surfaces large-transaction anomalies
+    .map((a) => ({
+      id: a.id || uid(),
+      userId: a.userId,
+      type: "anomaly" as const,
+      category: a.category,
+      title: a.description.split(".")[0] || `Unusual ${a.category} charge`,
+      description: a.description,
+      severity: a.severity === "critical" ? "high" : a.severity,
+      amount: a.amount,
+      period: a.comparisonPeriod || format(toDate(a.date), "MMM d, yyyy"),
+      createdAt: new Date().toISOString(),
+    }));
 
-    for (const tx of list) {
-      const amount = normalizeAmount(tx.amount);
-      // Leave-one-out baseline: the candidate transaction is excluded from the
-      // average it is compared against, so a dominant expense is not judged
-      // against a baseline it inflated itself.
-      const avg = (total(list) - amount) / (list.length - 1);
-      if (avg <= 0) continue;
-      const ratio = amount / avg;
-      if (ratio >= threshold) {
-        const severity: Severity =
-          ratio >= 4 ? "high" : ratio >= 3 ? "medium" : "low";
-        const d = toDate(tx.date);
-        const label = tx.merchant || tx.description || category;
-        anomalies.push({
-          id: uid(),
-          userId,
-          type: "anomaly",
-          category,
-          title: `Unusual ${category} charge`,
-          description:
-            `A ${formatCurrency(amount)} transaction${
-              tx.merchant ? ` at ${tx.merchant}` : ""
-            } is ${ratio.toFixed(1)}x your typical ${category} spend of ` +
-            `${formatCurrency(avg)}. Review "${label}" to confirm it's expected.`,
-          severity,
-          amount,
-          period: d ? format(d, "MMM d, yyyy") : "Recent",
-          createdAt: new Date().toISOString(),
-        });
-      }
-    }
-  }
+  return insights.sort((a, b) => b.amount - a.amount);
+  const rawAnomalies = detectAnomaliesCanonical(transactions);
 
-  return anomalies.sort((a, b) => b.amount - a.amount);
+  return rawAnomalies.map((item, idx) => {
+    const anomalyId = `anomaly-${idx}-${Date.now()}`;
+    return {
+      id: anomalyId,
+      type: 'anomaly' as const,
+      title: 'description' in item && typeof item.description === 'string'
+        ? item.description
+        : 'Transaction Anomaly Detected',
+      description: item.description || 'Anomalous financial pattern detected.',
+      severity: (item.severity as 'low' | 'medium' | 'high') || 'medium',
+      date: item.date ? new Date(item.date) : new Date(),
+    };
+  }).filter((item) => !ignoredTransactionIds?.has(item.id));
 }
-
 // ---------------------------------------------------------------------------
 // 3. Savings opportunities
 // ---------------------------------------------------------------------------
@@ -664,8 +663,10 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(expenseTransactions, userId),
-    opportunities: identifyOpportunities(expenseTransactions, userId),
+    // Detect over the full transaction set (not just expenses) so ignored
+    // transactions are excluded consistently. The earlier expense-scoped pair
+    // was dead code: duplicate keys in an object literal keep only the last
+    // assignment, so the all-transactions computation is the intended one.
     anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
