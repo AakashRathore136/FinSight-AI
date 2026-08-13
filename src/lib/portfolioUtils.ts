@@ -356,13 +356,14 @@ export async function addTransaction(userId: string, input: TransactionInput): P
                 quantity
               : existing.avgCost || 0;
 
-          tx.update(holdingRef, {
+          const update: Record<string, unknown> = {
             quantity,
             avgCost,
             portfolioId: input.portfolioId,
-            currentPrice: input.price,
             updatedAt: serverTimestamp(),
-          });
+          };
+          if (input.type === "buy") update.currentPrice = input.price;
+          tx.update(holdingRef, update);
         }
 
         resolvedHoldingId = holdingRef.id;
