@@ -220,7 +220,7 @@ export function AnalysisList({ type, user, onSelect }: any) {
             "Content-Type": "application/json",
             ...headers,
           },
-          body: JSON.stringify({ storagePath }),
+          body: JSON.stringify({ storagePath, documentId: id }),
         },
         { timeout: 30000 },
       );

@@ -242,6 +242,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
       const result = await addTransaction(user.uid, {
         holdingId,
         symbol: holdings.find((h) => h.id === holdingId)?.symbol || '',
+        assetClass: holdings.find((h) => h.id === holdingId)?.assetClass,
         type: txType,
         quantity: q,
         price,

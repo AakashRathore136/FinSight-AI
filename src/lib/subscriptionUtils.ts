@@ -46,6 +46,10 @@ export interface Subscription {
   isActive: boolean;
   detectedFromTransactionId?: string;
   createdAt: Date;
+  /** Charges per year derived from the observed interval at detection time.
+   * Used by the cost summary so weekly/bi-weekly cadences are not annualized
+   * with a hardcoded multiplier. (Issue #1032) */
+  annualizationFactor?: number;
 }
 
 export interface SubscriptionSummary {
@@ -235,7 +239,14 @@ export function groupTransactionsIntoSubscriptions(
 
 export function analyzeSubscriptionPattern(
   transactions: Transaction[],
-): { frequency: "monthly" | "yearly" | "weekly"; confidence: number } | null {
+): {
+  frequency: "monthly" | "yearly" | "weekly";
+  confidence: number;
+  /** Observed average interval between charges, in days. Cost annualization is
+   * derived from this so it reflects the actual cadence (e.g. bi-weekly at
+   * ~14 days) instead of assuming a fixed 52x/12x. (Issue #1032) */
+  avgIntervalDays: number;
+} | null {
   if (transactions.length < 2) return null;
 
   const sorted = [...transactions].sort(
@@ -255,14 +266,42 @@ export function analyzeSubscriptionPattern(
   const consistency = stdDev < avgInterval * 0.3 ? 1 : 0.5;
 
   if (avgInterval >= 25 && avgInterval <= 35) {
-    return { frequency: "monthly", confidence: consistency };
+    return { frequency: "monthly", confidence: consistency, avgIntervalDays: avgInterval };
   } else if (avgInterval >= 350 && avgInterval <= 380) {
-    return { frequency: "yearly", confidence: consistency };
+    return { frequency: "yearly", confidence: consistency, avgIntervalDays: avgInterval };
   } else if (avgInterval >= 5 && avgInterval <= 10) {
-    return { frequency: "weekly", confidence: consistency };
+    return { frequency: "weekly", confidence: consistency, avgIntervalDays: avgInterval };
   }
 
-  return { frequency: "monthly", confidence: 0.3 };
+  return { frequency: "monthly", confidence: 0.3, avgIntervalDays: avgInterval };
+}
+
+/** Default annualization factor (charges per year) per declared frequency. */
+function defaultAnnualizationFactor(
+  frequency: Subscription["frequency"],
+): number {
+  switch (frequency) {
+    case "weekly":
+      return 52;
+    case "monthly":
+      return 12;
+    case "yearly":
+      return 1;
+  }
+}
+
+/** Annualization factor (charges per year) for a subscription, preferring the
+ * factor captured at detection time from the actual observed interval between
+ * charges. (Issue #1032) */
+export function getAnnualizationFactor(sub: Subscription): number {
+  if (
+    typeof sub.annualizationFactor === "number" &&
+    Number.isFinite(sub.annualizationFactor) &&
+    sub.annualizationFactor > 0
+  ) {
+    return sub.annualizationFactor;
+  }
+  return defaultAnnualizationFactor(sub.frequency);
 }
 
 function advanceByFrequency(
@@ -318,20 +357,13 @@ export function calculateSubscriptionCosts(subscriptions: Subscription[]): {
 
   for (const sub of subscriptions) {
     if (!sub.isActive) continue;
-    switch (sub.frequency) {
-      case "weekly":
-        monthly += sub.amount * 4.33;
-        yearly += sub.amount * 52;
-        break;
-      case "monthly":
-        monthly += sub.amount;
-        yearly += sub.amount * 12;
-        break;
-      case "yearly":
-        monthly += sub.amount / 12;
-        yearly += sub.amount;
-        break;
-    }
+    // Annualize using the actual detected cadence (observed interval between
+    // charges) rather than a fixed 52x/12x assumption. Monthly is derived from
+    // the annualized figure so the two stay consistent. (Issue #1032)
+    const factor = getAnnualizationFactor(sub);
+    const annual = sub.amount * factor;
+    yearly += annual;
+    monthly += annual / 12;
   }
 
   return {
@@ -356,20 +388,12 @@ export function calculateCategoryGroups(
     }
 
     groups[category].count += 1;
-    switch (sub.frequency) {
-      case "weekly":
-        groups[category].monthly += sub.amount * 4.33;
-        groups[category].yearly += sub.amount * 52;
-        break;
-      case "monthly":
-        groups[category].monthly += sub.amount;
-        groups[category].yearly += sub.amount * 12;
-        break;
-      case "yearly":
-        groups[category].monthly += sub.amount / 12;
-        groups[category].yearly += sub.amount;
-        break;
-    }
+    // Annualize using the actual detected cadence (observed interval between
+    // charges) rather than a fixed 52x/12x assumption. (Issue #1032)
+    const factor = getAnnualizationFactor(sub);
+    const annual = sub.amount * factor;
+    groups[category].yearly += annual;
+    groups[category].monthly += annual / 12;
   }
 
   for (const key in groups) {
@@ -495,6 +519,7 @@ export async function fetchUserSubscriptions(
         isActive: data.isActive ?? true,
         detectedFromTransactionId: data.detectedFromTransactionId,
         createdAt: toDate(data.createdAt) || new Date(),
+        annualizationFactor: data.annualizationFactor,
       } as Subscription;
     });
   } catch (error) {
@@ -522,6 +547,11 @@ export async function detectAndSaveSubscriptions(
     if (existingNames.has(name.toLowerCase())) continue;
 
     const nextRenewal = predictNextRenewalDate(txns, analysis.frequency);
+    // Charges per year from the observed interval (e.g. ~52 for weekly, ~26
+    // for bi-weekly, ~12 for monthly). Falls back to the frequency default
+    // when absent. (Issue #1032)
+    const annualizationFactor =
+      analysis.avgIntervalDays > 0 ? 365.25 / analysis.avgIntervalDays : undefined;
 
     try {
       const id = await saveSubscription(userId, {
@@ -532,6 +562,7 @@ export async function detectAndSaveSubscriptions(
         nextRenewalDate: nextRenewal,
         isActive: true,
         detectedFromTransactionId: txns[0].id,
+        annualizationFactor,
       });
 
       createdSubs.push({
@@ -545,6 +576,7 @@ export async function detectAndSaveSubscriptions(
         isActive: true,
         detectedFromTransactionId: txns[0].id,
         createdAt: new Date(),
+        annualizationFactor,
       });
     } catch (error) {
       console.error("Error saving subscription:", error);

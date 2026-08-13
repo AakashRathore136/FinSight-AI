@@ -206,8 +206,15 @@ export function FileUpload({ user, onComplete, onCancel }: any) {
         console.error("Failed to cache analysis locally", err);
       }
 
-      // If local persistence mode was used by server, attempt client-side Firestore write as well
-      if (result?.persistenceMode === "local" && user?.uid) {
+      // If local persistence mode was used by server, attempt client-side Firestore write as well.
+      // Skip when the local record has no fileUrl: firestore.rules isValidDocument requires
+      // `fileUrl`, so the write would be rejected and the record would be lost from the cloud.
+      // (Issue #1028)
+      if (
+        result?.persistenceMode === "local" &&
+        user?.uid &&
+        result.record?.fileUrl
+      ) {
         try {
           const { db } = await import("@/src/lib/firebase");
           const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");

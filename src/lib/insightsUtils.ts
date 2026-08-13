@@ -28,6 +28,7 @@ import {
 } from "date-fns";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { getDefaultCurrency, normalizeTransactionType, toDate } from "@/src/lib/utils";
+import { detectAnomalies as detectAnomaliesCore, type Anomaly } from "./anomalyUtils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -223,12 +224,44 @@ export function filterByPeriod(
  * own threshold. Categories need a minimum sample size to avoid flagging
  * noise. Returns anomaly `Insight` objects.
  */
+// Thin wrapper around the canonical anomaly detection in anomalyUtils.ts.
+// Converts Anomaly[] (with transactionId, comparisonPeriod, confidence, etc.)
+// to the Insight[] format used by the insights dashboard. (Issue #1041)
 export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
   ignoredTransactionIds?: Set<string>
 ): Insight[] {
+  // Convert insights Transaction[] to anomalyUtils Transaction[] (compatible shape)
+  const coreTransactions = transactions.map((tx) => ({
+    id: tx.id,
+    userId: tx.userId,
+    amount: normalizeAmount(tx.amount),
+    category: tx.category,
+    description: tx.description,
+    merchant: tx.merchant,
+    date: tx.date,
+    type: tx.type,
+  } as any));
+
+  const anomalies = detectAnomaliesCore(coreTransactions);
+  const insights: Insight[] = anomalies
+    .filter((a) => a.type === "large_transaction") // insights only surfaces large-transaction anomalies
+    .map((a) => ({
+      id: a.id || uid(),
+      userId: a.userId,
+      type: "anomaly" as const,
+      category: a.category,
+      title: a.description.split(".")[0] || `Unusual ${a.category} charge`,
+      description: a.description,
+      severity: a.severity === "critical" ? "high" : a.severity,
+      amount: a.amount,
+      period: a.comparisonPeriod || format(toDate(a.date), "MMM d, yyyy"),
+      createdAt: new Date().toISOString(),
+    }));
+
+  return insights.sort((a, b) => b.amount - a.amount);
   const rawAnomalies = detectAnomaliesCanonical(transactions);
 
   return rawAnomalies.map((item, idx) => {
@@ -635,6 +668,10 @@ export function buildInsights(
     // overwrites the result. (Issue #1035)
     anomalies: detectAnomalies(expenseTransactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(expenseTransactions, userId),
+    // Detect over the full transaction set (not just expenses) so ignored
+    // transactions are excluded consistently. The earlier expense-scoped pair
+    // was dead code: duplicate keys in an object literal keep only the last
+    // assignment, so the all-transactions computation is the intended one.
     anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
