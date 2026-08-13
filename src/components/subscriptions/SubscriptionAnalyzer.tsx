@@ -28,7 +28,6 @@ import {
   fetchUserSubscriptions,
   detectAndSaveSubscriptions,
   generateSubscriptionSummary,
-  estimateMonthlyIncome,
   Subscription,
 } from "@/src/lib/subscriptionUtils";
 import { formatCurrency } from "@/src/lib/utils";
@@ -42,7 +41,7 @@ const FREQUENCY_FILTERS = [
 
 export function SubscriptionAnalyzer({ user }: { user: any }) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [estimatedMonthlyIncome, setEstimatedMonthlyIncome] = useState(0);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -51,7 +50,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   useEffect(() => {
     if (user?.uid) {
       loadSubscriptions();
-      loadIncome();
+      loadRecentTransactions();
     }
   }, [user?.uid]);
 
@@ -68,12 +67,12 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
     }
   };
 
-  const loadIncome = async () => {
+  const loadRecentTransactions = async () => {
     try {
-      const transactions = await fetchUserTransactions(user.uid, 183);
-      setEstimatedMonthlyIncome(estimateMonthlyIncome(transactions));
+      const transactions = await fetchUserTransactions(user.uid, 365);
+      setRecentTransactions(transactions);
     } catch (error) {
-      console.error("Error loading income:", error);
+      console.error("Error loading transactions:", error);
     }
   };
 
@@ -81,6 +80,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
     setAnalyzing(true);
     try {
       const transactions = await fetchUserTransactions(user.uid, 365);
+      setRecentTransactions(transactions);
       if (transactions.length < 10) {
         toast.error(
           "Not enough transaction history to analyze. Upload or add more transactions.",
@@ -105,8 +105,13 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   };
 
   const summary = useMemo(() => {
+    const incomeTxns = recentTransactions.filter((t) => t.type === "income");
+    const months =
+      new Set(incomeTxns.map((t) => format(t.date, "yyyy-MM"))).size || 1;
+    const estimatedMonthlyIncome =
+      incomeTxns.reduce((s, t) => s + t.amount, 0) / months;
     return generateSubscriptionSummary(subscriptions, estimatedMonthlyIncome);
-  }, [subscriptions, estimatedMonthlyIncome]);
+  }, [subscriptions, recentTransactions]);
 
   const filteredSubscriptions = useMemo(() => {
     let result = subscriptions;
