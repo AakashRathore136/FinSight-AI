@@ -231,6 +231,12 @@ function safeJsonParse(text: string): unknown {
   }
 }
 
+function clampSentiment(v: unknown): number {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-1, Math.min(1, n));
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateAnalysisPayload(payload: any): AnalysisResponse {
   const required = [
@@ -271,7 +277,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],
-    sentiment_score: Number(payload.sentiment_score || 0),
+    sentiment_score: clampSentiment(payload.sentiment_score),
     entities: Array.isArray(payload.entities)
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
       : [],
