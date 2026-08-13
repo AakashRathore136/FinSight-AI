@@ -630,6 +630,10 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
+    // Detect over the full transaction set (not just expenses) so ignored
+    // transactions are excluded consistently. The earlier expense-scoped pair
+    // was dead code: duplicate keys in an object literal keep only the last
+    // assignment, so the all-transactions computation is the intended one.
     anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
