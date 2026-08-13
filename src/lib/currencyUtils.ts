@@ -206,7 +206,48 @@ export function formatCurrencyDisplay(amount: number, currencyCode: string): str
     }).format(amount);
   } catch (err) {
     console.error("formatCurrency: failed to format currency", err);
-    return `${symbol}${amount.toLocaleString('en-US')}`;
+    const fractionDigits = getCurrencyMinorUnits(currencyCode);
+    return `${symbol}${amount.toFixed(fractionDigits)}`;
+  }
+}
+
+/**
+ * Returns the ISO 4217 minor-unit (decimal) count for a currency code so the
+ * fallback formatter honours zero-decimal currencies (JPY/KRW/CLP/VND) and
+ * three-decimal currencies (BHD/KWD) instead of always printing 2 places.
+ * Defaults to 2 for unknown codes, matching prior behaviour.
+ */
+export function getCurrencyMinorUnits(currencyCode: string): number {
+  switch (currencyCode) {
+    case 'BIF':
+    case 'CLP':
+    case 'DJF':
+    case 'GNF':
+    case 'ISK':
+    case 'JPY':
+    case 'KMF':
+    case 'KRW':
+    case 'PYG':
+    case 'RWF':
+    case 'UGX':
+    case 'VND':
+    case 'VUV':
+    case 'XAF':
+    case 'XOF':
+    case 'XPF':
+      return 0;
+    case 'BHD':
+    case 'IQD':
+    case 'JOD':
+    case 'KWD':
+    case 'LYD':
+    case 'OMR':
+    case 'TND':
+      return 3;
+    case 'CLF':
+      return 4;
+    default:
+      return 2;
   }
 }
 
