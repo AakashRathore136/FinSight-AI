@@ -31,26 +31,32 @@ export async function apiFetch(
     throw new Error("Fetch API is not available in this environment");
   }
 
-  // Create a new controller for this request
+  // Build a controller for this request and wire the caller's AbortSignal into
+  // it. We keep a handle on the listener so it can be detached on cleanup and
+  // never leak on the (possibly unmounted) caller's signal.
   const controller = new AbortController();
-
-  // Respect an existing AbortSignal provided by the caller
+  let callerAbortListener: (() => void) | null = null;
   if (init?.signal) {
     if (init.signal.aborted) {
       controller.abort(init.signal.reason);
     } else {
-      init.signal.addEventListener(
-        "abort",
-        () => controller.abort(init.signal?.reason),
-        { once: true },
-      );
+      callerAbortListener = () => controller.abort(init.signal?.reason);
+      init.signal.addEventListener("abort", callerAbortListener, { once: true });
     }
   }
 
-  // Abort the request after the timeout
   const timeoutId = setTimeout(() => {
     controller.abort(new Error(`Request timed out after ${timeout}ms`));
   }, timeout);
+
+  // Detach the caller-signal listener and clear the timeout exactly once.
+  const cleanup = () => {
+    if (callerAbortListener && init?.signal) {
+      init.signal.removeEventListener("abort", callerAbortListener);
+      callerAbortListener = null;
+    }
+    clearTimeout(timeoutId);
+  };
 
   try {
     const res = await fetchImpl(input, {
@@ -58,18 +64,43 @@ export async function apiFetch(
       signal: controller.signal,
     });
 
-    // 401 Interceptor: If 401 Unauthorized occurs, attempt silent token renewal and retry once
+    // 401 Interceptor: attempt silent token renewal and retry once.
     if (res.status === 401 && init?.headers) {
       const newToken = await getValidIdToken(true);
       if (newToken) {
         const headers = new Headers(init.headers);
         headers.set("Authorization", `Bearer ${newToken}`);
         console.warn("[API Fetch] 401 Unauthorized intercepted. Retrying request with refreshed token.");
-        return await fetchImpl(input, {
-          ...init,
-          headers,
-          signal: controller.signal,
-        });
+
+        // The retry gets a FRESH controller + timeout so it is not killed by the
+        // still-pending original timeout, and a fresh caller-signal listener
+        // that is also cleaned up.
+        cleanup();
+        const retryController = new AbortController();
+        let retryCallerListener: (() => void) | null = null;
+        if (init?.signal) {
+          if (init.signal.aborted) {
+            retryController.abort(init.signal.reason);
+          } else {
+            retryCallerListener = () => retryController.abort(init.signal?.reason);
+            init.signal.addEventListener("abort", retryCallerListener, { once: true });
+          }
+        }
+        const retryTimeoutId = setTimeout(() => {
+          retryController.abort(new Error(`Request timed out after ${timeout}ms`));
+        }, timeout);
+        try {
+          return await fetchImpl(input, {
+            ...init,
+            headers,
+            signal: retryController.signal,
+          });
+        } finally {
+          if (retryCallerListener && init?.signal) {
+            init.signal.removeEventListener("abort", retryCallerListener);
+          }
+          clearTimeout(retryTimeoutId);
+        }
       }
     }
 
@@ -85,6 +116,6 @@ export async function apiFetch(
 
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    cleanup();
   }
 }
