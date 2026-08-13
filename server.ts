@@ -87,6 +87,8 @@ type AnalysisResponse = {
   sentiment_score: number;
   entities: string[];
   full_report: string;
+  citations?: Record<string, any>;
+  grounding?: any;
 };
 
 const firebaseProjectId = String(process.env.FIREBASE_PROJECT_ID || "").trim();
@@ -821,47 +823,22 @@ async function startServer() {
         const ownerId = req.ownerId as string;
 
         // Extract text from PDF buffer
-
         let extractedText = "";
-        {
-          const parser = new PDFParse({ data: file.buffer });
-          const parserDestroyTimeout = setTimeout(() => {
-            console.warn(
-              "PDF_PARSE_DESTROY_TIMEOUT: parser.destroy() did not complete within 5s, process continuing",
-            );
-          }, 5000);
-
-          try {
-            const parsed = await parser.getText();
-            extractedText = (parsed?.text || "").trim();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (extractError: any) {
-            console.error(
-              "PDF_EXTRACTION_ERROR: Failed to parse PDF",
-              extractError?.message || extractError,
-            );
-            throw new PipelineError(
-              "PDF_EXTRACTION",
-              `Failed to parse PDF: ${extractError?.message || "Unknown error"}`,
-              "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF.",
-            );
-          } finally {
-            clearTimeout(parserDestroyTimeout);
-            try {
-              await Promise.race([
-                parser.destroy(),
-                new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error("destroy timeout")), 5000),
-                ),
-              ]);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (destroyError: any) {
-              console.warn(
-                "PDF_PARSE_DESTROY_ERROR: Failed to cleanly destroy parser",
-                destroyError?.message || destroyError,
-              );
-            }
-          }
+        let extractedDoc;
+        try {
+          const { extractPages } = await import("./src/lib/verification/extractPages.js");
+          extractedDoc = await extractPages(file.buffer);
+          extractedText = extractedDoc.fullText;
+        } catch (extractError: any) {
+          console.error(
+            "PDF_EXTRACTION_ERROR: Failed to parse PDF",
+            extractError?.message || extractError,
+          );
+          throw new PipelineError(
+            "PDF_EXTRACTION",
+            `Failed to parse PDF: ${extractError?.message || "Unknown error"}`,
+            "Ensure the uploaded file is a valid, uncorrupted, and unencrypted PDF.",
+          );
         }
 
 
@@ -971,7 +948,7 @@ CRITICAL RULES:
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const controller = new AbortController();
-            const timeoutMs = 60_000;
+            const timeoutMs = 120_000;
             timer = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
@@ -1133,6 +1110,32 @@ CRITICAL RULES:
 
 
 
+        // Run grounding analysis if enabled or by default
+        let citations: any = {};
+        let grounding: any = null;
+        let claims: any[] = [];
+        try {
+          const { getPageOffsets } = await import("./src/lib/verification/extractPages.js");
+          const { chunkFinancialDocument } = await import("./src/lib/rag/textChunker.js");
+          const { verifyDocumentAnalysis } = await import("./src/lib/verification/index.js");
+
+          const pageOffsets = getPageOffsets(extractedDoc?.pages || [""]);
+          const chunks = chunkFinancialDocument(extractedText, { pageOffsets });
+
+          const groundingResult = await verifyDocumentAnalysis(
+            validPayload,
+            file.buffer,
+            chunks,
+            { hfClient, enableAdjudication: true }
+          );
+
+          citations = groundingResult.citations || {};
+          grounding = groundingResult.grounding || null;
+          claims = groundingResult.claims || [];
+        } catch (groundErr: any) {
+          console.error("Grounding analysis failed, proceeding without verification metadata:", groundErr?.message || groundErr);
+        }
+
         const docData: any = {
           ownerId,
           fileName: file.originalname,
@@ -1147,6 +1150,9 @@ CRITICAL RULES:
 
         const analysisDoc = {
           ...validPayload,
+          citations,
+          grounding,
+          claims,
           documentId: "",
           ownerId,
           riskLevel,

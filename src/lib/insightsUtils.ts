@@ -630,8 +630,6 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(expenseTransactions, userId),
-    opportunities: identifyOpportunities(expenseTransactions, userId),
     anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
