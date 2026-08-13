@@ -37,7 +37,29 @@ export interface RecurringTransaction {
   category: string;
   type: "income" | "expense";
   averageAmount: number;
-  frequency: "weekly" | "monthly" | "quarterly" | "yearly";
+  frequency: "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "yearly";
+}
+
+/** Canonical occurrences-per-year for a recurring frequency. Used by any
+ * projection/annualization code so a bi-weekly income (26/yr) or bi-monthly
+ * charge (6/yr) is scaled correctly instead of being treated as monthly (12/yr). */
+export function occurrencesPerYear(
+  frequency: RecurringTransaction["frequency"],
+): number {
+  switch (frequency) {
+    case "weekly":
+      return 52;
+    case "biweekly":
+      return 26;
+    case "monthly":
+      return 12;
+    case "bimonthly":
+      return 6;
+    case "quarterly":
+      return 4;
+    case "yearly":
+      return 1;
+  }
 }
 
 // Single source of truth for the observation/projection window so the fetch
@@ -74,7 +96,9 @@ function inferRecurrenceFrequency(
       : intervals[mid];
 
   if (median >= 5 && median <= 10) return "weekly";
+  if (median >= 11 && median <= 24) return "biweekly";
   if (median >= 25 && median <= 35) return "monthly";
+  if (median >= 36 && median <= 84) return "bimonthly";
   if (median >= 85 && median <= 95) return "quarterly";
   if (median >= 350 && median <= 380) return "yearly";
   return "monthly";
