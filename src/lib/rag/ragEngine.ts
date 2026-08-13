@@ -23,6 +23,14 @@ export class RAGEngine {
   }
 
   /**
+   * Indexes already processed document chunks directly.
+   */
+  public indexChunks(chunks: DocumentChunk[]): void {
+    this.vectorStore.addChunks(chunks);
+    this.isIndexed = chunks.length > 0;
+  }
+
+  /**
    * Retrieves relevant context for a user query.
    */
   public retrieveContext(query: string, topK: number = 3): {
