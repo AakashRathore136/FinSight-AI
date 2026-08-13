@@ -93,11 +93,6 @@ function advanceByFrequency(
     const safeDay = Math.min(utcDay, lastDayOfNextYearMonth);
     return new Date(Date.UTC(nextYear, utcMonth, safeDay, 12, 0, 0));
   }
-  if (frequency === 'yearly') {
-    const day = originalDueDay ?? date.getDate();
-    const lastDay = new Date(date.getFullYear() + 1, date.getMonth() + 1, 0).getDate();
-    return new Date(date.getFullYear() + 1, date.getMonth(), Math.min(day, lastDay));
-  }
   return date;
 }
 
