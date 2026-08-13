@@ -141,20 +141,32 @@ export const TOOL_CATALOGUE: AgentTool[] = [
   {
     name: "project_goal",
     description:
-      "Project a savings goal timeline. Given a target amount, current amount, and deadline, returns the monthly contribution needed and a month-by-month projection.",
+      "Project a savings goal timeline. Given a target amount, current amount, deadline, and optional contribution level, returns the monthly contribution needed and a month-by-month projection.",
     parameters: {
       targetAmount: "goal target amount",
       currentAmount: "amount saved so far",
       deadline: "ISO date string deadline",
+      level: "contribution level: 'conservative' (85%), 'recommended' (100%), or 'aggressive' (120%)",
     },
     run: (args, _ctx) => {
       const target = toNumber(args.targetAmount);
       const current = toNumber(args.currentAmount);
       const deadline = String(args.deadline ?? "");
+      const level = String(args.level ?? "recommended").toLowerCase();
       const monthly = calculateMonthlyContribution(target, current, deadline);
+      const conservative = Math.ceil(monthly * 0.85);
+      const aggressive = Math.max(1, Math.floor(monthly * 1.2));
+      const selectedMonthly =
+        level === "conservative"
+          ? conservative
+          : level === "aggressive"
+          ? aggressive
+          : monthly;
       return {
         monthlyContribution: monthly,
-        timeline: generateTimelineProjection(target, current, monthly),
+        conservative,
+        aggressive,
+        timeline: generateTimelineProjection(target, current, selectedMonthly),
       };
     },
   },
