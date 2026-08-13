@@ -136,7 +136,8 @@ export async function saveLocalAnalysis(
         evictOldest(docMap, MAX_LOCAL_DOCS);
         writeLocalDocMap(docMap, payload.documentId);
         return { ok: true, quotaExceeded: true };
-      } catch {
+      } catch (err) {
+        console.warn("[FinSight] storeLocalDocument failed:", err);
         return { ok: false, quotaExceeded: true };
       }
     }
