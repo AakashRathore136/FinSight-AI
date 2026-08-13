@@ -31,6 +31,7 @@ import {
   generateTaxSummary,
   formatCurrency,
   formatPercent,
+  type FilingStatus,
   type TaxBreakdown,
   type TaxEstimateRecord,
 } from '@/src/lib/taxUtils';
@@ -64,6 +65,8 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
   const [breakdown, setBreakdown] = useState<TaxBreakdown | null>(null);
   const [previousYear, setPreviousYear] = useState<TaxEstimateRecord | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>('single');
+  const [deductionsInput, setDeductionsInput] = useState('');
 
   const country = useMemo(
     () => COUNTRY_TAX_DATA.find((c) => c.code === countryCode),
@@ -126,12 +129,16 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
 
   useEffect(() => {
     if (annualIncome > 0) {
-      const result = calculateTax(annualIncome, countryCode, regionCode);
+      const deductionsValue = parseFloat(deductionsInput);
+      const result = calculateTax(annualIncome, countryCode, regionCode, {
+        filingStatus: countryCode === 'US' ? filingStatus : undefined,
+        deductions: !isNaN(deductionsValue) && deductionsValue > 0 ? deductionsValue : undefined,
+      });
       setBreakdown(result);
     } else {
       setBreakdown(null);
     }
-  }, [annualIncome, countryCode, regionCode]);
+  }, [annualIncome, countryCode, regionCode, filingStatus, deductionsInput]);
 
   const handleSave = async () => {
     if (!user || !breakdown) {
@@ -284,9 +291,49 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
               />
             </div>
 
+            {countryCode === 'US' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Filing Status
+                  </label>
+                  <Select
+                    value={filingStatus}
+                    onValueChange={(v) => setFilingStatus(v as FilingStatus)}
+                    className="bg-slate-800 border-slate-700 text-white h-12"
+                    options={[
+                      { value: 'single', label: 'Single' },
+                      { value: 'married_joint', label: 'Married Filing Jointly' },
+                      { value: 'married_separate', label: 'Married Filing Separately' },
+                      { value: 'head_of_household', label: 'Head of Household' },
+                    ]}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Itemized Deductions (optional)
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={deductionsInput}
+                    onChange={(e) => setDeductionsInput(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-12 tabular-nums"
+                    min="0"
+                    step="100"
+                  />
+                  <p className="text-xs text-slate-500">
+                    The 2024 standard deduction for this status is applied unless you enter a
+                    smaller itemized amount.
+                  </p>
+                </div>
+              </>
+            )}
+
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                Income
+                Gross Income
               </label>
               <div className="flex gap-2">
                 <Input

@@ -347,21 +347,65 @@ function applyBrackets(income: number, brackets: TaxBracket[] | undefined): numb
   return tax;
 }
 
+export type FilingStatus = 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
+
+// 2024 US federal standard deduction amounts. The US bracket tables below are
+// post-standard-deduction, so gross income must be reduced by a deduction
+// before bracketing or every estimate is systematically overstated.
+const STANDARD_DEDUCTIONS_2024: Record<FilingStatus, number> = {
+  single: 14600,
+  married_joint: 29200,
+  married_separate: 14600,
+  head_of_household: 21900,
+};
+
+export function standardDeduction(filingStatus?: FilingStatus): number {
+  if (!filingStatus) return 0;
+  return STANDARD_DEDUCTIONS_2024[filingStatus] ?? 0;
+}
+
+function roundToCents(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export interface CalculateTaxOptions {
+  // Filing status used to derive the standard deduction (US only).
+  filingStatus?: FilingStatus;
+  // Itemized deductions; when provided, the smaller of the standard deduction
+  // and the itemized amount is subtracted from gross income before bracketing.
+  deductions?: number;
+}
+
+// `income` is the user's GROSS annual income. For US jurisdictions a standard
+// (or itemized) deduction is subtracted before the bracket tables are applied.
 export function calculateTax(
   income: number,
   countryCode: string,
-  regionCode: string
+  regionCode: string,
+  options?: CalculateTaxOptions
 ): TaxBreakdown | null {
   const country = COUNTRY_TAX_DATA.find((c) => c.code === countryCode);
   if (!country) return null;
   const region = country.regions.find((r) => r.code === regionCode);
   if (!region) return null;
 
+  // The US bracket tables are post-standard-deduction, so gross income must be
+  // reduced by a deduction before bracketing; otherwise every estimate is
+  // systematically overstated. Other jurisdictions bake their allowance into
+  // the 0% bands and are left untouched.
+  let deduction = 0;
+  if (countryCode === 'US') {
+    const standard = standardDeduction(options?.filingStatus);
+    const itemized = options?.deductions ?? Infinity;
+    deduction = Math.min(standard, itemized);
+  }
   const annualIncome = income > 0 ? income : 0;
-  const federalTax = applyBrackets(annualIncome, region.federalBrackets);
-  const stateTax = applyBrackets(annualIncome, region.stateBrackets);
-  const localTax = region.localRate ? annualIncome * region.localRate : 0;
-  const totalTax = federalTax + stateTax + localTax;
+  const taxableIncome = Math.max(0, annualIncome - deduction);
+
+  const federalTax = roundToCents(applyBrackets(taxableIncome, region.federalBrackets));
+  const stateTax = roundToCents(applyBrackets(taxableIncome, region.stateBrackets));
+  const localTax = roundToCents(region.localRate ? taxableIncome * region.localRate : 0);
+  const totalTax = roundToCents(federalTax + stateTax + localTax);
   const effectiveRate = annualIncome > 0 ? totalTax / annualIncome : 0;
 
   return {
