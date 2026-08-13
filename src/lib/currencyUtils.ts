@@ -196,19 +196,27 @@ export function aggregateMultiCurrencyTotals(
   return { totalBase, byCurrency };
 }
 
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'CLP', 'PYG', 'GNF', 'RWF', 'UGX', 'VUV', 'XAF', 'XOF', 'XPF']);
+
+/**
+ * Formats an amount for display in the given currency code.
+ * Zero-decimal currencies (JPY, KRW, VND, etc.) are displayed without
+ * fraction digits; all other currencies default to 2 fraction digits.
+ */
 export function formatCurrencyDisplay(amount: number, currencyCode: string): string {
   const currency = MAJOR_CURRENCIES.find((c) => c.code === currencyCode);
   const symbol = currency?.symbol || currencyCode;
+  const decimals = ZERO_DECIMAL_CURRENCIES.has(currencyCode) ? 0 : 2;
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount);
   } catch (err) {
     console.error("formatCurrency: failed to format currency", err);
-    return `${symbol}${amount.toFixed(2)}`;
+    return `${symbol}${amount.toFixed(decimals)}`;
   }
 }
 
