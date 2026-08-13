@@ -638,7 +638,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
               onClick={async () => {
                 if (!user || !portfolioId) return;
                 setIsSavingSnapshot(true);
-                await savePortfolioSnapshot(user.uid, portfolioId, holdings);
+                await savePortfolioSnapshot(user.uid, portfolioId, holdings, rates ?? undefined, baseCurrency);
                 const history = await fetchPortfolioHistory(user.uid, portfolioId);
                 setPerformanceHistory(history);
                 setIsSavingSnapshot(false);

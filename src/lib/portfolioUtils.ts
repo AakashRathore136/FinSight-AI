@@ -727,10 +727,18 @@ export async function savePortfolioSnapshot(
   userId: string,
   portfolioId: string,
   holdings: Holding[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
 ): Promise<boolean> {
   try {
-    const totalValue = calculateTotalValue(holdings);
-    const totalCost = holdings.reduce((sum, h) => sum + h.avgCost * h.quantity, 0);
+    const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
+    const totalCost = holdings.reduce((sum, h) => {
+      const local = h.avgCost * h.quantity;
+      if (!rates || !baseCurrency || !h.currency || h.currency === baseCurrency)
+        return sum + local;
+      const converted = convertAmount(local, h.currency, baseCurrency, rates);
+      return sum + (converted == null ? local : converted);
+    }, 0);
     const profitLoss = totalValue - totalCost;
     const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
 
