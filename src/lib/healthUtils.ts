@@ -77,17 +77,26 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
   const totalSpent = expenses.reduce((sum, t) => sum + t.amount, 0);
   const categoryCount = new Set(expenses.map((t) => t.category)).size;
 
-  const avgTransactionSize = totalSpent / expenses.length;
+  const discretionaryCats = new Set([
+    'entertainment',
+    'shopping',
+    'dining',
+    'restaurants',
+    'food',
+  ]);
   const discretionary = expenses
-    .filter((t) => ['Entertainment', 'Shopping', 'Dining'].includes(t.category))
+    .filter((t) => discretionaryCats.has((t.category || '').toLowerCase()))
     .reduce((sum, t) => sum + t.amount, 0);
   const discretionaryRatio = totalSpent > 0 ? discretionary / totalSpent : 0;
 
-  const uniquePayees = new Set(expenses.map((t) => t.description?.toLowerCase().trim()).filter(Boolean)).size;
+  const payeeKey = (t: Transaction): string =>
+    t.description ? t.description.toLowerCase().trim() : 'tx:' + t.id;
+  const uniquePayees = new Set(expenses.map(payeeKey)).size;
   const concentration = uniquePayees <= expenses.length * 0.5 ? 0.9 : 1;
 
   let score = 100;
-  if (avgTransactionSize > totalSpent * 0.3) score -= 15;
+  const maxTx = Math.max(...expenses.map((t) => t.amount));
+  if (totalSpent > 0 && maxTx > totalSpent * 0.3) score -= 15;
   if (discretionaryRatio > 0.5) score -= 20;
   if (discretionaryRatio > 0.35) score -= 10;
   if (categoryCount < 3) score -= 10;
