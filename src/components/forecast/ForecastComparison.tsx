@@ -183,15 +183,21 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
 
   const handleExport = () => {
     const data = activeView === 'monthly'
-      ? filteredMonthly
+      ? filteredMonthly.map((m) => ({
+          period: m.month,
+          income: m.income,
+          expenses: m.expenses,
+          net: m.net,
+          confidence: m.confidence,
+        }))
       : filteredQuarterly.map((q) => ({
-          month: q.quarter,
+          period: q.quarter,
           income: q.income,
           expenses: q.expenses,
           net: q.net,
           confidence: q.confidence,
         }));
-    const csv = exportForecastChart(data as MonthlyForecast[]);
+    const csv = exportForecastChart(data);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
