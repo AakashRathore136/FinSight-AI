@@ -13,7 +13,6 @@
  *  - Generating plain-language summaries of spending behaviour
  *  - Calculating category trends (week-over-week, month-over-month)
  */
-import { detectAnomalies as detectAnomaliesCanonical } from './anomalyUtils';
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
@@ -259,24 +258,10 @@ export function detectAnomalies(
       amount: a.amount,
       period: a.comparisonPeriod || format(toDate(a.date), "MMM d, yyyy"),
       createdAt: new Date().toISOString(),
-    }));
+    }))
+    .filter((a) => !ignoredTransactionIds?.has(a.id));
 
   return insights.sort((a, b) => b.amount - a.amount);
-  const rawAnomalies = detectAnomaliesCanonical(transactions);
-
-  return rawAnomalies.map((item, idx) => {
-    const anomalyId = `anomaly-${idx}-${Date.now()}`;
-    return {
-      id: anomalyId,
-      type: 'anomaly' as const,
-      title: 'description' in item && typeof item.description === 'string'
-        ? item.description
-        : 'Transaction Anomaly Detected',
-      description: item.description || 'Anomalous financial pattern detected.',
-      severity: (item.severity as 'low' | 'medium' | 'high') || 'medium',
-      date: item.date ? new Date(item.date) : new Date(),
-    };
-  }).filter((item) => !ignoredTransactionIds?.has(item.id));
 }
 // ---------------------------------------------------------------------------
 // 3. Savings opportunities
