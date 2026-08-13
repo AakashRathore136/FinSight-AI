@@ -219,14 +219,9 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
 
   const fullReport = String(payload.full_report || "").trim();
   const wordCount = fullReport.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 120) {
+  if (wordCount < 600) {
     throw new Error(
       `Model response full_report is too short (${wordCount} words)`,
-    );
-  }
-  if (wordCount < 450) {
-    console.warn(
-      `AI_SCHEMA_VALIDATION_WARNING: full_report is ${wordCount} words; accepting shorter valid analysis.`,
     );
   }
 

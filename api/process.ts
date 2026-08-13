@@ -326,7 +326,7 @@ function validatePayload(p: any) {
   const keys = ["summary", "key_metrics", "risk_assessment", "action_items", "sentiment_score", "entities", "full_report"];
   for (const k of keys) if (!(k in p)) throw new Error(`Missing key: ${k}`);
   const words = String(p.full_report || "").trim().split(/\s+/).filter(Boolean).length;
-  if (words < 120) throw new Error(`full_report too short: ${words} words`);
+  if (words < 600) throw new Error(`full_report too short: ${words} words`);
   return p;
 }
 
