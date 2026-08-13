@@ -210,8 +210,8 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
 
   const handleAdjustTarget = async () => {
     if (!fund) return;
-    const targetAmount = parseFloat(monthlyContribution) || fund.targetAmount;
-    const months = parseInt((document.getElementById('ef-months') as HTMLSelectElement)?.value || '6', 10) || fund.monthsCovered;
+    const targetAmount = fund.targetAmount;
+    const months = targetMonths || fund.monthsCovered;
     const newContribution = calculateMonthlySavings(targetAmount, fund.currentAmount, months);
     await updateGoal({
       targetAmount,
