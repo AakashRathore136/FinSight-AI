@@ -299,7 +299,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       if (!holdingsSnap.empty) {
         holdingRef = holdingsSnap.docs[0].ref;
       } else if (input.type === 'buy') {
-        holdingRef = doc(holdings);
+        holdingRef = doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
       } else {
         throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
       }
