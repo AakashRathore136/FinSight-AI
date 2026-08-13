@@ -186,9 +186,21 @@ export function calculateMonthlyForecast(
   // Averages are computed over the full observation window: months without
   // activity are zero-filled so a charge that appears once in the window is
   // projected at its true monthly rate instead of its per-month-with-activity
-  // rate. The divisor is always windowMonths so projections span exactly the
-  // requested window regardless of how many months contain transactions.
-  const divisor = windowMonths > 0 ? windowMonths : 1;
+  // rate.
+  //
+  // The current (still-running) month is part of the observation window but is
+  // only partially elapsed. Weighting it by elapsedDays/daysInMonth stops a
+  // partial month from being counted as a full month in the divisor, which
+  // would inflate/deflate the projected monthly rate. (Issue #1033)
+  const now = new Date();
+  const currentMonthDays = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+  ).getDate();
+  const elapsedDays = Math.min(Math.max(now.getDate(), 1), currentMonthDays);
+  const currentMonthWeight = elapsedDays / currentMonthDays;
+  const divisor = Math.max(windowMonths - 1 + currentMonthWeight, 1);
   const avgIncome =
     Object.values(incomeByMonth).length > 0
       ? Object.values(incomeByMonth).reduce((a, b) => a + b, 0) /
