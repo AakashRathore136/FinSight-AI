@@ -183,22 +183,31 @@ export const TOOL_CATALOGUE: AgentTool[] = [
     run: (args, _ctx) => {
       const target = toNumber(args.targetAmount);
       const current = toNumber(args.currentAmount);
-      const deadline = String(args.deadline ?? "");
+      const deadlineRaw = String(args.deadline ?? "");
+      const deadlineDate = new Date(deadlineRaw);
       const level = String(args.level ?? "recommended").toLowerCase();
-      const monthly = calculateMonthlyContribution(target, current, deadline);
-      const conservative = Math.ceil(monthly * 0.85);
-      const aggressive = Math.max(1, Math.floor(monthly * 1.2));
+      const effectiveDeadline =
+        deadlineRaw && !Number.isNaN(deadlineDate.getTime())
+          ? deadlineRaw
+          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+      const monthly = calculateMonthlyContribution(target, current, effectiveDeadline);
+      const safeMonthly = Number.isFinite(monthly) ? monthly : 0;
+      const conservative = Math.ceil(safeMonthly * 0.85);
+      const aggressive = Math.max(1, Math.floor(safeMonthly * 1.2));
       const selectedMonthly =
         level === "conservative"
           ? conservative
           : level === "aggressive"
           ? aggressive
-          : monthly;
+          : safeMonthly;
       return {
-        monthlyContribution: monthly,
+        monthlyContribution: safeMonthly,
         conservative,
         aggressive,
-        timeline: generateTimelineProjection(target, current, selectedMonthly),
+        timeline: Number.isFinite(safeMonthly)
+          ? generateTimelineProjection(target, current, selectedMonthly)
+          : [],
       };
     },
   },
