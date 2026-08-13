@@ -679,6 +679,7 @@ export default async function handler(req: any, res: any) {
 
     let documentId = `local-${ownerId}-${now.getTime()}`;
     let persistenceMode = "local";
+    let firestorePersisted = false;
 
     if (appCtx) {
       try {
@@ -718,14 +719,37 @@ export default async function handler(req: any, res: any) {
         });
 
         console.log(`[process] Firestore write OK: ${documentId} (${Date.now() - startTime}ms)`);
+        firestorePersisted = true;
       } catch (dbErr: any) {
         console.warn("[process] Firestore write skipped:", dbErr?.message);
+        // The PDF was already uploaded to Storage above, but without a
+        // Firestore record it can never be downloaded, so clean it up.
+        if (processAppCtx && storagePath) {
+          try {
+            await processAppCtx.admin.storage().bucket().file(storagePath).delete();
+            console.log(`STORAGE_CLEANUP_AFTER_WRITE_FAILURE: deleted ${storagePath}`);
+          } catch (cleanupErr: any) {
+            if (cleanupErr?.code !== 404) console.error("Cleanup failed:", cleanupErr);
+          }
+        }
       }
     }
 
     // ------------------------------------------------------------------
     // Step 6: Respond
     // ------------------------------------------------------------------
+    if (!firestorePersisted) {
+      res.status(500).json({
+        error: {
+          stage: "FIRESTORE_WRITE_FAILED",
+          reason:
+            "Document could not be persisted to Firestore. The uploaded PDF was removed from Storage.",
+          recommendation: "Please try again. If the problem persists, contact support.",
+        },
+      });
+      return;
+    }
+
     res.status(200).json({
       documentId,
       persistenceMode,
