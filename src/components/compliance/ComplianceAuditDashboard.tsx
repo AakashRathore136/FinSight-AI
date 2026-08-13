@@ -4,11 +4,14 @@ import { ShieldAlert, FileText, CheckCircle2, AlertOctagon, Loader2 } from "luci
 import { ComplianceScorecard } from "./ComplianceScorecard";
 import { auditFinancialData } from "@/src/lib/complianceUtils";
 import { fetchUserTransactions } from "@/src/lib/cashflowUtils";
+import { useBaseCurrency } from "@/src/hooks/useBaseCurrency";
+import { fetchExchangeRates } from "@/src/lib/currencyUtils";
 
 export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<ReturnType<typeof auditFinancialData> | null>(null);
+  const baseCurrency = useBaseCurrency(user || null);
 
   useEffect(() => {
     if (!user) {
@@ -16,7 +19,7 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
       return;
     }
     loadComplianceData();
-  }, [user]);
+  }, [user, baseCurrency]);
 
   async function loadComplianceData() {
     setLoading(true);
@@ -28,8 +31,22 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
         description: t.description || "",
         date: t.date instanceof Date ? t.date.toISOString().split("T")[0] : String(t.date),
         category: t.category,
+        currency: baseCurrency,
       }));
-      const result = auditFinancialData(realTransactions);
+
+      let rates: Record<string, number> = {};
+      try {
+        const fetched = await fetchExchangeRates(baseCurrency);
+        rates = fetched.rates;
+      } catch {
+        rates = {};
+      }
+
+      const result = auditFinancialData(realTransactions, {
+        baseCurrency,
+        rates,
+        country: user?.country,
+      });
       setAuditResult(result);
     } catch (err) {
       setError("Failed to load compliance data. Please try again.");
