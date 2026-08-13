@@ -74,34 +74,37 @@ export async function verifyDocumentAnalysis(
         if (claim.status !== "unverified") continue;
 
         const adjudication = adjudicationResults[claim.id];
-        if (adjudication && (adjudication.verdict === "supported" || adjudication.verdict === "partial")) {
-          const status: ClaimStatus = adjudication.verdict === "supported" ? "verified" : "derived";
-          
+        const retrieved = new Set(adjudication?.retrievedChunkIds ?? []);
+        const chunk =
+          adjudication && (adjudication.verdict === "supported" || adjudication.verdict === "partial")
+            ? retrieved.has(adjudication.chunkId ?? "")
+              ? chunks.find((c) => c.id === adjudication.chunkId)
+              : undefined
+            : undefined;
+
+        if (chunk && chunk.text.includes(String(claim.value))) {
+          const status: ClaimStatus = adjudication!.verdict === "supported" ? "verified" : "derived";
           claim.status = status;
-          claim.reason = adjudication.reason;
+          claim.reason = adjudication!.reason;
 
-          // Find the chunk that supported this claim
-          const chunk = chunks.find((c) => c.id === adjudication.chunkId);
-          if (chunk) {
-            const page = chunk.pageNumber || 1;
-            const snippet = chunk.text.slice(0, 240).replace(/\s+/g, " ").trim();
-            const charOffset = chunk.charStart || 0;
+          const page = chunk.pageNumber || 1;
+          const snippet = chunk.text.slice(0, 240).replace(/\s+/g, " ").trim();
+          const charOffset = chunk.charStart || 0;
 
-            const citation: Citation = {
-              page,
-              chunkId: chunk.id,
-              snippet,
-              charOffset,
-              matchType: "adjudicated",
-            };
+          const citation: Citation = {
+            page,
+            chunkId: chunk.id,
+            snippet,
+            charOffset,
+            matchType: "adjudicated",
+          };
 
-            claim.citation = citation;
+          claim.citation = citation;
 
-            // Store in citations map if under the limit
-            if (citationsCount < 100) {
-              result.citations[claim.id] = citation;
-              citationsCount++;
-            }
+          // Store in citations map if under the limit
+          if (citationsCount < 100) {
+            result.citations[claim.id] = citation;
+            citationsCount++;
           }
         }
       }
