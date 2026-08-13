@@ -13,7 +13,7 @@
  *  - Generating plain-language summaries of spending behaviour
  *  - Calculating category trends (week-over-week, month-over-month)
  */
-
+import { detectAnomalies as detectAnomaliesCanonical } from './anomalyUtils';
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
@@ -231,7 +231,7 @@ export function detectAnomalies(
   transactions: Transaction[],
   userId?: string,
   threshold = 2,
-  ignoredTransactionIds?: Set<string>,
+  ignoredTransactionIds?: Set<string>
 ): Insight[] {
   // Convert insights Transaction[] to anomalyUtils Transaction[] (compatible shape)
   const coreTransactions = transactions.map((tx) => ({
@@ -262,8 +262,22 @@ export function detectAnomalies(
     }));
 
   return insights.sort((a, b) => b.amount - a.amount);
-}
+  const rawAnomalies = detectAnomaliesCanonical(transactions);
 
+  return rawAnomalies.map((item, idx) => {
+    const anomalyId = `anomaly-${idx}-${Date.now()}`;
+    return {
+      id: anomalyId,
+      type: 'anomaly' as const,
+      title: 'description' in item && typeof item.description === 'string'
+        ? item.description
+        : 'Transaction Anomaly Detected',
+      description: item.description || 'Anomalous financial pattern detected.',
+      severity: (item.severity as 'low' | 'medium' | 'high') || 'medium',
+      date: item.date ? new Date(item.date) : new Date(),
+    };
+  }).filter((item) => !ignoredTransactionIds?.has(item.id));
+}
 // ---------------------------------------------------------------------------
 // 3. Savings opportunities
 // ---------------------------------------------------------------------------
@@ -649,8 +663,6 @@ export function buildInsights(
     weeklySummary,
     monthlySummary,
     monthlyDeltas: computeCategoryDeltas(thisMonth, lastMonth),
-    anomalies: detectAnomalies(expenseTransactions, userId),
-    opportunities: identifyOpportunities(expenseTransactions, userId),
     anomalies: detectAnomalies(transactions, userId, undefined, ignoredTransactionIds),
     opportunities: identifyOpportunities(transactions, userId),
     trends,
