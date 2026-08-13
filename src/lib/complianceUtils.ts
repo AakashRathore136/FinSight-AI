@@ -44,18 +44,29 @@ function isExpenseTransaction(t: AuditTransaction): boolean {
 
 /**
  * Scans financial transactions and documents for AML and SOX compliance issues.
+ * Transactions with unparseable amounts or dates are skipped; they do not
+ * contribute to the audit score and do not silently corrupt violation results.
  */
 export function auditFinancialData(
   transactions: AuditTransaction[],
 ): ComplianceScore {
   const violations: ComplianceViolation[] = [];
 
+  // Parse-validate every transaction upfront. Skip entries whose amount or date
+  // cannot be interpreted rather than silently including them with a fallback
+  // value that would corrupt the AML/SOX/FINRA rule checks.
+  const valid = transactions.filter((t) => {
+    if (typeof t.amount !== 'number' || !Number.isFinite(t.amount)) return false;
+    const d = t.date instanceof Date ? t.date : new Date(t.date as string);
+    return !isNaN(d.getTime());
+  });
+
   // Amounts are compared with Math.abs so the rules work for both signed
   // storage (negative expenses) and unsigned storage (positive amounts with a
   // `type` field), consistent with anomalyUtils/reportUtils.
 
   // AML Rule 1: Structuring / Smurfing detection (multiple transactions just under $10,000 threshold)
-  const structuringTxns = transactions.filter(
+  const structuringTxns = valid.filter(
     (t) => Math.abs(t.amount) >= 9000 && Math.abs(t.amount) < 10000,
   );
   if (structuringTxns.length >= 2) {
@@ -82,10 +93,10 @@ export function auditFinancialData(
 
   // AML Rule 2: High velocity round-trip transfers (high-value deposit and a
   // rapid withdrawal that actually fall inside the same short window)
-  const largeExpenses = transactions.filter(
+  const largeExpenses = valid.filter(
     (t) => Math.abs(t.amount) > 25000 && isExpenseTransaction(t),
   );
-  const largeIncomes = transactions.filter(
+  const largeIncomes = valid.filter(
     (t) => Math.abs(t.amount) > 25000 && !isExpenseTransaction(t),
   );
   const roundTripDetected =
@@ -111,7 +122,7 @@ export function auditFinancialData(
   }
 
   // SOX Rule 1: Off-balance sheet expenditure disclosure
-  const unclassifiedLarge = transactions.filter(
+  const unclassifiedLarge = valid.filter(
     (t) =>
       Math.abs(t.amount) > 50000 &&
       (!t.category || t.category.toLowerCase() === "other"),
@@ -134,7 +145,7 @@ export function auditFinancialData(
   // date-only row as after-hours (midnight hours < 9), while `Date` objects
   // stringified to an Invalid Date and never fired. Weekend detection works on
   // the date alone.
-  const suspiciousDates = transactions.filter((t) => {
+  const suspiciousDates = valid.filter((t) => {
     const d = auditDate(t.date);
     const day = d.getDay();
     if (day === 0 || day === 6) return true; // weekend

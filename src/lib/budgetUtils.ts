@@ -96,7 +96,7 @@ export async function fetchBudgetCategories(userId: string): Promise<BudgetCateg
         name: data.name || '',
         monthlyLimit: data.monthlyLimit || 0,
         rolloverEnabled: data.rolloverEnabled || false,
-        rolloverPercentage: data.rolloverPercentage || 100,
+        rolloverPercentage: data.rolloverPercentage ?? 100,
         rolledOverAmount: data.rolledOverAmount || 0,
         createdAt: data.createdAt || '',
         updatedAt: data.updatedAt || '',
@@ -378,7 +378,9 @@ async function fetchUserTransactionsInRange(
 export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Use end of current month so the 3-month window is complete months only.
+  // (startDate = 2 months ago on the 1st; endDate = end of this month)
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return fetchUserTransactionsInRange(userId, startDate, endDate);
 }
 

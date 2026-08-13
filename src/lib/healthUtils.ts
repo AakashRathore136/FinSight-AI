@@ -78,8 +78,9 @@ export function calculateSpendingScore(transactions: Transaction[]): number {
   const categoryCount = new Set(expenses.map((t) => t.category)).size;
 
   const avgTransactionSize = totalSpent / expenses.length;
+  const DISCRETIONARY = new Set(['entertainment', 'shopping', 'dining']);
   const discretionary = expenses
-    .filter((t) => ['Entertainment', 'Shopping', 'Dining'].includes(t.category))
+    .filter((t) => DISCRETIONARY.has((t.category || '').toLowerCase()))
     .reduce((sum, t) => sum + t.amount, 0);
   const discretionaryRatio = totalSpent > 0 ? discretionary / totalSpent : 0;
 
