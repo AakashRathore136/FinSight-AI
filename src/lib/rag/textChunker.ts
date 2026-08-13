@@ -69,6 +69,7 @@ export function chunkFinancialDocument(
 
   let searchIndex = 0;
   let currentChunkParas: { start: number; end: number }[] = [];
+  let currentChunkCharStart = 0;
 
   for (let i = 0; i < paragraphs.length; i++) {
     const para = paragraphs[i].trim();
@@ -92,7 +93,7 @@ export function chunkFinancialDocument(
     }
 
     if (currentTokens + paraTokens > chunkSize && currentChunkText.length > 0) {
-      const charStart = currentChunkParas[0]?.start;
+      const charStart = currentChunkCharStart;
       const charEnd = currentChunkParas[currentChunkParas.length - 1]?.end;
       const pageNumber = (pageOffsets && typeof charStart === "number")
         ? pageForOffset(pageOffsets, charStart)
@@ -111,18 +112,21 @@ export function chunkFinancialDocument(
       // Maintain overlap by retaining last portion of text
       const words = currentChunkText.split(/\s+/);
       const overlapWords = words.slice(-Math.max(10, Math.floor(chunkOverlap / 1.3))).join(" ");
+      const overlapDocStart = currentChunkCharStart + Math.max(0, currentChunkText.length - (overlapWords.length + 1));
       currentChunkText = overlapWords + " " + para;
+      currentChunkCharStart = overlapDocStart;
       currentChunkParas = paraStart !== -1 ? [{ start: paraStart, end: paraEnd }] : [];
     } else {
       currentChunkText = currentChunkText ? `${currentChunkText}\n\n${para}` : para;
       if (paraStart !== -1) {
         currentChunkParas.push({ start: paraStart, end: paraEnd });
       }
+      currentChunkCharStart = currentChunkParas[0]?.start ?? 0;
     }
   }
 
   if (currentChunkText.trim()) {
-    const charStart = currentChunkParas[0]?.start;
+    const charStart = currentChunkCharStart;
     const charEnd = currentChunkParas[currentChunkParas.length - 1]?.end;
     const pageNumber = (pageOffsets && typeof charStart === "number")
       ? pageForOffset(pageOffsets, charStart)
