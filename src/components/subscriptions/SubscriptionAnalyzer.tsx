@@ -114,7 +114,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   }, [subscriptions, recentTransactions]);
 
   const filteredSubscriptions = useMemo(() => {
-    let result = subscriptions;
+    let result = [...subscriptions];
 
     if (filter !== "all") {
       result = result.filter((s) => s.frequency === filter);
