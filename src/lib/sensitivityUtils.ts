@@ -49,7 +49,7 @@ export function calculateSensitivityDrivers(
       baselineValue: interestRate,
       unit: "%",
       lowSwingImpact: Math.round(
-        (revenue - cogs - opex - revenue * ((interestRate * 0.8) / 100)) - baseNetProfit
+        (revenue - cogs - opex - revenue * ((interestRate * 1.0) / 100)) - baseNetProfit
       ),
       highSwingImpact: Math.round(
         (revenue - cogs - opex - revenue * ((interestRate * 0.8) / 100)) - baseNetProfit
@@ -64,7 +64,7 @@ export function calculateSensitivityDrivers(
         (revenue - cogs - opex - revenue * ((interestRate * 1.2) / 100)) - baseNetProfit
       ),
       highSwingImpact: Math.round(
-        (revenue - cogs - opex - revenue * ((interestRate * 1.2) / 100)) - baseNetProfit
+        (revenue - cogs - opex - revenue * ((interestRate * 1.0) / 100)) - baseNetProfit
       ),
     },
     {
