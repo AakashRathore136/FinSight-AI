@@ -203,12 +203,10 @@ export function formatCurrencyDisplay(amount: number, currencyCode: string): str
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
     }).format(amount);
   } catch (err) {
     console.error("formatCurrency: failed to format currency", err);
-    return `${symbol}${amount.toFixed(2)}`;
+    return `${symbol}${amount.toLocaleString('en-US')}`;
   }
 }
 
