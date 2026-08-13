@@ -9,7 +9,6 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { toDate, normalizeTransactionType } from "@/src/lib/utils";
-import { getForecastMonths } from "@/src/lib/forecastMonthUtils";
 
 export interface Transaction {
   id: string;
@@ -104,10 +103,6 @@ function getNextMonths(count: number): string[] {
     months.push(getMonthKey(d));
   }
   return months;
-  // Shared forecast-window convention: forecast months start at the NEXT
-  // calendar month so the cash-flow engine agrees with the Forecast
-  // Comparison engine (issue #900).
-  return getForecastMonths(count);
 }
 
 export async function fetchUserTransactions(
