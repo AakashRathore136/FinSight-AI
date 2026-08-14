@@ -10,6 +10,19 @@ const MAX_LOCAL_DOCS = 50;
 // oldest entries before writing so new analyses keep being cached locally.
 const QUOTA_PRESSURE_RATIO = 0.9;
 
+/** True when an error is a localStorage quota-exceeded failure. */
+function isQuotaError(err: unknown): boolean {
+  if (err instanceof DOMException) {
+    return (
+      err.name === "QuotaExceededError" ||
+      err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err.code === 22 ||
+      err.code === 1014
+    );
+  }
+  return false;
+}
+
 /**
  * SECURITY: financial-document analyses (extracted entities/amounts from the
  * user's statements, invoices, filings) must never sit in `localStorage` as
@@ -184,14 +197,15 @@ export async function saveLocalAnalysis(
     console.warn("Could not estimate storage quota", err);
   }
 
-  // 3. Store in the session-only decrypted mirror (bounded + evicting). The
-  // encrypted blob is persisted asynchronously; the in-memory value is the
-  // source of truth for the rest of the session.
+  // Store in the in-memory decrypted mirror (bounded + evicting) — the source
+  // of truth for the rest of the session — then persist the encrypted blob to
+  // the localStorage documents map so the offline document mirror survives a
+  // page reload. Do NOT return early here: the original code returned before
+  // the localStorage write, leaving the bounded localStorage persistence and
+  // quota retry below as dead code, so callers never learned whether the write
+  // actually succeeded (incl. quota failures).
   memoryCache[payload.documentId] = cached;
   evictOldest(memoryCache, MAX_LOCAL_DOCS);
-  await writeLocalDocMap(memoryCache, payload.documentId);
-  return { ok: true, quotaExceeded: false };
-  // 3. Store in localStorage documents map (bounded + evicting)
   try {
     const docMap = readLocalDocMap();
     docMap[payload.documentId] = cached;
@@ -211,7 +225,7 @@ export async function saveLocalAnalysis(
         writeLocalDocMap(docMap, payload.documentId);
         return { ok: true, quotaExceeded: true };
       } catch (err) {
-        console.warn("[FinSight] storeLocalDocument failed:", err);
+        console.warn("[FinSight] saveLocalAnalysis failed:", err);
         return { ok: false, quotaExceeded: true };
       }
     }
