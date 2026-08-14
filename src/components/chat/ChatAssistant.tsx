@@ -405,6 +405,39 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
       );
     }
 
+    if (data[0]?.month !== undefined && data[0]?.projectedIncome !== undefined) {
+      // forecast_cash_flow tool output: { month, projectedIncome, projectedExpenses, projectedNet }
+      return (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <XAxis
+              dataKey="month"
+              stroke="#94a3b8"
+              fontSize={11}
+              tickFormatter={(value) => format(parseISO(`${value}-01`), 'MMM yyyy')}
+            />
+            <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(value) => formatCurrency(value)} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#0f1219',
+                border: '1px solid #1e293b',
+                borderRadius: '8px',
+                color: '#f8fafc',
+              }}
+              formatter={(value: number, name: string) => [
+                formatCurrency(value),
+                name === 'projectedIncome' ? 'Income' : name === 'projectedExpenses' ? 'Expenses' : 'Net',
+              ]}
+            />
+            <Legend />
+            <Bar dataKey="projectedIncome" name="projectedIncome" fill="#10b981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="projectedExpenses" name="projectedExpenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+
     if (data[0]?.name !== undefined && data[0]?.amount !== undefined) {
       return (
         <ResponsiveContainer width="100%" height={200}>
