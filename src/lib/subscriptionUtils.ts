@@ -469,10 +469,15 @@ export function estimateMonthlyIncome(
     const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
     incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
   });
-  const monthCount = incomeByMonth.size;
-  if (monthCount === 0) return 0;
+  if (incomeByMonth.size === 0) return 0;
   const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
-  return total / Math.min(monthCount, windowMonths);
+  // Average over the true window length, counting zero-income months as 0.
+  // Dividing by months-with-income overstated income for sporadic earners
+  // (e.g. a freelancer paid in 3 of 6 months got total/3 instead of total/6,
+  // doubling estimated income and suppressing the "High burden" warning).
+  // (issue #1364)
+  const window = Math.max(1, windowMonths);
+  return total / window;
 }
 
 export function calculateSubscriptionBurden(
