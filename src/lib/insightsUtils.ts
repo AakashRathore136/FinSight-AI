@@ -394,6 +394,17 @@ export function identifyOpportunities(
     const smallTotal = total(small);
     const avg = smallTotal / small.length;
     if (smallTotal < 50) continue;
+    // Normalize the all-time total to an annual run-rate so it ranks and is
+    // tiered on the same comparable basis as subscription opportunities.
+    const firstSmall = small.reduce((earliest, tx) => {
+      const d = toDate(tx.date)?.getTime() ?? 0;
+      return d && (earliest === 0 || d < earliest) ? d : earliest;
+    }, 0);
+    const spanDays = Math.max(
+      1,
+      (now.getTime() - firstSmall) / (1000 * 60 * 60 * 24),
+    );
+    const annualSmall = (smallTotal / spanDays) * 365;
     opportunities.push({
       id: uid(),
       userId,
@@ -405,8 +416,8 @@ export function identifyOpportunities(
         `totalled ${formatCurrency(smallTotal)}. Bundling or cutting a few could ` +
         `free up meaningful cash each month.`,
       severity:
-        smallTotal >= 400 ? "high" : smallTotal >= 150 ? "medium" : "low",
-      amount: smallTotal,
+        annualSmall >= 500 ? "high" : annualSmall >= 150 ? "medium" : "low",
+      amount: annualSmall,
       period: "All time",
       createdAt: new Date().toISOString(),
     });
@@ -423,6 +434,17 @@ export function identifyOpportunities(
     if (recent.length === 0) {
       const spent = total(list);
       if (spent < 50) continue;
+      // Normalize the historical total to an annual run-rate so it ranks and is
+      // tiered on the same comparable basis as subscription opportunities.
+      const firstList = list.reduce((earliest, tx) => {
+        const d = toDate(tx.date)?.getTime() ?? 0;
+        return d && (earliest === 0 || d < earliest) ? d : earliest;
+      }, 0);
+      const spanDays = Math.max(
+        1,
+        (now.getTime() - firstList) / (1000 * 60 * 60 * 24),
+      );
+      const annualSpent = (spent / spanDays) * 365;
       opportunities.push({
         id: uid(),
         userId,
@@ -433,8 +455,9 @@ export function identifyOpportunities(
           `You spent ${formatCurrency(spent)} on ${category} historically but ` +
           `nothing in the last 30 days. If this was a recurring service, ` +
           `double-check it isn't still billing you.`,
-        severity: "low",
-        amount: spent,
+        severity:
+          annualSpent >= 500 ? "high" : annualSpent >= 150 ? "medium" : "low",
+        amount: annualSpent,
         period: "Last 30 days",
         createdAt: new Date().toISOString(),
       });
