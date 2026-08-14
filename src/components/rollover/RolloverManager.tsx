@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { RefreshCw, Settings2, RotateCcw, TrendingUp, Wallet, History as HistoryIcon, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,6 +47,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('categories');
+  const inFlightRef = useRef(false);
 
   const currentMonth = getCurrentMonthKey();
   const previousMonth = getPreviousMonthKey();
@@ -145,15 +146,32 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       toast.error('Enable rollover for this category first');
       return;
     }
+    const alreadyRolled = history.some(
+      (h) => h.category === category.name && h.toMonth === currentMonth && h.fromMonth === previousMonth
+    );
+    if (alreadyRolled) {
+      toast.info('Already rolled over for this month');
+      return;
+    }
     const unusedBudget = calculateUnusedBudget(category.monthlyLimit, priorMonthSpend[category.name] || 0);
     if (unusedBudget <= 0) {
       toast.error('No unused budget available to roll over');
       return;
     }
+    if (saving || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSaving(true);
     const rolloverAmount = calculateRolloverAmount(unusedBudget, category.rolloverPercentage);
     if (rolloverAmount <= 0) {
       toast.error('Rollover amount is zero');
+      inFlightRef.current = false;
+      setSaving(false);
+      return;
+    }
+    const ok = await updateBudgetCategory(category.id, { rolledOverAmount: rolloverAmount });
+    if (!ok) {
+      toast.error('Failed to create rollover entry');
+      inFlightRef.current = false;
       setSaving(false);
       return;
     }
@@ -166,7 +184,6 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       category.rolloverPercentage
     );
     if (entry) {
-      await updateBudgetCategory(category.id, { rolledOverAmount: rolloverAmount });
       setCategories((prev) => prev.map((c) =>
         c.id === category.id ? { ...c, rolledOverAmount: rolloverAmount } : c
       ));
@@ -175,6 +192,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
     } else {
       toast.error('Failed to create rollover entry');
     }
+    inFlightRef.current = false;
     setSaving(false);
   };
 
@@ -293,7 +311,12 @@ export function RolloverManager({ user }: RolloverManagerProps) {
               const rolloverAmount = category.rolloverEnabled
                 ? calculateRolloverAmount(unusedBudget, category.rolloverPercentage)
                 : 0;
-              const rolloverPercentage = category.monthlyLimit > 0 ? (unusedBudget / category.monthlyLimit) * 100 : 0;
+              const effectiveLimit = category.rolloverEnabled
+                ? category.monthlyLimit + Math.max(0, category.rolledOverAmount || 0)
+                : category.monthlyLimit;
+              const rolloverPercentage = effectiveLimit > 0 ? (unusedBudget / effectiveLimit) * 100 : 0;
+              const alreadyRolled = category.rolloverEnabled ? Math.max(0, category.rolledOverAmount || 0) : 0;
+              const remainingUnused = Math.max(0, unusedBudget - alreadyRolled);
 
               return (
                 <motion.div
@@ -314,9 +337,9 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 Active
                               </Badge>
                             )}
-                            {unusedBudget > 0 && (
+                            {remainingUnused > 0 && (
                               <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                {formatCurrency(unusedBudget)} unused
+                                {formatCurrency(remainingUnused)} unused
                               </Badge>
                             )}
                           </div>
@@ -331,7 +354,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 className="w-24 h-8 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 rounded-lg text-xs"
                               />
                             </div>
-                            {category.monthlyLimit > 0 && (
+                            {effectiveLimit > 0 && (
                               <div className="flex items-center gap-2">
                                 <span className="uppercase tracking-wider font-semibold">Unused</span>
                                 <span className="text-slate-300 font-medium tabular-nums">

@@ -165,21 +165,28 @@ export function calculateTotalValue(holdings: Holding[]): number {
  * `rates` and `baseCurrency` are supplied each holding is converted via
  * `convertAmount` (USD-base FX table) before it is summed, so multi-currency
  * portfolios no longer treat every local-currency amount as if it were the
- * base currency. Holdings whose currency is missing from the rate table fall
- * back to their raw local value rather than being dropped, so totals stay
- * stable when a rate is temporarily unavailable.
+ * base currency. When a rate is genuinely missing or non-positive,
+ * `convertAmount` returns `null` and we surface that (log a warning and return
+ * `null`) instead of silently folding the foreign amount in at 1:1 parity, so
+ * totals, allocations and performance are not overstated.
  */
 function holdingBaseValue(
   holding: Holding,
   rates?: Record<string, number>,
   baseCurrency?: string,
-): number {
+): number | null {
   const local = holding.quantity * holding.currentPrice;
   if (!rates || !baseCurrency || !holding.currency || holding.currency === baseCurrency) {
     return local;
   }
   const converted = convertAmount(local, holding.currency, baseCurrency, rates);
-  return converted == null ? local : converted;
+  if (converted == null) {
+    console.warn(
+      `Skipping holding ${holding.symbol}: FX rate unavailable for ${holding.currency} → ${baseCurrency}.`,
+    );
+    return null;
+  }
+  return converted;
 }
 
 export function calculateTotalValue(
@@ -187,7 +194,10 @@ export function calculateTotalValue(
   rates?: Record<string, number>,
   baseCurrency?: string,
 ): number {
-  return holdings.reduce((sum, h) => sum + holdingBaseValue(h, rates, baseCurrency), 0);
+  return holdings.reduce((sum, h) => {
+    const v = holdingBaseValue(h, rates, baseCurrency);
+    return sum + (v == null ? 0 : v);
+  }, 0);
 }
 
 export function calculateProfitLoss(holding: Holding): { value: number; percent: number } {
@@ -207,6 +217,7 @@ export function calculateAllocation(
   const classMap = new Map<AssetClass, number>();
   holdings.forEach((h) => {
     const value = holdingBaseValue(h, rates, baseCurrency);
+    if (value == null) return;
     classMap.set(h.assetClass, (classMap.get(h.assetClass) || 0) + value);
   });
 
@@ -225,10 +236,10 @@ export function calculatePerformance(
   baseCurrency?: string,
 ): PerformanceMetrics {
   const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
-  const totalCost = holdings.reduce(
-    (sum, h) => sum + holdingBaseValue({ ...h, currentPrice: h.avgCost }, rates, baseCurrency),
-    0,
-  );
+  const totalCost = holdings.reduce((sum, h) => {
+    const v = holdingBaseValue({ ...h, currentPrice: h.avgCost }, rates, baseCurrency);
+    return sum + (v == null ? 0 : v);
+  }, 0);
   const totalProfitLoss = totalValue - totalCost;
   const totalProfitLossPercent = totalCost > 0 ? (totalProfitLoss / totalCost) * 100 : 0;
 
@@ -269,11 +280,12 @@ export function generatePortfolioSummary(
   const topHoldings = holdings
     .map((h) => {
       const value = holdingBaseValue(h, rates, baseCurrency);
+      const safeValue = value == null ? 0 : value;
       return {
         symbol: h.symbol,
         name: h.name,
-        value,
-        weight: metrics.totalValue > 0 ? value / metrics.totalValue : 0,
+        value: safeValue,
+        weight: metrics.totalValue > 0 ? safeValue / metrics.totalValue : 0,
       };
     })
     .sort((a, b) => b.value - a.value)
@@ -295,28 +307,43 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     const symbol = input.symbol.trim();
     const now = new Date().toISOString();
 
-    // Queries are not allowed inside client transactions — resolve the holding
-    // document ref first, then lock/update it atomically with the ledger write.
-    let holdingRef = input.holdingId ? doc(db, 'portfolioHoldings', input.holdingId) : null;
-    if (!holdingRef && (input.type === 'buy' || input.type === 'sell')) {
+    // Best-effort lookup for a *legacy* holding created under a non-stable id
+    // (e.g. via addHolding). This is only a hint: the authoritative existence
+    // check for a brand-new symbol happens inside runTransaction below, so two
+    // concurrent buys of the same new symbol cannot each mint a duplicate
+    // holding (TOCTOU outside the transaction).
+    let legacyHoldingRef: ReturnType<typeof doc> | null = null;
+    if (!input.holdingId && (input.type === 'buy' || input.type === 'sell')) {
       const holdingsSnap = await getDocs(
         query(holdings, where('userId', '==', userId), where('symbol', '==', symbol)),
       );
       if (!holdingsSnap.empty) {
-        holdingRef = holdingsSnap.docs[0].ref;
-      } else if (input.type === 'buy') {
-        holdingRef = doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
-      } else {
-        throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
+        legacyHoldingRef = holdingsSnap.docs[0].ref;
       }
     }
 
     const transaction = await runTransaction(db, async (tx) => {
-      let resolvedHoldingId = holdingRef?.id || input.holdingId || '';
+      let resolvedHoldingId = input.holdingId || '';
 
-      if ((input.type === 'buy' || input.type === 'sell') && holdingRef) {
+      if (input.type === 'buy' || input.type === 'sell') {
+        // Resolve the holding ref deterministically from userId+symbol so
+        // Firestore guards the create against concurrent transactions. The
+        // existence read happens inside the transaction, keeping the ledger
+        // write atomic with the holding resolution.
+        let holdingRef = input.holdingId
+          ? doc(db, 'portfolioHoldings', input.holdingId)
+          : doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
+
         const holdingSnap = await tx.get(holdingRef);
-        const existing = holdingSnap.data();
+        let existing = holdingSnap.data();
+
+        // Fall back to a legacy holding found outside the transaction only if
+        // the stable id does not yet exist, so existing non-stable holdings are
+        // still updated rather than duplicated.
+        if (!existing && legacyHoldingRef && legacyHoldingRef.id !== holdingRef.id) {
+          holdingRef = legacyHoldingRef;
+          existing = (await tx.get(holdingRef)).data();
+        }
 
         if (!existing) {
           if (input.type === 'sell') {
@@ -356,13 +383,14 @@ export async function addTransaction(userId: string, input: TransactionInput): P
                 quantity
               : existing.avgCost || 0;
 
-          tx.update(holdingRef, {
+          const update: Record<string, unknown> = {
             quantity,
             avgCost,
             portfolioId: input.portfolioId,
-            currentPrice: input.price,
             updatedAt: serverTimestamp(),
-          });
+          };
+          if (input.type === "buy") update.currentPrice = input.price;
+          tx.update(holdingRef, update);
         }
 
         resolvedHoldingId = holdingRef.id;
@@ -727,10 +755,18 @@ export async function savePortfolioSnapshot(
   userId: string,
   portfolioId: string,
   holdings: Holding[],
+  rates?: Record<string, number>,
+  baseCurrency?: string,
 ): Promise<boolean> {
   try {
-    const totalValue = calculateTotalValue(holdings);
-    const totalCost = holdings.reduce((sum, h) => sum + h.avgCost * h.quantity, 0);
+    const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
+    const totalCost = holdings.reduce((sum, h) => {
+      const local = h.avgCost * h.quantity;
+      if (!rates || !baseCurrency || !h.currency || h.currency === baseCurrency)
+        return sum + local;
+      const converted = convertAmount(local, h.currency, baseCurrency, rates);
+      return sum + (converted == null ? local : converted);
+    }, 0);
     const profitLoss = totalValue - totalCost;
     const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
 

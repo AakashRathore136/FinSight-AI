@@ -71,7 +71,7 @@ async function persistGeneratedForecasts(
   if (!generated.length) return;
   const existing = await getForecasts(userId);
   const byMonth = new Map(existing.map((f) => [f.month, f]));
-  for (const m of generated.slice(0, 6)) {
+  for (const m of generated) {
     const payload = {
       month: m.month,
       projectedIncome: m.income,
@@ -112,13 +112,15 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
       try {
         const existing = await getForecasts(user.uid);
         if (existing.length > 0 && active) {
-          const mapped: MonthlyForecast[] = existing.map((f) => ({
-            month: f.month,
-            income: f.projectedIncome,
-            expenses: f.projectedExpenses,
-            net: f.netBalance,
-            confidence: f.confidence,
-          }));
+          const mapped: MonthlyForecast[] = existing
+            .map((f) => ({
+              month: f.month,
+              income: f.projectedIncome,
+              expenses: f.projectedExpenses,
+              net: f.netBalance,
+              confidence: f.confidence,
+            }))
+            .sort((a, b) => a.month.localeCompare(b.month));
           setMonthly(mapped);
           setQuarterly(generateQuarterlyForecast(mapped));
         } else if (active) {
@@ -167,31 +169,49 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
   }, [filteredMonthly]);
 
   const totalProjectedIncome = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.income, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.income, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const totalProjectedExpenses = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.expenses, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.expenses, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const totalNet = useMemo(
-    () => filteredMonthly.reduce((s, m) => s + m.net, 0),
-    [filteredMonthly]
+    () =>
+      (activeView === "monthly"
+        ? filteredMonthly
+        : filteredQuarterly.map((q) => ({ ...q, month: q.quarter }))
+      ).reduce((s, m) => s + m.net, 0),
+    [activeView, filteredMonthly, filteredQuarterly]
   );
 
   const handleExport = () => {
     const data = activeView === 'monthly'
-      ? filteredMonthly
+      ? filteredMonthly.map((m) => ({
+          period: m.month,
+          income: m.income,
+          expenses: m.expenses,
+          net: m.net,
+          confidence: m.confidence,
+        }))
       : filteredQuarterly.map((q) => ({
-          month: q.quarter,
+          period: q.quarter,
           income: q.income,
           expenses: q.expenses,
           net: q.net,
           confidence: q.confidence,
         }));
-    const csv = exportForecastChart(data as MonthlyForecast[]);
+    const csv = exportForecastChart(data);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

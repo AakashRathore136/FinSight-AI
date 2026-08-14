@@ -60,7 +60,15 @@ export async function adjudicateClaims(
     const batch = unverifiedClaims.slice(i, i + batchSize);
     
     const claimsWithContext = batch.map((claim) => {
-      const { relevantChunks } = ragEngine.retrieveContext(claim.raw, 3);
+      // Key-metric claims store `raw` as a bare normalized integer
+      // (e.g. "4523000"); the source prints it grouped ("4,523,000"), which
+      // tokenizes to distinct tokens with no overlap. Build a query in the
+      // lexical form present in the source so the figure can be retrieved.
+      const lexicalFigure = Number.isFinite(claim.value)
+        ? claim.value.toLocaleString("en-US")
+        : claim.raw;
+      const query = `${claim.label} ${lexicalFigure}`;
+      const { relevantChunks } = ragEngine.retrieveContext(query, 3);
       return {
         claim,
         chunks: relevantChunks,

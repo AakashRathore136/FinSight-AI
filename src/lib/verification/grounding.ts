@@ -358,7 +358,7 @@ function summarize(claims: GroundedClaim[]): GroundingSummary {
     verified,
     derived,
     unverified,
-    ratio: totalClaims === 0 ? 0 : verified / totalClaims,
+    ratio: totalClaims === 0 ? 0 : (verified + derived) / totalClaims,
     adjudicated: false,
     version: 1,
   };

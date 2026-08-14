@@ -136,6 +136,39 @@ export function AnalysisList({ type, user, onSelect }: any) {
       return;
 
     if (id.startsWith("local-")) {
+      // Local-fallback documents exist only as Storage objects with no
+      // Firestore record, so before dropping the local mirror purge the object
+      // server-side (namespace + uploadedBy verified by the API). If the purge
+      // request fails, the local removal still proceeds but a warning is kept.
+      const localDoc = documents.find((doc) => doc.id === id);
+      if (localDoc?.storagePath) {
+        try {
+          const headers: Record<string, string> = {};
+          try {
+            const idToken = await (user as any)?.getIdToken?.();
+            if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+          } catch (tErr) {
+            console.warn("Could not fetch ID token for local document purge", tErr);
+          }
+          const res = await apiFetch(
+            "/api/documents/delete",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...headers,
+              },
+              body: JSON.stringify({ documentId: id, storagePath: localDoc.storagePath }),
+            },
+            { timeout: 30000 },
+          );
+          if (!res.ok) {
+            console.warn(`Local Storage purge failed (${res.status}) for ${id}`);
+          }
+        } catch (purgeErr) {
+          console.warn("Local Storage purge failed:", purgeErr);
+        }
+      }
       deleteLocalDocument(id);
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
       toast.success("Document removed");

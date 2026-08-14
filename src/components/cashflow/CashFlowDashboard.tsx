@@ -41,6 +41,8 @@ import {
   BalanceProjection,
   RecurringTransaction,
 } from "@/src/lib/cashflowUtils";
+import { formatCurrency } from "@/src/lib/utils";
+import { useBaseCurrency } from "@/src/hooks/useBaseCurrency";
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#10b981"];
 const LEGACY_STARTING_BALANCE_KEY = "finsight_starting_balance";
@@ -57,6 +59,14 @@ export function CashFlowDashboard({ user }: { user: any }) {
   const [confidence, setConfidence] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [startingBalance, setStartingBalance] = useState(0);
+  const baseCurrency = useBaseCurrency(user);
+
+  const fmtAxis = (val: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: baseCurrency,
+      maximumFractionDigits: 0,
+    }).format(val / 1000) + "k";
 
   useEffect(() => {
     loadCashFlowData();
@@ -331,7 +341,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
                       fontSize={12}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                      tickFormatter={fmtAxis}
                       width={70}
                     />
                     <Tooltip
@@ -343,10 +353,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
                       itemStyle={{ color: "#f8fafc" }}
                       labelStyle={{ color: "#94a3b8" }}
                       formatter={(value: number) => [
-                        new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                        }).format(value),
+                        formatCurrency(value, baseCurrency),
                         "Balance",
                       ]}
                     />
@@ -398,7 +405,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
                       fontSize={12}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                      tickFormatter={fmtAxis}
                       width={70}
                     />
                     <Tooltip
@@ -410,10 +417,7 @@ export function CashFlowDashboard({ user }: { user: any }) {
                       itemStyle={{ color: "#f8fafc" }}
                       labelStyle={{ color: "#94a3b8" }}
                       formatter={(value: number) => [
-                        new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                        }).format(value),
+                        formatCurrency(value, baseCurrency),
                         "",
                       ]}
                     />

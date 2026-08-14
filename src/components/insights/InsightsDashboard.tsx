@@ -195,7 +195,7 @@ function WeeklySection({
   baseCurrency: string;
 }) {
   const { weeklySummary, weekly } = bundle;
-  const summary = generatePlainSummary(weeklySummary);
+  const summary = generatePlainSummary(weeklySummary, baseCurrency);
   const topDeltas = weekly.slice(0, 6);
 
   return (
@@ -263,7 +263,7 @@ function MonthlySection({
   baseCurrency: string;
 }) {
   const { monthlySummary } = bundle;
-  const summary = generatePlainSummary(monthlySummary);
+  const summary = generatePlainSummary(monthlySummary, baseCurrency);
 
   return (
     <section>
