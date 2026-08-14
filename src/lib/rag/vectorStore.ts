@@ -79,6 +79,7 @@ export class InMemoryVectorStore {
     });
 
     return scored
+      .filter((c) => c.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   }
