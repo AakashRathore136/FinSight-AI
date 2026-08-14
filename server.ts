@@ -1422,6 +1422,25 @@ CRITICAL RULES:
     standardHeaders: false,
   });
 
+  // /api/documents/delete performs a Firestore read, a Storage metadata get, a
+  // batched delete, and a Storage object delete per call. It is state-changing
+  // and cost-amplifying, so it must be throttled just like the analyze and
+  // download-URL endpoints instead of being freely loopable.
+  const documentDeleteRateLimiter = rateLimit({
+    keyGenerator: (req: any) => req.ownerId || req.ip,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 60, // 60 deletions per user per 15 minutes
+    message: {
+      error: {
+        stage: "RATE_LIMIT",
+        reason:
+          "Too many document deletion requests (max 60 per 15 minutes per user)",
+        recommendation: "Please slow down and try again later.",
+      },
+    },
+    standardHeaders: false,
+  });
+
   app.post("/api/document-download-url", downloadUrlRateLimiter, async (req: any, res) => {
     try {
       const { storagePath, documentId } = req.body;
@@ -1579,6 +1598,8 @@ CRITICAL RULES:
   // object in one operation. Firestore deletes do not cascade, and a bare
   // client-side deleteDoc would leave the PDF readable via signed URLs
   // forever. Ownership is verified against the Firestore record before any
+  // metadata or object is removed.
+  app.post("/api/documents/delete", documentDeleteRateLimiter, async (req: any, res) => {
   // metadata or object is removed. Local-fallback documents (Issue #1343)
   // have no Firestore record, so they are purged from Storage directly after
   // the same namespace + uploadedBy ownership checks.
