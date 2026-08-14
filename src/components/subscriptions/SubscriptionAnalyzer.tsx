@@ -130,7 +130,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
       });
     }
 
-    return result.sort(
+    return [...result].sort(
       (a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime(),
     );
   }, [subscriptions, filter, showUpcomingOnly]);
