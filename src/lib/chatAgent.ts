@@ -123,11 +123,11 @@ export const TOOL_CATALOGUE: AgentTool[] = [
         type: tx.type,
       } as any));
       const threshold = toNumber(args.threshold, 2);
-      const anomalies: Anomaly[] = detectAnomaliesCore(coreTxns);
+      const anomalies: Anomaly[] = detectAnomaliesCore(coreTxns, threshold);
       // Convert to Insight-like format for the chat response
       return anomalies
-        .filter((a) => a.type === "large_transaction")
         .map((a) => ({
+          type: a.type,
           category: a.category,
           amount: a.amount,
           averageAmount: a.averageAmount,
