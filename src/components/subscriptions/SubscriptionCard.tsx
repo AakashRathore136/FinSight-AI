@@ -18,6 +18,7 @@ import { formatCurrency } from "@/src/lib/utils";
 import {
   updateSubscription,
   deleteSubscription,
+  getAnnualizationFactor,
 } from "@/src/lib/subscriptionUtils";
 
 interface SubscriptionCardProps {
@@ -219,29 +220,18 @@ export function SubscriptionCard({
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
                   {formatCurrency(
-                    subscription.amount *
-                    (subscription.frequency === "monthly"
-                      ? 12
-                      : subscription.frequency === "yearly"
-                        ? 1
-                        : 52)
+                    subscription.amount * getAnnualizationFactor(subscription)
                   )}
                 </span>
               </div>
               <Progress
-                value={
-                  subscription.frequency === "monthly"
-                    ? 100 / 12
-                    : subscription.frequency === "yearly"
-                      ? 100
-                      : 100 / 52
-                }
+                value={100 / getAnnualizationFactor(subscription)}
                 className="h-1.5 bg-slate-800"
               >
                 <div
                   className="h-full bg-indigo-500 rounded-full transition-all"
                   style={{
-                    width: `${subscription.frequency === "monthly" ? 100 / 12 : subscription.frequency === "yearly" ? 100 : 100 / 52}%`,
+                    width: `${100 / getAnnualizationFactor(subscription)}%`,
                   }}
                 />
               </Progress>
