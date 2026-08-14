@@ -89,7 +89,20 @@ export function deriveSpendingPattern(
       })
       .filter((m): m is string => Boolean(m)),
   ).size || 1;
-  const totalMonthlySpend = totalExpenses / months;
+
+  // Use the actual analysis window length (span of months in the fetched
+  // transactions) rather than the count of months that contain an expense,
+  // so sporadic spenders get a realistic monthly baseline instead of an
+  // inflated totalExpenses / months-with-activity.
+  const allExpenseDates = expenses
+    .map((t) => toDate(t.date))
+    .filter((d): d is Date => Boolean(d));
+  let windowMonths = months;
+  if (allExpenseDates.length) {
+    const monthNums = allExpenseDates.map((d) => d.getFullYear() * 12 + d.getMonth());
+    windowMonths = Math.max(1, Math.max(...monthNums) - Math.min(...monthNums) + 1);
+  }
+  const totalMonthlySpend = totalExpenses / windowMonths;
 
   const spendIn = (predicate: (category: string) => boolean): number =>
     expenses
