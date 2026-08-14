@@ -503,14 +503,15 @@ export function calculateCategoryTrends(
   if (transactions.length === 0) return { trends: [], categories: [] };
 
   const now = new Date();
+  const endWindow = endOfMonth(subMonths(now, 1)); // last fully-elapsed month
   const startWindow = startOfMonth(subMonths(now, months - 1));
   const intervalMonths = eachMonthOfInterval({
     start: startWindow,
-    end: now,
+    end: endWindow,
   });
 
   // Determine top categories over the window to limit chart lines.
-  const windowTx = filterByPeriod(transactions, startWindow, endOfMonth(now));
+  const windowTx = filterByPeriod(transactions, startWindow, endWindow);
   const topCategories = sumByCategory(windowTx)
     .slice(0, 5)
     .map((c) => c.category);
