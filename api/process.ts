@@ -20,6 +20,8 @@ export const config = {
 
 export const maxDuration = 60; // Grant up to 60s execution time on Vercel
 
+import DOMPurify from "isomorphic-dompurify";
+
 // ---------------------------------------------------------------------------
 // Tiny helpers
 // ---------------------------------------------------------------------------
@@ -330,6 +332,38 @@ function validatePayload(p: any) {
   return p;
 }
 
+function sanitizeString(text: string): string {
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFallbackPayload(p: any) {
+  return {
+    summary: sanitizeString(String(p.summary || "")),
+    key_metrics:
+      typeof p.key_metrics === "object" && p.key_metrics ? p.key_metrics : {},
+    risk_assessment: Array.isArray(p.risk_assessment)
+      ? p.risk_assessment.map((item: any) => {
+        if (item && typeof item === "object") {
+          return {
+            level: sanitizeString(String(item.level || "")),
+            description: sanitizeString(String(item.description || "")),
+          };
+        }
+        return sanitizeString(String(item || ""));
+      })
+      : [],
+    action_items: Array.isArray(p.action_items)
+      ? p.action_items.map((v: any) => sanitizeString(String(v)))
+      : [],
+    sentiment_score: Number(p.sentiment_score || 0),
+    entities: Array.isArray(p.entities)
+      ? p.entities.map((v: any) => sanitizeString(String(v)))
+      : [],
+    full_report: sanitizeString(String(p.full_report || "")),
+  };
+}
+
 const SYSTEM_PROMPT = `You are a senior financial intelligence analyst. Produce detailed financial analysis based ONLY on the provided document.
 
 CRITICAL SECURITY NOTE:
@@ -622,10 +656,15 @@ export default async function handler(req: any, res: any) {
     const usedFallback = !analysisResult;
     if (!analysisResult) {
       console.warn(`[process] Using fallback analysis (hfKey present: ${!!hfKey})`);
-      analysisResult = buildFallbackAnalysis(
-        textForAnalysis,
-        filename,
-        hfKey ? "AI model returned invalid or timed out response" : "HUGGINGFACE_API_KEY not set in Vercel environment variables",
+      // The fallback embeds the user-controlled filename and extracted PDF text,
+      // so it must go through the same string sanitization as the AI path before
+      // it can be persisted (stored-XSS / script-injection defense).
+      analysisResult = sanitizeFallbackPayload(
+        buildFallbackAnalysis(
+          textForAnalysis,
+          filename,
+          hfKey ? "AI model returned invalid or timed out response" : "HUGGINGFACE_API_KEY not set in Vercel environment variables",
+        ),
       );
     }
 
@@ -688,7 +727,7 @@ export default async function handler(req: any, res: any) {
 
         const docData = {
           ownerId,
-          fileName: filename,
+          fileName: sanitizeString(filename),
           fileType: "application/pdf",
           fileSize: fileBuffer.length,
           fileUrl,

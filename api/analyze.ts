@@ -250,6 +250,13 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   if (wordCount < 120)
     throw new Error(`full_report too short (${wordCount} words)`);
 
+  return sanitizeAnalysisPayload(payload);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeAnalysisPayload(payload: any): AnalysisResponse {
+  const fullReport = String(payload.full_report || "").trim();
+
   return {
     summary: sanitizeString(String(payload.summary || "")),
     key_metrics:
@@ -699,10 +706,12 @@ full_report MUST be at least 300 words.`;
     }
 
     if (!validPayload) {
-      validPayload = buildFallbackAnalysis(
-        extractedText,
-        filename,
-        fallbackReason || undefined,
+      validPayload = sanitizeAnalysisPayload(
+        buildFallbackAnalysis(
+          extractedText,
+          filename,
+          fallbackReason || undefined,
+        ),
       );
     }
 
@@ -750,7 +759,7 @@ full_report MUST be at least 300 words.`;
 
     const docData: any = {
       ownerId,
-      fileName: filename,
+      fileName: sanitizeString(filename),
       fileType: "application/pdf",
       fileSize: fileBuffer.length,
       fileUrl,
