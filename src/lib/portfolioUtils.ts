@@ -165,21 +165,28 @@ export function calculateTotalValue(holdings: Holding[]): number {
  * `rates` and `baseCurrency` are supplied each holding is converted via
  * `convertAmount` (USD-base FX table) before it is summed, so multi-currency
  * portfolios no longer treat every local-currency amount as if it were the
- * base currency. Holdings whose currency is missing from the rate table fall
- * back to their raw local value rather than being dropped, so totals stay
- * stable when a rate is temporarily unavailable.
+ * base currency. When a rate is genuinely missing or non-positive,
+ * `convertAmount` returns `null` and we surface that (log a warning and return
+ * `null`) instead of silently folding the foreign amount in at 1:1 parity, so
+ * totals, allocations and performance are not overstated.
  */
 function holdingBaseValue(
   holding: Holding,
   rates?: Record<string, number>,
   baseCurrency?: string,
-): number {
+): number | null {
   const local = holding.quantity * holding.currentPrice;
   if (!rates || !baseCurrency || !holding.currency || holding.currency === baseCurrency) {
     return local;
   }
   const converted = convertAmount(local, holding.currency, baseCurrency, rates);
-  return converted == null ? local : converted;
+  if (converted == null) {
+    console.warn(
+      `Skipping holding ${holding.symbol}: FX rate unavailable for ${holding.currency} → ${baseCurrency}.`,
+    );
+    return null;
+  }
+  return converted;
 }
 
 export function calculateTotalValue(
@@ -187,7 +194,10 @@ export function calculateTotalValue(
   rates?: Record<string, number>,
   baseCurrency?: string,
 ): number {
-  return holdings.reduce((sum, h) => sum + holdingBaseValue(h, rates, baseCurrency), 0);
+  return holdings.reduce((sum, h) => {
+    const v = holdingBaseValue(h, rates, baseCurrency);
+    return sum + (v == null ? 0 : v);
+  }, 0);
 }
 
 export function calculateProfitLoss(holding: Holding): { value: number; percent: number } {
@@ -207,6 +217,7 @@ export function calculateAllocation(
   const classMap = new Map<AssetClass, number>();
   holdings.forEach((h) => {
     const value = holdingBaseValue(h, rates, baseCurrency);
+    if (value == null) return;
     classMap.set(h.assetClass, (classMap.get(h.assetClass) || 0) + value);
   });
 
@@ -225,10 +236,10 @@ export function calculatePerformance(
   baseCurrency?: string,
 ): PerformanceMetrics {
   const totalValue = calculateTotalValue(holdings, rates, baseCurrency);
-  const totalCost = holdings.reduce(
-    (sum, h) => sum + holdingBaseValue({ ...h, currentPrice: h.avgCost }, rates, baseCurrency),
-    0,
-  );
+  const totalCost = holdings.reduce((sum, h) => {
+    const v = holdingBaseValue({ ...h, currentPrice: h.avgCost }, rates, baseCurrency);
+    return sum + (v == null ? 0 : v);
+  }, 0);
   const totalProfitLoss = totalValue - totalCost;
   const totalProfitLossPercent = totalCost > 0 ? (totalProfitLoss / totalCost) * 100 : 0;
 
@@ -269,11 +280,12 @@ export function generatePortfolioSummary(
   const topHoldings = holdings
     .map((h) => {
       const value = holdingBaseValue(h, rates, baseCurrency);
+      const safeValue = value == null ? 0 : value;
       return {
         symbol: h.symbol,
         name: h.name,
-        value,
-        weight: metrics.totalValue > 0 ? value / metrics.totalValue : 0,
+        value: safeValue,
+        weight: metrics.totalValue > 0 ? safeValue / metrics.totalValue : 0,
       };
     })
     .sort((a, b) => b.value - a.value)
