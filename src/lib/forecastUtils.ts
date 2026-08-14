@@ -12,7 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { format, isWithinInterval, intervalsOverlap } from 'date-fns';
+import { format, intervalsOverlap, startOfMonth, endOfMonth } from 'date-fns';
 import { toDate } from './utils';
 import { getForecastMonths } from './forecastMonthUtils';
 import { csvEscape } from './reportUtils';
@@ -225,7 +225,6 @@ export function applyFilters<T extends { month: string }>(
     const start = toDate(filter.startDate);
     const end = toDate(filter.endDate);
     if (!start || !end) return true;
-
     // Quarterly forecasts are anchored at the first month of the quarter but
     // span three months. Test overlap against the full quarter span so an
     // in-range quarter is not dropped just because its first month precedes
@@ -241,7 +240,9 @@ export function applyFilters<T extends { month: string }>(
       );
     }
 
-    return isWithinInterval(monthDate, { start, end });
+    const monthStart = startOfMonth(monthDate);
+    const monthEnd = endOfMonth(monthDate);
+    return monthStart <= end && monthEnd >= start;
   });
 }
 
