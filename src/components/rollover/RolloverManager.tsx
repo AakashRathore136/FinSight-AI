@@ -293,7 +293,12 @@ export function RolloverManager({ user }: RolloverManagerProps) {
               const rolloverAmount = category.rolloverEnabled
                 ? calculateRolloverAmount(unusedBudget, category.rolloverPercentage)
                 : 0;
-              const rolloverPercentage = category.monthlyLimit > 0 ? (unusedBudget / category.monthlyLimit) * 100 : 0;
+              const effectiveLimit = category.rolloverEnabled
+                ? category.monthlyLimit + Math.max(0, category.rolledOverAmount || 0)
+                : category.monthlyLimit;
+              const rolloverPercentage = effectiveLimit > 0 ? (unusedBudget / effectiveLimit) * 100 : 0;
+              const alreadyRolled = category.rolloverEnabled ? Math.max(0, category.rolledOverAmount || 0) : 0;
+              const remainingUnused = Math.max(0, unusedBudget - alreadyRolled);
 
               return (
                 <motion.div
@@ -314,9 +319,9 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 Active
                               </Badge>
                             )}
-                            {unusedBudget > 0 && (
+                            {remainingUnused > 0 && (
                               <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                {formatCurrency(unusedBudget)} unused
+                                {formatCurrency(remainingUnused)} unused
                               </Badge>
                             )}
                           </div>
@@ -331,7 +336,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                                 className="w-24 h-8 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 rounded-lg text-xs"
                               />
                             </div>
-                            {category.monthlyLimit > 0 && (
+                            {effectiveLimit > 0 && (
                               <div className="flex items-center gap-2">
                                 <span className="uppercase tracking-wider font-semibold">Unused</span>
                                 <span className="text-slate-300 font-medium tabular-nums">
