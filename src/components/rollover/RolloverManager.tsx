@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { RefreshCw, Settings2, RotateCcw, TrendingUp, Wallet, History as HistoryIcon, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,6 +47,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('categories');
+  const inFlightRef = useRef(false);
 
   const currentMonth = getCurrentMonthKey();
   const previousMonth = getPreviousMonthKey();
@@ -145,15 +146,32 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       toast.error('Enable rollover for this category first');
       return;
     }
+    const alreadyRolled = history.some(
+      (h) => h.category === category.name && h.toMonth === currentMonth && h.fromMonth === previousMonth
+    );
+    if (alreadyRolled) {
+      toast.info('Already rolled over for this month');
+      return;
+    }
     const unusedBudget = calculateUnusedBudget(category.monthlyLimit, priorMonthSpend[category.name] || 0);
     if (unusedBudget <= 0) {
       toast.error('No unused budget available to roll over');
       return;
     }
+    if (saving || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSaving(true);
     const rolloverAmount = calculateRolloverAmount(unusedBudget, category.rolloverPercentage);
     if (rolloverAmount <= 0) {
       toast.error('Rollover amount is zero');
+      inFlightRef.current = false;
+      setSaving(false);
+      return;
+    }
+    const ok = await updateBudgetCategory(category.id, { rolledOverAmount: rolloverAmount });
+    if (!ok) {
+      toast.error('Failed to create rollover entry');
+      inFlightRef.current = false;
       setSaving(false);
       return;
     }
@@ -166,7 +184,6 @@ export function RolloverManager({ user }: RolloverManagerProps) {
       category.rolloverPercentage
     );
     if (entry) {
-      await updateBudgetCategory(category.id, { rolledOverAmount: rolloverAmount });
       setCategories((prev) => prev.map((c) =>
         c.id === category.id ? { ...c, rolledOverAmount: rolloverAmount } : c
       ));
@@ -175,6 +192,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
     } else {
       toast.error('Failed to create rollover entry');
     }
+    inFlightRef.current = false;
     setSaving(false);
   };
 
