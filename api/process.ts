@@ -20,10 +20,11 @@ export const config = {
 
 export const maxDuration = 60; // Grant up to 60s execution time on Vercel
 
+import { randomUUID } from "crypto";
+
 // ---------------------------------------------------------------------------
 // Tiny helpers
 // ---------------------------------------------------------------------------
-
 function getEnv(key: string, fallback = ""): string {
   return String(process.env[key] ?? fallback).trim();
 }
@@ -670,7 +671,7 @@ export default async function handler(req: any, res: any) {
       : "low";
 
     const safeFilename = sanitizeStorageFilename(filename);
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
 
     const processAppCtx = await getAdminApp();
 
@@ -706,7 +707,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    let documentId = `local-${ownerId}-${now.getTime()}`;
+    let documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
     let persistenceMode = "local";
     let firestorePersisted = false;
 

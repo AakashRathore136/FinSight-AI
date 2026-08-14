@@ -11,6 +11,7 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import cors from "cors";
+import { randomUUID } from "crypto";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 import logger from "./src/lib/logger.js";
@@ -1082,7 +1083,7 @@ CRITICAL RULES:
         // SECURITY: For security, store only the storage path, not a permanent download URL
         // Signed URLs will be generated on-demand with short expiration (15 minutes)
         const safeFilename = sanitizeStorageFilename(file.originalname);
-        const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+        const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
         // Real Storage object URL, derived after upload. Included in docData and
         // every response record so client-side Firestore fallback writes pass
         // firestore.rules isValidDocument (requires a https `fileUrl`).
@@ -1262,7 +1263,7 @@ CRITICAL RULES:
             // Local-fallback: keep the uploaded Storage object so the owner can
             // download the source PDF (Issue #1029). Orphan cleanup for these
             // records is handled when the local document is deleted.
-            documentId = `local-${ownerId}-${now.getTime()}`;
+            documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
             console.warn(
               "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
             );
