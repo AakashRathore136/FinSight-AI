@@ -292,7 +292,12 @@ export async function addTransaction(userId: string, input: TransactionInput): P
   try {
     const transactionRef = doc(collection(db, 'portfolioTransactions'));
     const holdings = collection(db, 'portfolioHoldings');
-    const symbol = input.symbol.trim();
+    // Normalize the symbol identically to addHolding (uppercased) so a later
+    // BUY/SELL transaction always matches the holding created via "Add
+    // Holding" for the same instrument. Without this, addHolding stored
+    // 'AAPL' but addTransaction queried/created 'aapl', producing duplicate
+    // holdings for the same asset (issue #1363).
+    const symbol = input.symbol.trim().toUpperCase();
     const now = new Date().toISOString();
 
     // Queries are not allowed inside client transactions — resolve the holding
@@ -305,7 +310,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
       if (!holdingsSnap.empty) {
         holdingRef = holdingsSnap.docs[0].ref;
       } else if (input.type === 'buy') {
-        holdingRef = doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
+        holdingRef = doc(db, 'portfolioHoldings', `${userId}_${symbol}`);
       } else {
         throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
       }
