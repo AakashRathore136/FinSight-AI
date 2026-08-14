@@ -397,6 +397,22 @@ export async function generateBudgetSuggestions(
     (t) => t.type === 'expense' || (t.type !== 'income' && t.amount < 0),
   );
 
+  // Compute the true analysis-window length (min month -> max month across
+  // fetched expenses). A category spent in only 1 of the 3 fetched months
+  // previously got averageSpending = thatMonthTotal / 1, reporting a single
+  // month's spend as the monthly average and inflating confidenceScore
+  // (issue #1329).
+  const expenseMonthNums = expenseTransactions
+    .map((t) => {
+      const d = toDate(t.date);
+      return d ? d.getFullYear() * 12 + d.getMonth() : null;
+    })
+    .filter((m): m is number => m !== null);
+  const windowMonths =
+    expenseMonthNums.length > 0
+      ? Math.max(1, Math.max(...expenseMonthNums) - Math.min(...expenseMonthNums) + 1)
+      : 1;
+
   const categoryMonthlyTotals = new Map<string, Map<string, number>>();
   expenseTransactions.forEach((t) => {
     const dateVal = toDate(t.date);
@@ -413,7 +429,7 @@ export async function generateBudgetSuggestions(
   const suggestions: CategoryBudgetSuggestion[] = [];
   categoryMonthlyTotals.forEach((monthMap, category) => {
     const monthlyTotals = Array.from(monthMap.values());
-    const averageSpending = monthlyTotals.reduce((sum, v) => sum + v, 0) / monthlyTotals.length;
+    const averageSpending = monthlyTotals.reduce((sum, v) => sum + v, 0) / windowMonths;
     const suggestedAmount = Math.max(0, Math.round(averageSpending / 10) * 10);
     const variance =
       monthlyTotals.reduce((sum, v) => sum + Math.pow(v - averageSpending, 2), 0) /
