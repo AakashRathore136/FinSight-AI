@@ -165,9 +165,10 @@ export function calculateTotalValue(holdings: Holding[]): number {
  * `rates` and `baseCurrency` are supplied each holding is converted via
  * `convertAmount` (USD-base FX table) before it is summed, so multi-currency
  * portfolios no longer treat every local-currency amount as if it were the
- * base currency. Holdings whose currency is missing from the rate table fall
- * back to their raw local value rather than being dropped, so totals stay
- * stable when a rate is temporarily unavailable.
+ * base currency. A holding whose currency is missing from the rate table (or
+ * has a non-positive rate) cannot be safely converted; folding its raw local
+ * value in at parity would overstate totals, so it is skipped (returns 0) and
+ * surfaced via a warning instead.
  */
 function holdingBaseValue(
   holding: Holding,
@@ -179,7 +180,15 @@ function holdingBaseValue(
     return local;
   }
   const converted = convertAmount(local, holding.currency, baseCurrency, rates);
-  return converted == null ? local : converted;
+  if (converted == null) {
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(
+        `[FinSight] portfolio: no FX rate for ${holding.currency} -> ${baseCurrency}; holding excluded from totals`,
+      );
+    }
+    return 0;
+  }
+  return converted;
 }
 
 export function calculateTotalValue(
