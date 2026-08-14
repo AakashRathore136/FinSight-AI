@@ -264,7 +264,7 @@ export const TOOL_CATALOGUE: AgentTool[] = [
           ? aggressive
           : safeMonthly;
       return {
-        monthlyContribution: safeMonthly,
+        monthlyContribution: selectedMonthly,
         conservative,
         aggressive,
         timeline: Number.isFinite(safeMonthly)
