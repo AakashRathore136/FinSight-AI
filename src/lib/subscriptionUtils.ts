@@ -354,11 +354,15 @@ function advanceByFrequency(
     }
     case "monthly":
     default: {
+      // Advance from the 1st of the month (a stable anchor) so the original
+      // day survives short months. Advancing from a clamped date (e.g. Feb 28
+      // for a 31st subscription) permanently shifted renewals to the 28th,
+      // predicting them ~3 days early every month thereafter (issue #1350).
       const day = originalDay ?? date.getDate();
-      const next = addMonths(date, 1);
-      const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-      next.setDate(Math.min(day, lastDayOfNextMonth));
-      return next;
+      const base = new Date(date.getFullYear(), date.getMonth(), 1);
+      const advanced = addMonths(base, 1);
+      const lastDay = new Date(advanced.getFullYear(), advanced.getMonth() + 1, 0).getDate();
+      return new Date(advanced.getFullYear(), advanced.getMonth(), Math.min(day, lastDay));
     }
   }
 }
