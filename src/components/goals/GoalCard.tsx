@@ -141,7 +141,11 @@ export function GoalCard({
               <span>Deadline</span>
             </div>
             <p className="text-sm font-semibold text-white">
-              {daysRemaining > 0 ? `${daysRemaining} days left` : 'Overdue'}
+              {daysRemaining == null
+                ? 'No deadline'
+                : daysRemaining > 0
+                  ? `${daysRemaining} days left`
+                  : 'Overdue'}
             </p>
             <p className="text-[10px] text-slate-500 mt-0.5">
               {formatDateSafe(goal.deadline)}

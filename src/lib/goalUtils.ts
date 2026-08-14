@@ -43,10 +43,10 @@ export function checkGoalCompletion(goal: Goal): boolean {
   return goal.currentAmount >= goal.targetAmount && goal.status !== 'completed';
 }
 
-export function calculateDaysRemaining(deadline: string): number {
-  if (!deadline) return Infinity;
+export function calculateDaysRemaining(deadline: string): number | null {
+  if (!deadline) return null;
   const deadlineDate = new Date(deadline);
-  if (Number.isNaN(deadlineDate.getTime())) return Infinity;
+  if (Number.isNaN(deadlineDate.getTime())) return null;
   const now = new Date();
   const days = differenceInDays(deadlineDate, now);
   return Math.max(0, days);
@@ -136,6 +136,7 @@ export function getGoalStatus(goal: Goal): { label: string; color: string } {
 
   const progress = getProgressPercentage(goal.currentAmount, goal.targetAmount);
   if (progress >= 100) return { label: 'Ready to Complete', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
+  if (daysRemaining == null) return { label: 'No Deadline', color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' };
   if (daysRemaining <= 30) return { label: 'Urgent', color: 'bg-red-500/10 text-red-400 border-red-500/30' };
   if (daysRemaining <= 90) return { label: 'At Risk', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
 
