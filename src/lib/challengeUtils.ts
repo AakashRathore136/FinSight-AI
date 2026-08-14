@@ -344,14 +344,18 @@ export async function createChallenge(userId: string, data: Omit<Challenge, 'id'
   return docRef.id;
 }
 
-export async function updateChallengeProgress(challengeId: string, currentProgress: number): Promise<void> {
+export async function updateChallengeProgress(challengeId: string, amountToAdd: number): Promise<void> {
   const snap = await getDoc(doc(db, 'challenges', challengeId));
   if (!snap.exists()) return;
   const data = snap.data() as Challenge;
   if (data.isCompleted) return;
   const targetAmount = data.targetAmount ?? 0;
-  const completed = currentProgress >= targetAmount && targetAmount > 0;
-  const patch: Record<string, unknown> = { currentProgress };
+  // Combine the incoming amount with the latest server value rather than
+  // overwriting an absolute snapshot, so concurrent "Log progress" writes do
+  // not clobber each other's increments.
+  const newProgress = Math.min((data.currentProgress ?? 0) + amountToAdd, targetAmount);
+  const completed = newProgress >= targetAmount && targetAmount > 0;
+  const patch: Record<string, unknown> = { currentProgress: newProgress };
   if (completed) {
     patch.isCompleted = true;
     patch.completedAt = serverTimestamp();

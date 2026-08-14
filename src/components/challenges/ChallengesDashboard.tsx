@@ -176,9 +176,8 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
     async (challengeId: string, amount: number) => {
       const challenge = challenges.find((c) => c.id === challengeId);
       if (!challenge) return;
-      const newProgress = Math.min(challenge.currentProgress + amount, challenge.targetAmount);
       try {
-        await updateChallengeProgress(challengeId, newProgress);
+        await updateChallengeProgress(challengeId, amount);
         toast.success(`Logged ${formatCurrency(amount)} saved`);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `challenges/${challengeId}`);
@@ -190,13 +189,10 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
 
   const handleComplete = useCallback(
     async (challenge: Challenge) => {
-      const updatedProgress = Math.max(challenge.currentProgress, challenge.targetAmount);
-      // Keep the badge shown on the challenge card instead of recomputing a
-      // different tier from the difficulty-scaled target. awardBadge is only a
-      // fallback for legacy challenges that never stored a badge.
       const badge = challenge.badge ?? awardBadge(challenge);
+      const amountToAdd = Math.max(0, challenge.targetAmount - challenge.currentProgress);
       try {
-        await updateChallengeProgress(challenge.id, updatedProgress);
+        await updateChallengeProgress(challenge.id, amountToAdd);
         await completeChallenge(challenge.id, badge);
         toast.success(`Challenge complete! Earned ${BADGE_META[badge].label} badge`, {
           description: `+${DIFFICULTY_REWARDS[challenge.difficulty].points} points`,
