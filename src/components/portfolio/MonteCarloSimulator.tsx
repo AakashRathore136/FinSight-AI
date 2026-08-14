@@ -8,8 +8,8 @@ export const MonteCarloSimulator: React.FC = () => {
   const [initialValue, setInitialValue] = useState<number>(100000);
   const [days, setDays] = useState<number>(252); // 1 trading year
   const [numSimulations, setNumSimulations] = useState<number>(1000);
-  const [volatility, setVolatility] = useState<number>(0.2); // 20% annualized vol
-  const [expectedReturn, setExpectedReturn] = useState<number>(0.08); // 8% drift
+  const [volatility, setVolatility] = useState<number>(20); // 20% annualized vol
+  const [expectedReturn, setExpectedReturn] = useState<number>(8); // 8% drift
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [trajectories, setTrajectories] = useState<TrajectoryPoint[]>([]);
   const [var95, setVar95] = useState<number | null>(null);
@@ -19,8 +19,10 @@ export const MonteCarloSimulator: React.FC = () => {
 
     setTimeout(() => {
       const dt = 1 / 252;
-      const drift = (expectedReturn - 0.5 * Math.pow(volatility, 2)) * dt;
-      const volStep = volatility * Math.sqrt(dt);
+      const mu = expectedReturn / 100;
+      const sigma = volatility / 100;
+      const drift = (mu - 0.5 * Math.pow(sigma, 2)) * dt;
+      const volStep = sigma * Math.sqrt(dt);
 
       const allPaths: number[][] = Array.from({ length: numSimulations }, () => [initialValue]);
 
