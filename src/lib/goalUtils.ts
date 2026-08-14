@@ -26,9 +26,11 @@ export function calculateMonthlyContribution(
   if (remaining <= 0) return 0;
 
   // Guard against empty/invalid deadlines so we never return NaN downstream.
-  if (!deadline) return NaN;
+  // Return 0 (not NaN) so callers like formatCurrency render "\$0" instead of
+  // "NaN" when the deadline is missing or unparseable (issue #1352).
+  if (!deadline) return 0;
   const deadlineDate = new Date(deadline);
-  if (Number.isNaN(deadlineDate.getTime())) return NaN;
+  if (Number.isNaN(deadlineDate.getTime())) return 0;
 
   const now = new Date();
   // A past-due deadline is "overdue": no monthly contribution applies.
