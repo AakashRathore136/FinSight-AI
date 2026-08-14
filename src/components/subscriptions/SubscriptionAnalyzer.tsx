@@ -114,7 +114,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
   }, [subscriptions, recentTransactions]);
 
   const filteredSubscriptions = useMemo(() => {
-    let result = subscriptions;
+    let result = [...subscriptions];
 
     if (filter !== "all") {
       result = result.filter((s) => s.frequency === filter);
@@ -130,7 +130,7 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
       });
     }
 
-    return result.sort(
+    return [...result].sort(
       (a, b) => a.nextRenewalDate.getTime() - b.nextRenewalDate.getTime(),
     );
   }, [subscriptions, filter, showUpcomingOnly]);

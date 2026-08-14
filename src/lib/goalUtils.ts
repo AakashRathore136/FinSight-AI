@@ -1,4 +1,4 @@
-import { format, differenceInDays, addMonths } from 'date-fns';
+import { format, differenceInDays, differenceInCalendarMonths, addMonths } from 'date-fns';
 import { getDefaultCurrency } from '@/src/lib/utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/purity, react-hooks/refs, react-hooks/set-state-in-effect */
@@ -34,7 +34,7 @@ export function calculateMonthlyContribution(
   // A past-due deadline is "overdue": no monthly contribution applies.
   if (differenceInDays(deadlineDate, now) <= 0) return 0;
 
-  const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
+  const monthsRemaining = Math.max(1, differenceInCalendarMonths(deadlineDate, now));
 
   return Math.ceil(remaining / monthsRemaining);
 }
@@ -72,7 +72,7 @@ export function generateContributionSuggestions(
     return [{ label: 'Overdue — lump sum', amount: Math.ceil(remaining) }];
   }
 
-  const monthsRemaining = Math.max(1, differenceInDays(deadlineDate, now) / 30);
+  const monthsRemaining = Math.max(1, differenceInCalendarMonths(deadlineDate, now));
   const baseMonthly = Math.ceil(remaining / monthsRemaining);
 
   const suggestions = [

@@ -8,8 +8,8 @@ export const MonteCarloSimulator: React.FC = () => {
   const [initialValue, setInitialValue] = useState<number>(100000);
   const [days, setDays] = useState<number>(252); // 1 trading year
   const [numSimulations, setNumSimulations] = useState<number>(1000);
-  const [volatility, setVolatility] = useState<number>(0.2); // 20% annualized vol
-  const [expectedReturn, setExpectedReturn] = useState<number>(0.08); // 8% drift
+  const [volatility, setVolatility] = useState<number>(20); // 20% annualized vol
+  const [expectedReturn, setExpectedReturn] = useState<number>(8); // 8% drift
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [trajectories, setTrajectories] = useState<TrajectoryPoint[]>([]);
   const [var95, setVar95] = useState<number | null>(null);
@@ -19,14 +19,17 @@ export const MonteCarloSimulator: React.FC = () => {
 
     setTimeout(() => {
       const dt = 1 / 252;
-      const drift = (expectedReturn - 0.5 * Math.pow(volatility, 2)) * dt;
-      const volStep = volatility * Math.sqrt(dt);
+      const mu = expectedReturn / 100;
+      const sigma = volatility / 100;
+      const drift = (mu - 0.5 * Math.pow(sigma, 2)) * dt;
+      const volStep = sigma * Math.sqrt(dt);
 
       const allPaths: number[][] = Array.from({ length: numSimulations }, () => [initialValue]);
 
       for (let s = 0; s < numSimulations; s++) {
         let currentPrice = initialValue;
-        for (let d = 1; d <= days; d += 5) {
+        const numSteps = Math.floor(days / 5);
+        for (let i = 0; i < numSteps; i++) {
           // Standard Normal approximation (Box-Muller transform)
           const u1 = Math.random();
           const u2 = Math.random();
@@ -53,7 +56,7 @@ export const MonteCarloSimulator: React.FC = () => {
         const p90 = pricesAtStep[Math.floor(pricesAtStep.length * 0.9)];
 
         points.push({
-          step: stepIdx * 5,
+          step: Math.min((stepIdx + 1) * 5, days),
           p10: Math.round(p10),
           p50: Math.round(p50),
           p90: Math.round(p90),

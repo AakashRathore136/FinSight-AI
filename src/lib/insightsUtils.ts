@@ -13,7 +13,6 @@
  *  - Generating plain-language summaries of spending behaviour
  *  - Calculating category trends (week-over-week, month-over-month)
  */
-import { detectAnomalies as detectAnomaliesCanonical } from './anomalyUtils';
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import {
   startOfWeek,
@@ -166,9 +165,11 @@ function total(transactions: Transaction[]): number {
 
 /**
  * Fetch a user's transactions for the analysis windows. The query is bounded
- * server-side (orderBy date desc + limit) so reads stay flat as the user's
- * history grows; the analysis windows all sit inside the most recent
- * transactions, so a large limit is never exhausted in practice.
+ * server-side (date >= startDate + orderBy date desc + limit) so reads stay
+ * flat as the user's history grows while never silently truncating earlier
+ * months inside the analysis windows (e.g. weekly, monthly, 6-month trends).
+ * The 12-month startDate covers every analysis window plus a buffer, so the
+ * limit is only a safety cap rather than the source of truth.
  *
  * Returns an empty array (never throws) so the dashboard can render an
  * onboarding/empty state gracefully when no data exists yet.
@@ -179,9 +180,11 @@ export async function fetchTransactions(
 ): Promise<Transaction[]> {
   if (!userId) return [];
   try {
+    const startDate = startOfMonth(subMonths(new Date(), 12)); // cover all windows + buffer
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
+      where("date", ">=", startDate),
       orderBy("date", "desc"),
       limit(limitCount),
     );
@@ -248,6 +251,7 @@ export function detectAnomalies(
   const anomalies = detectAnomaliesCore(coreTransactions);
   const insights: Insight[] = anomalies
     .filter((a) => a.type === "large_transaction") // insights only surfaces large-transaction anomalies
+    .filter((a) => !ignoredTransactionIds?.has(a.transactionId))
     .map((a) => ({
       id: a.id || uid(),
       userId: a.userId,
@@ -259,24 +263,10 @@ export function detectAnomalies(
       amount: a.amount,
       period: a.comparisonPeriod || format(toDate(a.date), "MMM d, yyyy"),
       createdAt: new Date().toISOString(),
-    }));
+    }))
+    .filter((a) => !ignoredTransactionIds?.has(a.id));
 
   return insights.sort((a, b) => b.amount - a.amount);
-  const rawAnomalies = detectAnomaliesCanonical(transactions);
-
-  return rawAnomalies.map((item, idx) => {
-    const anomalyId = `anomaly-${idx}-${Date.now()}`;
-    return {
-      id: anomalyId,
-      type: 'anomaly' as const,
-      title: 'description' in item && typeof item.description === 'string'
-        ? item.description
-        : 'Transaction Anomaly Detected',
-      description: item.description || 'Anomalous financial pattern detected.',
-      severity: (item.severity as 'low' | 'medium' | 'high') || 'medium',
-      date: item.date ? new Date(item.date) : new Date(),
-    };
-  }).filter((item) => !ignoredTransactionIds?.has(item.id));
 }
 // ---------------------------------------------------------------------------
 // 3. Savings opportunities
@@ -503,14 +493,15 @@ export function calculateCategoryTrends(
   if (transactions.length === 0) return { trends: [], categories: [] };
 
   const now = new Date();
+  const endWindow = endOfMonth(subMonths(now, 1)); // last fully-elapsed month
   const startWindow = startOfMonth(subMonths(now, months - 1));
   const intervalMonths = eachMonthOfInterval({
     start: startWindow,
-    end: now,
+    end: endWindow,
   });
 
   // Determine top categories over the window to limit chart lines.
-  const windowTx = filterByPeriod(transactions, startWindow, endOfMonth(now));
+  const windowTx = filterByPeriod(transactions, startWindow, endWindow);
   const topCategories = sumByCategory(windowTx)
     .slice(0, 5)
     .map((c) => c.category);
@@ -559,7 +550,7 @@ function buildPeriodSummary(
 /**
  * Produce a friendly, plain-language sentence describing a period summary.
  */
-export function generatePlainSummary(summary: PeriodSummary): string {
+export function generatePlainSummary(summary: PeriodSummary, currency?: string): string {
   if (summary.transactionCount === 0) {
     return `No spending recorded for ${summary.label.toLowerCase()} yet. Once you add transactions, we'll break down where your money goes.`;
   }
@@ -567,16 +558,16 @@ export function generatePlainSummary(summary: PeriodSummary): string {
   const top = summary.topCategories[0];
   const parts: string[] = [];
   parts.push(
-    `You spent ${formatCurrency(summary.total)} across ${summary.transactionCount} transaction${
-      summary.transactionCount === 1 ? "" : "s"
-    } ${summary.label.toLowerCase()}.`,
+    `You spent ${formatCurrency(summary.total, currency)} across ${summary.transactionCount} transaction${
+       summary.transactionCount === 1 ? "" : "s"
+     } ${summary.label.toLowerCase()}.`,
   );
 
   if (top) {
     const share =
       summary.total > 0 ? Math.round((top.total / summary.total) * 100) : 0;
     parts.push(
-      `${top.category} was your biggest category at ${formatCurrency(top.total)} (${share}% of spend).`,
+      `${top.category} was your biggest category at ${formatCurrency(top.total, currency)} (${share}% of spend).`,
     );
   }
 
