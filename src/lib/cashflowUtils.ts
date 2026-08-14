@@ -152,7 +152,7 @@ export async function fetchUserTransactions(
       return {
         id: doc.id,
         userId: data.userId || "",
-        amount: Number(data.amount) || 0,
+        amount: Math.abs(Number(data.amount)) || 0,
         category: data.category || "Other",
         type: data.type === "income" ? "income" : "expense",
         date: toDate(data.date) || new Date(),
@@ -174,7 +174,7 @@ export async function fetchUserTransactions(
         return {
           id: doc.id,
           userId: data.userId || "",
-          amount: Number(data.amount) || 0,
+          amount: Math.abs(Number(data.amount)) || 0,
           category: data.category || "Other",
           type: normalizeTransactionType(data.type),
           date: parseTransactionDate(data.date),
@@ -206,11 +206,11 @@ export function calculateMonthlyForecast(
     // independent of `now` (deterministic for a given history).
     if (monthKey === currentMonth) return;
     if (t.type === "income") {
-      incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + t.amount;
+      incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + Math.abs(t.amount);
     } else {
       if (!expenseByMonth[monthKey]) expenseByMonth[monthKey] = {};
       expenseByMonth[monthKey][t.category] =
-        (expenseByMonth[monthKey][t.category] || 0) + t.amount;
+        (expenseByMonth[monthKey][t.category] || 0) + Math.abs(t.amount);
     }
   });
 
