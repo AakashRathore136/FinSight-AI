@@ -108,6 +108,10 @@ function applyCors(req: IncomingMessage, res: ServerResponse): void {
   if (origin && allowed.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
+    // These handlers authenticate via the Authorization header (a credential);
+    // credentialed cross-origin requests require this flag and an exact origin
+    // (not "*"), otherwise browsers block the authenticated call (issue #1353).
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   } else if (!origin && process.env.NODE_ENV !== "production") {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
