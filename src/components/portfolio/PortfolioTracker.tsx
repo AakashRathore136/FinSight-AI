@@ -48,7 +48,6 @@ import {
   type Transaction,
   type PortfolioSnapshot,
   calculateTotalValue,
-  calculateProfitLoss,
   calculateAllocation,
   fetchUserHoldings,
   fetchUserTransactions,
@@ -187,8 +186,18 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
     [holdings, rates, baseCurrency],
   );
   const profitLoss = useMemo(() => {
-    return holdings.reduce((sum, h) => sum + calculateProfitLoss(h).value, 0);
-  }, [holdings]);
+    // Convert each holding's value and cost to the base currency before
+    // summing, otherwise multi-currency portfolios produce profitLoss !=
+    // totalValue - totalCost and a wrong SummaryCard (issue #1355).
+    return holdings.reduce((sum, h) => {
+      const localValue = h.quantity * h.currentPrice;
+      const localCost = h.quantity * h.avgCost;
+      if (!rates || h.currency === baseCurrency) return sum + (localValue - localCost);
+      const value = h.currency ? convertAmount(localValue, h.currency, baseCurrency, rates) : null;
+      const cost = h.currency ? convertAmount(localCost, h.currency, baseCurrency, rates) : null;
+      return sum + ((value == null ? localValue : value) - (cost == null ? localCost : cost));
+    }, 0);
+  }, [holdings, rates, baseCurrency]);
   const allocation = useMemo(
     () => calculateAllocation(holdings, rates ?? undefined, baseCurrency),
     [holdings, rates, baseCurrency],
