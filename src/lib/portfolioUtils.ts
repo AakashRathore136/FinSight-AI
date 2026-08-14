@@ -360,7 +360,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             quantity,
             avgCost,
             portfolioId: input.portfolioId,
-            currentPrice: input.price,
+            ...(input.type === 'buy' ? { currentPrice: input.price } : {}),
             updatedAt: serverTimestamp(),
           });
         }
