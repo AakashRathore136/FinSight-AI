@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/src
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import { cn, formatCurrency } from '@/src/lib/utils';
 import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';

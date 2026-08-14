@@ -39,6 +39,7 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Badge } from '@/src/components/ui/badge';
 import { Progress, ProgressTrack, ProgressIndicator } from '@/src/components/ui/progress';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import { cn, formatCurrency, toDate } from '@/src/lib/utils';
 import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import {
