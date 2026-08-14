@@ -275,7 +275,7 @@ export function analyzeSubscriptionPattern(
 
   if (avgInterval >= 5 && avgInterval <= 10) {
     return { frequency: "weekly", confidence: consistency, avgIntervalDays: avgInterval };
-  } else if (avgInterval > 10 && avgInterval <= 18) {
+  } else if (avgInterval > 10 && avgInterval < 25) {
     return { frequency: "bi-weekly", confidence: consistency, avgIntervalDays: avgInterval };
   } else if (avgInterval >= 25 && avgInterval <= 35) {
     return { frequency: "monthly", confidence: consistency, avgIntervalDays: avgInterval };

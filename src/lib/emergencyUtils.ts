@@ -17,6 +17,7 @@ import {
   runTransaction,
   increment,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { addMonths, differenceInCalendarDays } from 'date-fns';
 import { db, handleFirestoreError, OperationType } from './firebase';
@@ -272,6 +273,51 @@ export async function addContribution(
     return updated;
   } catch (error) {
     console.error('Error adding emergency fund contribution:', error);
+    handleFirestoreError(error, OperationType.UPDATE, `emergency_funds/${fund.id}`);
+    return null;
+  }
+}
+
+export async function removeContribution(
+  fund: EmergencyFund,
+  contribution: Contribution,
+): Promise<EmergencyFund | null> {
+  if (!fund || !contribution || !contribution.id) return null;
+
+  try {
+    // Deletion must be transactional, mirroring addContribution: applying the
+    // delta against a fresh snapshot prevents a concurrent addContribution from
+    // being clobbered by an absolute overwrite of currentAmount/contributions.
+    const updated = await runTransaction(db, async (tx) => {
+      const fundRef = doc(db, 'emergency_funds', fund.id);
+      const snapshot = await tx.get(fundRef);
+      if (!snapshot.exists()) throw new Error('Emergency fund no longer exists');
+
+      const current = normalizeFund(fund.id, snapshot.data());
+      const currentAmount = Math.max(0, current.currentAmount - contribution.amount);
+      const estimatedCompletionDate = estimateCompletionDate(
+        current.targetAmount,
+        currentAmount,
+        current.monthlyContribution || 0,
+      );
+
+      tx.update(fundRef, {
+        currentAmount: increment(-contribution.amount),
+        contributions: arrayRemove(contribution),
+        estimatedCompletionDate,
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        ...current,
+        currentAmount,
+        estimatedCompletionDate,
+        contributions: current.contributions.filter((c) => c.id !== contribution.id),
+      };
+    });
+    return updated;
+  } catch (error) {
+    console.error('Error removing emergency fund contribution:', error);
     handleFirestoreError(error, OperationType.UPDATE, `emergency_funds/${fund.id}`);
     return null;
   }

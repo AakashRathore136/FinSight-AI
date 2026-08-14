@@ -20,10 +20,11 @@ export const config = {
 
 export const maxDuration = 60; // Grant up to 60s execution time on Vercel
 
+import { randomUUID } from "crypto";
+
 // ---------------------------------------------------------------------------
 // Tiny helpers
 // ---------------------------------------------------------------------------
-
 function getEnv(key: string, fallback = ""): string {
   return String(process.env[key] ?? fallback).trim();
 }
@@ -124,6 +125,9 @@ function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
 }
 
 const processRateBuckets = new Map<string, number[]>();
+// Per-user in-flight counter so the serverless route enforces the same
+// concurrency cap as the Express backend (max 2 concurrent per user).
+const inFlightProcessByUser = new Map<string, number>();
 
 function acceptProcessRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
   const now = Date.now();
@@ -326,7 +330,7 @@ function validatePayload(p: any) {
   const keys = ["summary", "key_metrics", "risk_assessment", "action_items", "sentiment_score", "entities", "full_report"];
   for (const k of keys) if (!(k in p)) throw new Error(`Missing key: ${k}`);
   const words = String(p.full_report || "").trim().split(/\s+/).filter(Boolean).length;
-  if (words < 120) throw new Error(`full_report too short: ${words} words`);
+  if (words < 600) throw new Error(`full_report too short: ${words} words`);
   return p;
 }
 
@@ -489,22 +493,6 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") { res.status(405).json({ error: "Method Not Allowed" }); return; }
 
-  const clientIp = String(
-    (req.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      "unknown",
-  );
-  if (!acceptProcessRequest(clientIp)) {
-    res.status(429).json({
-      error: {
-        stage: "RATE_LIMIT",
-        reason: "Too many upload requests. Please try again later.",
-        recommendation: "Wait a few minutes before retrying.",
-      },
-    });
-    return;
-  }
-
   const startTime = Date.now();
 
   try {
@@ -564,6 +552,35 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    // Per-user quota keyed on the verified uid, mirroring the Express backend
+    // (server.ts): 5 analyses / 24h per user and max 2 concurrent. The previous
+    // bucket key was the client-supplied X-Forwarded-For IP, which any client
+    // can spoof to mint a fresh bucket per request, voiding the limit.
+    if (!acceptProcessRequest(ownerId, 5, 24 * 60 * 60 * 1000)) {
+      res.status(429).json({
+        error: {
+          stage: "RATE_LIMIT",
+          reason: "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
+          recommendation: "Please try again tomorrow or upgrade your plan.",
+        },
+      });
+      return;
+    }
+
+    const inFlight = inFlightProcessByUser.get(ownerId) || 0;
+    if (inFlight >= 2) {
+      res.status(429).json({
+        error: {
+          stage: "CONCURRENT_LIMIT",
+          reason: "Too many concurrent analysis requests (max 2 at a time)",
+          recommendation:
+            "Please wait for an in-progress analysis to finish before submitting another.",
+        },
+      });
+      return;
+    }
+    inFlightProcessByUser.set(ownerId, inFlight + 1);
+
     // ------------------------------------------------------------------
     // Step 2: Parse multipart body
     // ------------------------------------------------------------------
@@ -610,22 +627,35 @@ export default async function handler(req: any, res: any) {
     // Step 3: Extract PDF text
     // ------------------------------------------------------------------
     const extractedText = await extractPdfText(fileBuffer);
-    const textForAnalysis = extractedText.length >= 50
-      ? extractedText
-      : `Document: ${filename}\nSize: ${fileBuffer.length} bytes\n(Insufficient text extracted — may be a scanned PDF)`;
 
     // ------------------------------------------------------------------
     // Step 4: AI analysis or fallback
     // ------------------------------------------------------------------
     const hfKey = getEnv("HUGGINGFACE_API_KEY") || getEnv("VITE_HUGGINGFACE_API_KEY");
-    let analysisResult = hfKey ? await runHfAnalysis(textForAnalysis, hfKey) : null;
+    let analysisResult: any = null;
+    let fallbackReason = "";
+
+    if (extractedText.length < 50) {
+      // Never feed a placeholder string to the model and persist its output as
+      // a genuine "completed" analysis. A scanned/image PDF yields only an
+      // explicit fallback record so users never see a fabricated financial
+      // analysis of a document the system could not read.
+      fallbackReason = "Insufficient extractable text (scanned/image PDF)";
+    } else {
+      analysisResult = hfKey ? await runHfAnalysis(extractedText, hfKey) : null;
+      if (!analysisResult) {
+        fallbackReason = hfKey
+          ? "AI model returned invalid or timed out response"
+          : "HUGGINGFACE_API_KEY not set in Vercel environment variables";
+      }
+    }
     const usedFallback = !analysisResult;
     if (!analysisResult) {
       console.warn(`[process] Using fallback analysis (hfKey present: ${!!hfKey})`);
       analysisResult = buildFallbackAnalysis(
-        textForAnalysis,
+        extractedText,
         filename,
-        hfKey ? "AI model returned invalid or timed out response" : "HUGGINGFACE_API_KEY not set in Vercel environment variables",
+        fallbackReason,
       );
     }
 
@@ -641,7 +671,7 @@ export default async function handler(req: any, res: any) {
       : "low";
 
     const safeFilename = sanitizeStorageFilename(filename);
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
 
     const processAppCtx = await getAdminApp();
 
@@ -677,7 +707,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    let documentId = `local-${ownerId}-${now.getTime()}`;
+    let documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
     let persistenceMode = "local";
     let firestorePersisted = false;
 
@@ -788,5 +818,13 @@ export default async function handler(req: any, res: any) {
         stack: isProd ? undefined : err?.stack,
       },
     });
+  } finally {
+    // Release the concurrency slot held for this user once the pipeline settles,
+    // regardless of whether it succeeded or failed.
+    if (ownerId) {
+      const updated = (inFlightProcessByUser.get(ownerId) || 1) - 1;
+      if (updated <= 0) inFlightProcessByUser.delete(ownerId);
+      else inFlightProcessByUser.set(ownerId, updated);
+    }
   }
 }

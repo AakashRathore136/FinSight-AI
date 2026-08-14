@@ -283,11 +283,23 @@ export function deleteLocalDocument(documentId: string): void {
  * erasure (and logout) so deleted or abandoned financial data never survives
  * on the device.
  */
-export function clearAllLocalData(): void {
+export function clearAllLocalData(userId?: string): void {
   if (typeof window === "undefined") return;
 
   try {
     window.localStorage.removeItem(LOCAL_DOCS_KEY);
+    if (userId) {
+      // Remove every per-user localStorage key so privacy/retention/analytics
+      // preferences, starting-balance and alert actions don't survive account
+      // erasure. Keys are keyed by `_<uid>` or `:<uid>` suffixes; matching the
+      // uid substring covers all of them without touching global keys.
+      const doomed: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.includes(userId)) doomed.push(key);
+      }
+      doomed.forEach((key) => window.localStorage.removeItem(key));
+    }
   } catch (err) {
     console.warn("[FinSight] Failed to clear localStorage:", err);
   }

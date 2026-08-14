@@ -13,7 +13,7 @@ import { Progress } from "@/src/components/ui/progress";
 import { Calendar, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 import { format, differenceInDays, differenceInMilliseconds, startOfDay } from "date-fns";
 import { toast } from "sonner";
-import { Subscription } from "@/src/lib/subscriptionUtils";
+import { Subscription, getAnnualizationFactor } from "@/src/lib/subscriptionUtils";
 import { formatCurrency } from "@/src/lib/utils";
 import {
   updateSubscription,
@@ -138,6 +138,8 @@ export function SubscriptionCard({
         ? "Yearly"
         : "Weekly";
 
+  const annualizationFactor = getAnnualizationFactor(subscription);
+
   return (
     <motion.div
       layout
@@ -218,30 +220,17 @@ export function SubscriptionCard({
                   Annual Cost
                 </span>
                 <span className="text-indigo-400 font-mono font-bold">
-                  {formatCurrency(
-                    subscription.amount *
-                    (subscription.frequency === "monthly"
-                      ? 12
-                      : subscription.frequency === "yearly"
-                        ? 1
-                        : 52)
-                  )}
+                  {formatCurrency(subscription.amount * annualizationFactor)}
                 </span>
               </div>
               <Progress
-                value={
-                  subscription.frequency === "monthly"
-                    ? 100 / 12
-                    : subscription.frequency === "yearly"
-                      ? 100
-                      : 100 / 52
-                }
+                value={100 / annualizationFactor}
                 className="h-1.5 bg-slate-800"
               >
                 <div
                   className="h-full bg-indigo-500 rounded-full transition-all"
                   style={{
-                    width: `${subscription.frequency === "monthly" ? 100 / 12 : subscription.frequency === "yearly" ? 100 : 100 / 52}%`,
+                    width: `${100 / annualizationFactor}%`,
                   }}
                 />
               </Progress>

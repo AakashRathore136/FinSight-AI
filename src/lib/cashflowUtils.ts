@@ -152,7 +152,7 @@ export async function fetchUserTransactions(
       return {
         id: doc.id,
         userId: data.userId || "",
-        amount: Number(data.amount) || 0,
+        amount: Math.abs(Number(data.amount)) || 0,
         category: data.category || "Other",
         type: data.type === "income" ? "income" : "expense",
         date: toDate(data.date) || new Date(),
@@ -174,7 +174,7 @@ export async function fetchUserTransactions(
         return {
           id: doc.id,
           userId: data.userId || "",
-          amount: Number(data.amount) || 0,
+          amount: Math.abs(Number(data.amount)) || 0,
           category: data.category || "Other",
           type: normalizeTransactionType(data.type),
           date: parseTransactionDate(data.date),
@@ -206,11 +206,11 @@ export function calculateMonthlyForecast(
     // independent of `now` (deterministic for a given history).
     if (monthKey === currentMonth) return;
     if (t.type === "income") {
-      incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + t.amount;
+      incomeByMonth[monthKey] = (incomeByMonth[monthKey] || 0) + Math.abs(t.amount);
     } else {
       if (!expenseByMonth[monthKey]) expenseByMonth[monthKey] = {};
       expenseByMonth[monthKey][t.category] =
-        (expenseByMonth[monthKey][t.category] || 0) + t.amount;
+        (expenseByMonth[monthKey][t.category] || 0) + Math.abs(t.amount);
     }
   });
 
@@ -286,18 +286,26 @@ export function identifyRecurringTransactions(
   const groups: Group[] = [];
 
   transactions.forEach((t) => {
-    const key = normalizeDescriptionKey(t.description) || t.category;
+    const key = normalizeDescriptionKey(t.description);
+    // Without a description we cannot reliably group the transaction, so it is
+    // never merged into a recurring series. Collapsing whole categories into a
+    // single "recurring" charge (old `|| t.category` fallback) mislabels varied
+    // spending as one uniform subscription.
+    if (!key) return;
     let group: Group | null = null;
     for (const g of groups) {
-      if (g.type !== t.type) continue;
-      const exactMatch = g.key === key;
-      const textMatch = g.key.includes(key) || key.includes(g.key);
+      // Never merge across types or categories: a "netflix" subscription must
+      // not be grouped with a same-named merchant in another category.
+      if (g.type !== t.type || g.category !== t.category) continue;
+      // Require an exact key match; a loose substring match (e.g. "uber" vs
+      // "uber eats") merges distinct merchants into a single series.
+      const strong = g.key === key;
       const amountMatch = g.txns.some(
         (gt) =>
           Math.abs(gt.amount - t.amount) <
           0.01 * Math.max(1, Math.abs(gt.amount)),
       );
-      if (exactMatch || (textMatch && amountMatch)) {
+      if (strong && amountMatch) {
         group = g;
         break;
       }
@@ -351,10 +359,10 @@ export function calculateConfidenceScore(
   return Math.round(dataScore + volumeScore + diversityScore);
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
