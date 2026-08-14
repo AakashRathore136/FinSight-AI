@@ -81,15 +81,20 @@ export function deriveSpendingPattern(
   const totalIncome = income.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   const totalExpenses = expenses.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-  const months = new Set(
-    expenses
-      .map((t) => {
-        const d = toDate(t.date);
-        return d ? `${d.getFullYear()}-${d.getMonth()}` : null;
-      })
-      .filter((m): m is string => Boolean(m)),
-  ).size || 1;
-  const totalMonthlySpend = totalExpenses / months;
+  // Divide by the true analysis-window length (min month -> max month across
+  // the fetched transactions), not the count of distinct months that contain
+  // an expense. A sporadic spender (2 of 6 fetched months) previously got
+  // totalExpenses / 2, inflating the monthly baseline and every challenge
+  // target derived from it (issue #1318).
+  const allDates = transactions
+    .map((t) => toDate(t.date))
+    .filter((d): d is Date => Boolean(d));
+  const monthNums = allDates.map((d) => d.getFullYear() * 12 + d.getMonth());
+  const windowMonths =
+    allDates.length > 0
+      ? Math.max(1, Math.max(...monthNums) - Math.min(...monthNums) + 1)
+      : 1;
+  const totalMonthlySpend = totalExpenses / windowMonths;
 
   const spendIn = (predicate: (category: string) => boolean): number =>
     expenses
