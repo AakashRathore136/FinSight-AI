@@ -230,6 +230,11 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     );
   }
 
+  const rawSentiment = Number(payload.sentiment_score);
+  const sentiment_score = Number.isFinite(rawSentiment)
+    ? Math.max(-1, Math.min(1, rawSentiment))
+    : 0;
+
   return {
     summary: sanitizeString(String(payload.summary || "")),
     key_metrics:
@@ -250,7 +255,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],
-    sentiment_score: Number(payload.sentiment_score || 0),
+    sentiment_score,
     entities: Array.isArray(payload.entities)
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
       : [],
@@ -394,6 +399,7 @@ function sanitizeString(text: string): string {
 /** Recursively sanitize string leaves of an arbitrary value (objects/arrays)
  * so untrusted model output rendered in the UI cannot carry HTML/script. */
 function sanitizeDeep(value: any): any {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") return sanitizeString(value);
   if (Array.isArray(value)) return value.map(sanitizeDeep);
   if (value && typeof value === "object") {
