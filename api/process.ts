@@ -626,22 +626,35 @@ export default async function handler(req: any, res: any) {
     // Step 3: Extract PDF text
     // ------------------------------------------------------------------
     const extractedText = await extractPdfText(fileBuffer);
-    const textForAnalysis = extractedText.length >= 50
-      ? extractedText
-      : `Document: ${filename}\nSize: ${fileBuffer.length} bytes\n(Insufficient text extracted — may be a scanned PDF)`;
 
     // ------------------------------------------------------------------
     // Step 4: AI analysis or fallback
     // ------------------------------------------------------------------
     const hfKey = getEnv("HUGGINGFACE_API_KEY") || getEnv("VITE_HUGGINGFACE_API_KEY");
-    let analysisResult = hfKey ? await runHfAnalysis(textForAnalysis, hfKey) : null;
+    let analysisResult: any = null;
+    let fallbackReason = "";
+
+    if (extractedText.length < 50) {
+      // Never feed a placeholder string to the model and persist its output as
+      // a genuine "completed" analysis. A scanned/image PDF yields only an
+      // explicit fallback record so users never see a fabricated financial
+      // analysis of a document the system could not read.
+      fallbackReason = "Insufficient extractable text (scanned/image PDF)";
+    } else {
+      analysisResult = hfKey ? await runHfAnalysis(extractedText, hfKey) : null;
+      if (!analysisResult) {
+        fallbackReason = hfKey
+          ? "AI model returned invalid or timed out response"
+          : "HUGGINGFACE_API_KEY not set in Vercel environment variables";
+      }
+    }
     const usedFallback = !analysisResult;
     if (!analysisResult) {
       console.warn(`[process] Using fallback analysis (hfKey present: ${!!hfKey})`);
       analysisResult = buildFallbackAnalysis(
-        textForAnalysis,
+        extractedText,
         filename,
-        hfKey ? "AI model returned invalid or timed out response" : "HUGGINGFACE_API_KEY not set in Vercel environment variables",
+        fallbackReason,
       );
     }
 
