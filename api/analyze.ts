@@ -652,15 +652,19 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       );
     }
 
-    if (!extractedText || extractedText.length < 20) {
-      extractedText = `Document: ${filename}\nFile Size: ${fileBuffer.length} bytes.\nNotice: Scanned PDF or non-standard text layer.`;
-    }
+    const hasExtractableText = Boolean(extractedText) && extractedText.trim().length >= 20;
 
     const hfApiKey = getEnv("HUGGINGFACE_API_KEY");
     let validPayload: AnalysisResponse | null = null;
     let fallbackReason = "";
 
-    if (hfApiKey) {
+    if (!hasExtractableText) {
+      // Never feed a placeholder string to the model and then persist the
+      // result as a genuine "completed" analysis. A scanned/image PDF produces
+      // only an explicit fallback record so users are not shown a fabricated
+      // financial analysis of a document the system could not read.
+      fallbackReason = "Insufficient extractable text (scanned/image PDF)";
+    } else if (hfApiKey) {
       try {
         const { InferenceClient } = await import("@huggingface/inference");
         const hfClient = new InferenceClient(hfApiKey);
