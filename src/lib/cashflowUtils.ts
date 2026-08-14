@@ -359,10 +359,10 @@ export function calculateConfidenceScore(
   return Math.round(dataScore + volumeScore + diversityScore);
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
