@@ -40,6 +40,7 @@ import { Input } from '@/src/components/ui/input';
 import { Badge } from '@/src/components/ui/badge';
 import { Progress, ProgressTrack, ProgressIndicator } from '@/src/components/ui/progress';
 import { cn, formatCurrency, toDate } from '@/src/lib/utils';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import {
   type EmergencyFund,
   type Contribution,
@@ -62,6 +63,7 @@ interface EmergencyFundPlannerProps {
 const MONTH_OPTIONS = [3, 4, 5, 6];
 
 export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
+  const baseCurrency = useBaseCurrency(user);
   const [fund, setFund] = useState<EmergencyFund | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -200,7 +202,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
     const updated = await addContribution(fund, amount, contributeNote);
     if (updated) {
       setFund(updated);
-      toast.success(`Added ${formatCurrency(amount)} to your fund`);
+      toast.success(`Added ${formatCurrency(amount, baseCurrency)} to your fund`);
       setContributeAmount('');
       setContributeNote('');
     } else {
@@ -341,7 +343,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     </label>
                     <div className="h-12 flex items-center justify-between px-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
                       <span className="text-emerald-300 font-semibold text-lg tabular-nums">
-                        {formatCurrency(recommendedTarget)}
+                        {formatCurrency(recommendedTarget, baseCurrency)}
                       </span>
                       <span className="text-[10px] uppercase tracking-wider text-slate-500">
                         {targetMonths} × expenses
@@ -432,7 +434,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-slate-500">Current Balance</p>
                       <p className="text-2xl font-bold text-white tabular-nums">
-                        {formatCurrency(fund.currentAmount)}
+                        {formatCurrency(fund.currentAmount, baseCurrency)}
                       </p>
                     </div>
                     <Badge
@@ -449,9 +451,9 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Progress to {formatCurrency(fund.targetAmount)}</span>
+                      <span>Progress to {formatCurrency(fund.targetAmount, baseCurrency)}</span>
                       <span className="tabular-nums">
-                        {formatCurrency(Math.max(0, fund.targetAmount - fund.currentAmount))} to go
+                        {formatCurrency(Math.max(0, fund.targetAmount - fund.currentAmount), baseCurrency)} to go
                       </span>
                     </div>
                     <Progress value={progress}>
@@ -464,7 +466,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     </Progress>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <Stat label="Monthly Save" value={formatCurrency(monthlySuggestion || fund.monthlyContribution)} />
+                    <Stat label="Monthly Save" value={formatCurrency(monthlySuggestion || fund.monthlyContribution, baseCurrency)} />
                     <Stat label="Months Covered" value={String(fund.monthsCovered)} />
                     <Stat
                       label="Est. Completion"
@@ -524,7 +526,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     Projection
                   </CardTitle>
                   <CardDescription className="text-slate-500 text-xs">
-                    Balance growth at {formatCurrency(parseFloat(monthlyContribution) || fund.monthlyContribution)}/month
+                    Balance growth at {formatCurrency(parseFloat(monthlyContribution) || fund.monthlyContribution, baseCurrency)}/month
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -543,7 +545,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                         <Tooltip
                           contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '12px' }}
                           labelStyle={{ color: '#94a3b8' }}
-                          formatter={(value: number) => [formatCurrency(value), 'Projected']}
+                          formatter={(value: number) => [formatCurrency(value, baseCurrency), 'Projected']}
                         />
                         <Area type="monotone" dataKey="projected" stroke="#10b981" strokeWidth={2} fill="url(#efGradient)" />
                       </AreaChart>
@@ -605,7 +607,7 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-white tabular-nums">
-                          {formatCurrency(c.amount)}
+                          {formatCurrency(c.amount, baseCurrency)}
                         </p>
                         <p className="text-[10px] text-slate-500">
                           {format(toDate(c.date) || new Date(), 'MMM d, yyyy')}
