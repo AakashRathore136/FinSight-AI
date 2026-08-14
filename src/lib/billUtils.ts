@@ -190,7 +190,10 @@ export function calculateNextDueDate(
   }
 
   const reference = fromDate ? startOfDay(fromDate) : startOfDay(new Date());
-  const originalDay = base.getDate();
+  // advanceByFrequency is UTC-based, so use the UTC day-of-month to avoid a
+  // local-vs-UTC mismatch that pushes the due date into the wrong day/month
+  // (issue #1358).
+  const originalDay = base.getUTCDate();
   let next = startOfDay(base);
 
   while (isBefore(next, reference)) {
@@ -212,7 +215,7 @@ export function advanceDueDateAfterPayment(
   if (!base) return null;
 
   const reference = startOfDay(paidDate);
-  const originalDay = base.getDate();
+  const originalDay = base.getUTCDate();
   let next = startOfDay(base);
 
   do {
@@ -366,7 +369,7 @@ export function generateRecurringSchedule(
 
   const schedule: string[] = [];
   const start = toDate(bill.nextDueDate || bill.dueDate) || startOfDay(reference);
-  const originalDay = start.getDate();
+  const originalDay = start.getUTCDate();
   let next = startOfDay(start);
   for (let i = 0; i < occurrences; i++) {
     schedule.push(next.toISOString());
