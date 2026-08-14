@@ -108,6 +108,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
   const [txPrice, setTxPrice] = useState('');
   const [txFees, setTxFees] = useState('');
   const [txNotes, setTxNotes] = useState('');
+  const [txCurrency, setTxCurrency] = useState('USD');
 
   useEffect(() => {
     if (!user) {
@@ -259,6 +260,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
         fees,
         notes: txNotes || '',
         date: new Date().toISOString(),
+        currency: txCurrency,
       });
       if (result) {
         const [h, t] = await Promise.all([
@@ -332,7 +334,7 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={addTransactionOpen} onOpenChange={setAddTransactionOpen}>
+          <Dialog open={addTransactionOpen} onOpenChange={(open) => { if (open) setTxCurrency(baseCurrency); setAddTransactionOpen(open); }}>
             <DialogTrigger>
               <Button
                 variant="outline"
@@ -389,6 +391,20 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
                 <div>
                   <label className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Notes</label>
                   <Input value={txNotes} onChange={(e) => setTxNotes(e.target.value)} className="mt-1 bg-slate-800 border-slate-700 text-white" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Currency</label>
+                  <Select
+                    value={txCurrency}
+                    onChange={(e) => setTxCurrency(e.target.value)}
+                    options={[
+                      { value: 'USD', label: 'USD' },
+                      { value: 'EUR', label: 'EUR' },
+                      { value: 'GBP', label: 'GBP' },
+                      { value: 'INR', label: 'INR' },
+                    ]}
+                    className="mt-1 bg-slate-800 border-slate-700 text-white"
+                  />
                 </div>
                 <Button onClick={handleAddTransaction} className="w-full bg-violet-600 hover:bg-violet-700">Save Transaction</Button>
               </div>
