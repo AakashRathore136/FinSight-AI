@@ -28,7 +28,8 @@ export const MonteCarloSimulator: React.FC = () => {
 
       for (let s = 0; s < numSimulations; s++) {
         let currentPrice = initialValue;
-        for (let d = 1; d <= days; d += 5) {
+        const numSteps = Math.floor(days / 5);
+        for (let i = 0; i < numSteps; i++) {
           // Standard Normal approximation (Box-Muller transform)
           const u1 = Math.random();
           const u2 = Math.random();
@@ -55,7 +56,7 @@ export const MonteCarloSimulator: React.FC = () => {
         const p90 = pricesAtStep[Math.floor(pricesAtStep.length * 0.9)];
 
         points.push({
-          step: stepIdx * 5,
+          step: Math.min((stepIdx + 1) * 5, days),
           p10: Math.round(p10),
           p50: Math.round(p50),
           p90: Math.round(p90),
