@@ -179,9 +179,15 @@ export async function fetchTransactions(
 ): Promise<Transaction[]> {
   if (!userId) return [];
   try {
+    // Bound the fetch to the actual analysis window (last 12 months) so an
+    // active account with >1000 transactions in 6 months does not silently
+    // drop older months, which would undercount earlier category trends and
+    // deltas. Previously relied only on orderBy(date, desc) + limit.
+    const startDate = startOfMonth(subMonths(new Date(), 12));
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
+      where("date", ">=", startDate),
       orderBy("date", "desc"),
       limit(limitCount),
     );
