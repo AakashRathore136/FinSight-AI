@@ -1,3 +1,5 @@
+import { convertAmount } from "./currencyUtils";
+
 export interface ComplianceViolation {
   id: string;
   category: "AML" | "SOX" | "FINRA" | "FATCA";
@@ -22,6 +24,13 @@ export interface AuditTransaction {
   date: string | Date;
   category?: string;
   type?: "income" | "expense";
+  currency?: string;
+}
+
+export interface AuditOptions {
+  baseCurrency?: string;
+  rates?: Record<string, number>;
+  country?: string;
 }
 
 const STRUCTURING_WINDOW_DAYS = 7;
@@ -30,6 +39,18 @@ const ROUND_TRIP_WINDOW_DAYS = 7;
 function parseAuditDate(value: string | Date): Date | null {
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? null : d;
+}
+
+// Maps a user's country/region to the relevant financial-intelligence or
+// regulatory authority. Defaults to FinCEN (US) when no country is supplied.
+function regulatoryBodyForCountry(country?: string): string {
+  const c = (country || "").toUpperCase();
+  if (c === "GB" || c === "UK") return "FCA";
+  if (c === "EU") return "EBA";
+  if (c === "CA") return "FINTRAC";
+  if (c === "AU") return "AUSTRAC";
+  if (c === "IN") return "FIU-IND";
+  return "FinCEN";
 }
 
 function normalizeAmount(value: unknown): number {
@@ -55,6 +76,7 @@ function isExpenseTransaction(
  */
 export function auditFinancialData(
   transactions: AuditTransaction[],
+  options: AuditOptions = {},
 ): ComplianceScore {
   const violations: ComplianceViolation[] = [];
 
@@ -93,19 +115,36 @@ export function auditFinancialData(
   }
 
   // Only transactions with a numeric amount participate in the value-based
-  // rules. Amounts are compared with Math.abs so the rules work for both signed
-  // storage (negative expenses) and unsigned storage (positive amounts with a
-  // `type` field), consistent with anomalyUtils/reportUtils.
+  // rules. Amounts are compared in the base currency so the rules work for both
+  // signed storage (negative expenses) and unsigned storage (positive amounts
+  // with a `type` field), consistent with anomalyUtils/reportUtils.
   const valid = parsed.filter((p) => !Number.isNaN(p.amt));
   // Date-dependent rules additionally require a parseable date.
   const dated = valid.filter(
     (p): p is typeof p & { date: Date } => p.date !== null,
   );
 
-  // AML Rule 1: Structuring / Smurfing detection (multiple transactions just under $10,000 threshold)
-  const structuringTxns = dated.filter(
-    (p) => Math.abs(p.amt) >= 9000 && Math.abs(p.amt) < 10000,
-  );
+  const baseCurrency = options.baseCurrency || "USD";
+  const rates = options.rates || {};
+  const regulatoryBody = regulatoryBodyForCountry(options.country);
+
+  // Normalizes a transaction's absolute amount into the base currency so the
+  // AML/SOX thresholds are applied consistently regardless of the transaction's
+  // original currency. When the currency is unknown or missing from the rate
+  // table, convertAmount returns null and we fall back to the raw amount
+  // rather than silently assuming a 1:1 (USD) parity.
+  const toBaseAmount = (t: AuditTransaction, amt: number): number => {
+    const raw = Math.abs(amt);
+    if (!t.currency || t.currency === baseCurrency) return raw;
+    const converted = convertAmount(raw, t.currency, baseCurrency, rates);
+    return converted === null ? raw : converted;
+  };
+
+  // AML Rule 1: Structuring / Smurfing detection (multiple transactions just under the base-currency $10,000-equivalent threshold)
+  const structuringTxns = dated.filter((p) => {
+    const amt = toBaseAmount(p.t, p.amt);
+    return amt >= 9000 && amt < 10000;
+  });
   if (structuringTxns.length >= 2) {
     // Only flag when the transactions actually occur in close succession.
     const inCloseSuccession = structuringTxns.some((p, i) =>
@@ -119,9 +158,8 @@ export function auditFinancialData(
         category: "AML",
         severity: "high",
         title: "Potential Transaction Structuring Detected",
-        description: `Identified ${structuringTxns.length} transactions between $9,000 and $9,999 within ${STRUCTURING_WINDOW_DAYS} days of each other.`,
-        recommendedAction:
-          "File a Currency Transaction Report (CTR) / Suspicious Activity Report (SAR) with FinCEN.",
+        description: `Identified ${structuringTxns.length} transactions between ${baseCurrency} 9,000 and ${baseCurrency} 9,999 within ${STRUCTURING_WINDOW_DAYS} days of each other.`,
+        recommendedAction: `File a Currency Transaction Report (CTR) / Suspicious Activity Report (SAR) with ${regulatoryBody}.`,
       });
     }
   }
@@ -129,10 +167,12 @@ export function auditFinancialData(
   // AML Rule 2: High velocity round-trip transfers (high-value deposit and a
   // rapid withdrawal that actually fall inside the same short window)
   const largeExpenses = dated.filter(
-    (p) => Math.abs(p.amt) > 25000 && isExpenseTransaction(p.amt, p.t.type),
+    (p) =>
+      toBaseAmount(p.t, p.amt) > 25000 && isExpenseTransaction(p.amt, p.t.type),
   );
   const largeIncomes = dated.filter(
-    (p) => Math.abs(p.amt) > 25000 && !isExpenseTransaction(p.amt, p.t.type),
+    (p) =>
+      toBaseAmount(p.t, p.amt) > 25000 && !isExpenseTransaction(p.amt, p.t.type),
   );
   const roundTripDetected =
     largeIncomes.length > 0 &&
@@ -157,7 +197,7 @@ export function auditFinancialData(
   // SOX Rule 1: Off-balance sheet expenditure disclosure
   const unclassifiedLarge = valid.filter(
     (p) =>
-      Math.abs(p.amt) > 50000 &&
+      toBaseAmount(p.t, p.amt) > 50000 &&
       (!p.t.category || p.t.category.toLowerCase() === "other"),
   );
   if (unclassifiedLarge.length > 0) {
@@ -166,7 +206,7 @@ export function auditFinancialData(
       category: "SOX",
       severity: "high",
       title: "Unclassified Major Expenditure (SOX 404)",
-      description: `Found ${unclassifiedLarge.length} uncategorized expenditure(s) exceeding $50,000 threshold.`,
+      description: `Found ${unclassifiedLarge.length} uncategorized expenditure(s) exceeding ${baseCurrency} 50,000 threshold.`,
       recommendedAction: "Reclassify expenditure under GAAP ledger accounts and obtain controller approval.",
     });
   }
