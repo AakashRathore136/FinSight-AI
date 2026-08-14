@@ -129,7 +129,7 @@ export function ReportExport() {
   const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [baseCurrency, setBaseCurrency] = useState("INR");
+  const [baseCurrency, setBaseCurrency] = useState("USD");
 
   const expenseChartRef = useRef<HTMLDivElement>(null);
   const incomeChartRef = useRef<HTMLDivElement>(null);
