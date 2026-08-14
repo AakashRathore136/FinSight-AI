@@ -398,10 +398,12 @@ export async function generateBudgetSuggestions(
   );
 
   const categoryMonthlyTotals = new Map<string, Map<string, number>>();
+  const windowMonths = new Set<string>();
   expenseTransactions.forEach((t) => {
     const dateVal = toDate(t.date);
     if (!dateVal) return;
     const monthKey = `${dateVal.getFullYear()}-${String(dateVal.getMonth() + 1).padStart(2, '0')}`;
+    windowMonths.add(monthKey);
     const category = t.category || 'Other';
     if (!categoryMonthlyTotals.has(category)) {
       categoryMonthlyTotals.set(category, new Map<string, number>());
@@ -409,15 +411,21 @@ export async function generateBudgetSuggestions(
     const monthMap = categoryMonthlyTotals.get(category)!;
     monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + Math.abs(t.amount));
   });
+  // Divide each category's total by the actual analysis window (the number of
+  // months present in the fetched range), not by the number of months in which
+  // that category had any transaction, so sporadic categories get a true
+  // monthly baseline instead of a single month's spend reported as the average.
+  const windowMonthCount = Math.max(1, windowMonths.size);
 
   const suggestions: CategoryBudgetSuggestion[] = [];
   categoryMonthlyTotals.forEach((monthMap, category) => {
     const monthlyTotals = Array.from(monthMap.values());
-    const averageSpending = monthlyTotals.reduce((sum, v) => sum + v, 0) / monthlyTotals.length;
+    const categoryTotal = monthlyTotals.reduce((sum, v) => sum + v, 0);
+    const averageSpending = categoryTotal / windowMonthCount;
     const suggestedAmount = Math.max(0, Math.round(averageSpending / 10) * 10);
     const variance =
       monthlyTotals.reduce((sum, v) => sum + Math.pow(v - averageSpending, 2), 0) /
-      monthlyTotals.length;
+      Math.max(1, monthlyTotals.length);
     const stdDev = Math.sqrt(variance);
     const coefficientOfVariation = averageSpending > 0 ? stdDev / averageSpending : 0;
 
