@@ -378,7 +378,7 @@ async function fetchUserTransactionsInRange(
 export async function fetchLast3MonthsTransactions(userId: string): Promise<Transaction[]> {
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-  const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   return fetchUserTransactionsInRange(userId, startDate, endDate);
 }
 
