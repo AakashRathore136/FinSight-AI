@@ -1344,6 +1344,63 @@ CRITICAL RULES:
     analyzePipelineHandler,
   );
 
+  // Agentic chat model calls. The browser never holds the HF inference key:
+  // it posts the message history (system + turns, no secrets) here and the
+  // server performs the model call with HUGGINGFACE_API_KEY, keeping the
+  // inference credential out of the client bundle entirely. The route sits
+  // behind requireFirebaseAuth (/api/*), so only signed-in users can spend
+  // the server key. (Issue #1341)
+  app.post("/api/agent-chat", async (req: any, res: any) => {
+    const { systemPrompt, messages, model } = req.body || {};
+    if (typeof systemPrompt !== "string" || !Array.isArray(messages)) {
+      return res.status(400).json({
+        error: {
+          stage: "BAD_REQUEST",
+          reason: "systemPrompt (string) and messages (array) are required",
+        },
+      });
+    }
+    // Only a plain model id is accepted, never arbitrary strings, so the model
+    // field cannot be abused to smuggle prompt content into the request.
+    const requestedModel =
+      typeof model === "string" && /^[\w.\-/]+$/.test(model)
+        ? model
+        : "meta-llama/Meta-Llama-3-8B-Instruct";
+    const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
+    if (!huggingFaceApiKey) {
+      return res.status(503).json({
+        error: {
+          stage: "MODEL_UNAVAILABLE",
+          reason: "HUGGINGFACE_API_KEY is not configured on the server",
+        },
+      });
+    }
+    try {
+      const hfClient = new InferenceClient(huggingFaceApiKey);
+      const completion = await hfClient.chatCompletion({
+        model: requestedModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ] as any,
+        max_tokens: 800,
+        temperature: 0.2,
+      });
+      const content = (completion as any)?.choices?.[0]?.message?.content ?? null;
+      if (content == null) {
+        return res.status(502).json({
+          error: { stage: "MODEL_ERROR", reason: "Empty model response" },
+        });
+      }
+      return res.json({ content });
+    } catch (err: any) {
+      console.error("AGENT_CHAT_ERROR:", err?.message || err);
+      return res.status(502).json({
+        error: { stage: "MODEL_ERROR", reason: "Model request failed" },
+      });
+    }
+  });
+
   // Generate short-lived signed URL for secure document download
   // Prevents permanent URL access to sensitive financial documents
   // Rate limiting for /api/document-download-url to prevent signed-URL

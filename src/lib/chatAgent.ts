@@ -11,9 +11,12 @@
  * the final answer comes from a deterministic function that already ships in
  * this repo. When no model/token is configured, runAgentLoop returns null so
  * callers fall back to the deterministic keyword router in chatUtils.ts.
+ *
+ * The model call itself never happens in the browser: the agent loop posts its
+ * message history to the authenticated /api/agent-chat endpoint, which performs
+ * the HF Inference call with the server-side HUGGINGFACE_API_KEY. This keeps
+ * the inference credential out of the client bundle. (Issue #1341)
  */
-
-import { HfInference } from "@huggingface/inference";
 
 import { calculateMonthlyForecast, identifyRecurringTransactions } from "./cashflowUtils";
 import { detectAnomalies as detectAnomaliesCore, type Anomaly } from "./anomalyUtils";
@@ -227,9 +230,41 @@ export const TOOL_CATALOGUE: AgentTool[] = [
   },
 ];
 
-function getHfToken(): string | null {
-  const env = (import.meta as any).env;
-  return env?.VITE_HF_TOKEN || env?.HF_TOKEN || null;
+async function callModel(
+  systemPrompt: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+  getAuthToken: () => Promise<string | null>,
+): Promise<string | null> {
+  const authToken = await getAuthToken();
+  if (!authToken) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Abort the request if the server does not respond within the per-call
+    // budget. Without this a hung API call would block the agent loop until
+    // the platform function/request timeout. (Issue #1036)
+    const controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), MODEL_CALL_TIMEOUT_MS);
+    const res = await fetch("/api/agent-chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        systemPrompt,
+        messages,
+        model: DEFAULT_AGENT_MODEL,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.content === "string" ? data.content : null;
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function buildSystemPrompt(tools: AgentTool[]): string {
@@ -341,6 +376,7 @@ async function callModel(
 export async function runAgentLoop(
   userMessage: string,
   context: FinancialContext,
+  getAuthToken: () => Promise<string | null>,
 ): Promise<AgentResult | null> {
   const tools = TOOL_CATALOGUE;
   const systemPrompt = buildSystemPrompt(tools);
@@ -365,7 +401,7 @@ export async function runAgentLoop(
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     if (Date.now() > deadline) return null;
-    const reply = await callModel(systemPrompt, messages);
+    const reply = await callModel(systemPrompt, messages, getAuthToken);
     if (!reply) return null;
 
     const parsed = parseAgentJson(reply);
@@ -433,9 +469,10 @@ export async function runAgentLoop(
 export async function generateAgentChatResponse(
   userMessage: string,
   context: FinancialContext,
+  getAuthToken: () => Promise<string | null>,
   fallback: (msg: string, ctx: FinancialContext) => ChatResponse,
 ): Promise<ChatResponse & { steps?: AgentStep[] }> {
-  const agentResult = await runAgentLoop(userMessage, context);
+  const agentResult = await runAgentLoop(userMessage, context, getAuthToken);
   if (agentResult) {
     return {
       message: agentResult.message,
