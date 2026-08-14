@@ -42,7 +42,7 @@ export function ReportPreview({ reportData }: ReportPreviewProps) {
     transactions,
     currency,
   } = reportData;
-  const reportCurrency = currency || "INR";
+  const reportCurrency = currency || "USD";
 
   return (
     <div className="space-y-6">
