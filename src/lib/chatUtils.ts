@@ -356,7 +356,10 @@ export function generateBudgetAdvice(context: FinancialContext): ChatResponse {
 
 export function analyzeSpendingPatterns(context: FinancialContext): ChatResponse {
   const { monthlySpending, spendingByMonth } = context;
-  const months = Object.keys(monthlySpending).sort((a: any, b: any) => Number(a) - Number(b));
+  // "yyyy-MM" keys sort lexicographically = chronologically; Number("2024-01")
+  // is NaN, so the previous comparator left the order undefined and paired
+  // non-consecutive months when computing increases/decreases (issue #1326).
+  const months = Object.keys(monthlySpending).sort();
   let response = '';
 
   if (months.length < 2) {
