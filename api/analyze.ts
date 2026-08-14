@@ -381,8 +381,8 @@ function buildFallbackAnalysis(
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
   const n = String(value || "").toLowerCase();
-  if (n.includes("high")) return "high";
-  if (n.includes("medium") || n.includes("moderate")) return "medium";
+  if (/(high|critical|severe|extreme|danger|alarm)/.test(n)) return "high";
+  if (/(medium|moderate|elevated|warning|caution)/.test(n)) return "medium";
   return "low";
 }
 
