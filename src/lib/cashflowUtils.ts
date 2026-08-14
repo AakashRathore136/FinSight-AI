@@ -286,18 +286,26 @@ export function identifyRecurringTransactions(
   const groups: Group[] = [];
 
   transactions.forEach((t) => {
-    const key = normalizeDescriptionKey(t.description) || t.category;
+    const key = normalizeDescriptionKey(t.description);
+    // Without a description we cannot reliably group the transaction, so it is
+    // never merged into a recurring series. Collapsing whole categories into a
+    // single "recurring" charge (old `|| t.category` fallback) mislabels varied
+    // spending as one uniform subscription.
+    if (!key) return;
     let group: Group | null = null;
     for (const g of groups) {
-      if (g.type !== t.type) continue;
-      const exactMatch = g.key === key;
-      const textMatch = g.key.includes(key) || key.includes(g.key);
+      // Never merge across types or categories: a "netflix" subscription must
+      // not be grouped with a same-named merchant in another category.
+      if (g.type !== t.type || g.category !== t.category) continue;
+      // Require an exact key match; a loose substring match (e.g. "uber" vs
+      // "uber eats") merges distinct merchants into a single series.
+      const strong = g.key === key;
       const amountMatch = g.txns.some(
         (gt) =>
           Math.abs(gt.amount - t.amount) <
           0.01 * Math.max(1, Math.abs(gt.amount)),
       );
-      if (exactMatch || (textMatch && amountMatch)) {
+      if (strong && amountMatch) {
         group = g;
         break;
       }
