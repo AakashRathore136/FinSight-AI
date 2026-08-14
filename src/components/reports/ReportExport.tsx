@@ -140,13 +140,13 @@ export function ReportExport() {
   );
 
   const expenseSummary: ExpenseSummaryItem[] = useMemo(
-    () => generateExpenseSummary(transactions),
-    [transactions],
+    () => generateExpenseSummary(transactions, baseCurrency, null),
+    [transactions, baseCurrency],
   );
 
   const incomeSummary: IncomeSummaryItem[] = useMemo(
-    () => generateIncomeSummary(transactions),
-    [transactions],
+    () => generateIncomeSummary(transactions, baseCurrency, null),
+    [transactions, baseCurrency],
   );
 
   const totalIncome = useMemo(
@@ -205,6 +205,7 @@ export function ReportExport() {
       expenseSummary,
       incomeSummary,
       baseCurrency,
+      null,
     );
     setReportData(data);
     setShowPreview(true);
@@ -232,6 +233,7 @@ export function ReportExport() {
         expenseSummary,
         incomeSummary,
         baseCurrency,
+        null,
       );
       setReportData(data);
 
