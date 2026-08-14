@@ -154,15 +154,30 @@ export function detectCategorySpikes(
   transactions: Transaction[];
   averageAllCategories: number;
 }> {
-  const currentMonth = format(new Date(), "yyyy-MM");
-  const byCategory = new Map<string, Transaction[]>();
+  // Compare two COMPLETE calendar months: the last fully-elapsed month
+  // against the one before it. Bucketing the still-running current month and
+  // comparing it against full-month history would flag false spikes at month
+  // boundaries, when the current month has only partial data. (Issue #1222)
+  const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+  const priorMonth = format(subMonths(new Date(), 2), "yyyy-MM");
+  const lastMonthByCategory = new Map<string, Transaction[]>();
+  const priorMonthByCategory = new Map<string, Transaction[]>();
 
   transactions.forEach((transaction) => {
     if (normalizeTransactionType(transaction.type) !== "expense") return;
-    const date = toDate(transaction.date) || new Date();
-    if (format(date, "yyyy-MM") !== currentMonth) return;
+    const monthKey = format(toDate(transaction.date) || new Date(), "yyyy-MM");
     const category = transaction.category || "Other";
-    byCategory.set(category, [...(byCategory.get(category) || []), transaction]);
+    if (monthKey === lastMonth) {
+      lastMonthByCategory.set(category, [
+        ...(lastMonthByCategory.get(category) || []),
+        transaction,
+      ]);
+    } else if (monthKey === priorMonth) {
+      priorMonthByCategory.set(category, [
+        ...(priorMonthByCategory.get(category) || []),
+        transaction,
+      ]);
+    }
   });
 
   // Overall per-category average used as a sanity floor for categories with
@@ -180,7 +195,7 @@ export function detectCategorySpikes(
       ? categoryAverages.reduce((sum, avg) => sum + avg, 0) / categoryAverages.length
       : 0;
 
-  return Array.from(byCategory.entries())
+  return Array.from(lastMonthByCategory.entries())
     .map(([category, items]) => {
       const categoryBaseline = baseline.get(category) || null;
       const amount = items.reduce((sum, item) => sum + Math.abs(item.amount), 0);
@@ -190,15 +205,15 @@ export function detectCategorySpikes(
       if (!item.baseline) {
         return averageAllCategories > 0 && item.amount > averageAllCategories * 2;
       }
-      if (item.baseline.monthlyTotals.length < 2) return false;
-      const previousTotals = item.baseline.monthlyTotals.slice(0, -1);
-      const average =
-        previousTotals.reduce((sum, total) => sum + total, 0) /
-        previousTotals.length;
+      const priorItems = priorMonthByCategory.get(item.category) || [];
+      const priorAmount = priorItems.reduce(
+        (sum, t) => sum + Math.abs(t.amount),
+        0,
+      );
       return (
-        average > 0 &&
-        item.amount > average * 1.5 &&
-        item.amount - average > Math.max(20, average * 0.5)
+        priorAmount > 0 &&
+        item.amount > priorAmount * 1.5 &&
+        item.amount - priorAmount > Math.max(20, priorAmount * 0.5)
       );
     });
 }
@@ -245,6 +260,7 @@ export async function checkHistoricalSimilarAnomalies(
 
 export function detectAnomalies(
   transactions: Transaction[],
+  threshold: number = 3,
 ): Omit<Anomaly, "id" | "createdAt">[] {
   const anomalies: Omit<Anomaly, "id" | "createdAt">[] = [];
   const categoryAverages = new Map<string, { total: number; count: number }>();
@@ -268,12 +284,12 @@ export function detectAnomalies(
       if (baselineTotal <= 0) return;
       const mean = baselineTotal / baselineCount;
       const amount = Math.abs(t.amount);
-      if (amount > mean * 3 && amount > 1000) {
+      if (amount > mean * threshold && amount > 1000) {
         anomalies.push({
           userId: t.userId,
           transactionId: t.id,
           type: "large_transaction",
-          severity: amount > mean * 5 ? "critical" : "high",
+          severity: amount > mean * (threshold + 2) ? "critical" : "high",
           category: cat,
           amount,
           averageAmount: Math.round(mean * 100) / 100,

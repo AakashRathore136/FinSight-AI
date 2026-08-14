@@ -68,7 +68,8 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const selectedGoal = goals.find((g) => g.id === selectedGoalId) || null;
   const [selectedSuggestionLevel, setSelectedSuggestionLevel] = useState<'Recommended' | 'Conservative' | 'Aggressive'>('Recommended');
   const notifiedGoalIds = useRef(new Set<string>());
   const updatingGoalIds = useRef(new Set<string>());
@@ -132,7 +133,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
   useEffect(() => {
     if (!user) return;
     goals.forEach((goal) => {
-      if (goal.status === 'completed') return;
+      if (goal.status === 'completed' || goal.status === 'paused') return;
       if (notifiedGoalIds.current.has(goal.id)) return;
       if (updatingGoalIds.current.has(goal.id)) return;
       const isComplete = goal.currentAmount >= goal.targetAmount;
@@ -260,7 +261,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
     try {
       await deleteDoc(doc(db, 'goals', goalId));
       toast.success('Goal deleted');
-      if (selectedGoal?.id === goalId) setSelectedGoal(null);
+      if (selectedGoalId === goalId) setSelectedGoalId(null);
     } catch (error) {
       console.error('Error deleting goal:', error);
       handleFirestoreError(error, OperationType.DELETE, `goals/${goalId}`);
@@ -471,7 +472,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                         goal={goal}
                         baseCurrency={baseCurrency}
                         onUpdateAmount={updateGoalAmount}
-                        onViewDetails={setSelectedGoal}
+                        onViewDetails={(g) => setSelectedGoalId(g.id)}
                         onStatusChange={(id, status) => updateGoalStatus(id, status)}
                         onDelete={deleteGoal}
                       />
@@ -505,7 +506,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                         goal={goal}
                         baseCurrency={baseCurrency}
                         onUpdateAmount={updateGoalAmount}
-                        onViewDetails={setSelectedGoal}
+                        onViewDetails={(g) => setSelectedGoalId(g.id)}
                         onStatusChange={(id, status) => updateGoalStatus(id, status)}
                         onDelete={deleteGoal}
                       />
@@ -537,7 +538,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                       goal={goal}
                       baseCurrency={baseCurrency}
                       onUpdateAmount={updateGoalAmount}
-                      onViewDetails={setSelectedGoal}
+                      onViewDetails={(g) => setSelectedGoalId(g.id)}
                       onStatusChange={(id, status) => updateGoalStatus(id, status)}
                       onDelete={deleteGoal}
                     />
@@ -569,7 +570,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
         </div>
       )}
 
-      <Dialog open={!!goalDetail} onOpenChange={(open) => !open && setSelectedGoal(null)}>
+      <Dialog open={!!goalDetail}               onOpenChange={(open) => !open && setSelectedGoalId(null)}>
         <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">

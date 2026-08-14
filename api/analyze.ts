@@ -5,6 +5,7 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
+import { randomUUID } from "crypto";
 
 dotenv.config({ quiet: true });
 
@@ -127,6 +128,9 @@ function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
 }
 
 const analyzeRateBuckets = new Map<string, number[]>();
+// Per-user in-flight counter so the serverless route enforces the same
+// concurrency cap as the Express backend (max 2 concurrent analyses per user).
+const inFlightAnalyzeByUser = new Map<string, number>();
 
 function acceptAnalyzeRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
   const now = Date.now();
@@ -253,7 +257,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   }
   const fullReport = String(payload.full_report || "").trim();
   const wordCount = fullReport.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 120)
+  if (wordCount < 600)
     throw new Error(`full_report too short (${wordCount} words)`);
 
   return {
@@ -387,8 +391,8 @@ function buildFallbackAnalysis(
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
   const n = String(value || "").toLowerCase();
-  if (n.includes("high")) return "high";
-  if (n.includes("medium") || n.includes("moderate")) return "medium";
+  if (/(high|critical|severe|extreme|danger|alarm)/.test(n)) return "high";
+  if (/(medium|moderate|elevated|warning|caution)/.test(n)) return "medium";
   return "low";
 }
 
@@ -540,22 +544,6 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return;
   }
 
-  const clientIp = String(
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      "unknown",
-  );
-  if (!acceptAnalyzeRequest(clientIp)) {
-    res.status(429).json({
-      error: {
-        stage: "RATE_LIMIT",
-        reason: "Too many analysis requests. Please try again later.",
-        recommendation: "Wait a few minutes before retrying.",
-      },
-    });
-    return;
-  }
-
   try {
     await ensureAdminInitialized();
 
@@ -613,6 +601,35 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       return;
     }
 
+    // Per-user quota keyed on the verified uid, mirroring the Express backend
+    // (server.ts): 5 analyses / 24h per user and max 2 concurrent. The previous
+    // bucket key was the client-supplied X-Forwarded-For IP, which any client
+    // can spoof to mint a fresh bucket per request, voiding the limit.
+    if (!acceptAnalyzeRequest(ownerId, 5, 24 * 60 * 60 * 1000)) {
+      res.status(429).json({
+        error: {
+          stage: "RATE_LIMIT",
+          reason: "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
+          recommendation: "Please try again tomorrow or upgrade your plan.",
+        },
+      });
+      return;
+    }
+
+    const inFlight = inFlightAnalyzeByUser.get(ownerId) || 0;
+    if (inFlight >= 2) {
+      res.status(429).json({
+        error: {
+          stage: "CONCURRENT_LIMIT",
+          reason: "Too many concurrent analysis requests (max 2 at a time)",
+          recommendation:
+            "Please wait for an in-progress analysis to finish before submitting another.",
+        },
+      });
+      return;
+    }
+    inFlightAnalyzeByUser.set(ownerId, inFlight + 1);
+
     const contentType = String(req.headers["content-type"] || "");
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
     const boundary = boundaryMatch ? boundaryMatch[1] || boundaryMatch[2] : null;
@@ -658,15 +675,19 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       );
     }
 
-    if (!extractedText || extractedText.length < 20) {
-      extractedText = `Document: ${filename}\nFile Size: ${fileBuffer.length} bytes.\nNotice: Scanned PDF or non-standard text layer.`;
-    }
+    const hasExtractableText = Boolean(extractedText) && extractedText.trim().length >= 20;
 
     const hfApiKey = getEnv("HUGGINGFACE_API_KEY");
     let validPayload: AnalysisResponse | null = null;
     let fallbackReason = "";
 
-    if (hfApiKey) {
+    if (!hasExtractableText) {
+      // Never feed a placeholder string to the model and then persist the
+      // result as a genuine "completed" analysis. A scanned/image PDF produces
+      // only an explicit fallback record so users are not shown a fabricated
+      // financial analysis of a document the system could not read.
+      fallbackReason = "Insufficient extractable text (scanned/image PDF)";
+    } else if (hfApiKey) {
       try {
         const { InferenceClient } = await import("@huggingface/inference");
         const hfClient = new InferenceClient(hfApiKey);
@@ -720,7 +741,7 @@ full_report MUST be at least 300 words.`;
     const riskLevel = normalizeRiskLevel(rawRisk);
     const now = new Date();
     const safeFilename = sanitizeStorageFilename(filename);
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
 
     // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
     // then derive fileUrl from the real object URL instead of a placeholder domain.
@@ -775,7 +796,7 @@ full_report MUST be at least 300 words.`;
       processedAt: now,
     };
 
-    let documentId = `local-${ownerId}-${now.getTime()}`;
+    let documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
     let firestorePersisted = false;
 
     if (admin.apps.length) {
@@ -805,7 +826,7 @@ full_report MUST be at least 300 words.`;
         firestorePersisted = true;
       } catch (writeErr: any) {
         console.warn("[analyze] Firestore server write skipped:", writeErr?.message);
-        documentId = `local-${ownerId}-${now.getTime()}`;
+        documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
         // The PDF was already uploaded to Storage above, but without a
         // Firestore record it can never be downloaded, so clean it up.
         if (storagePath) {
@@ -857,5 +878,13 @@ full_report MUST be at least 300 words.`;
         stack: isProd ? undefined : error?.stack,
       },
     });
+  } finally {
+    // Release the concurrency slot held for this user once the pipeline settles,
+    // regardless of whether it succeeded or failed.
+    if (ownerId) {
+      const updated = (inFlightAnalyzeByUser.get(ownerId) || 1) - 1;
+      if (updated <= 0) inFlightAnalyzeByUser.delete(ownerId);
+      else inFlightAnalyzeByUser.set(ownerId, updated);
+    }
   }
 }

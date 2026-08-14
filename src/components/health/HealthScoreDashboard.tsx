@@ -61,7 +61,7 @@ import {
   getHealthScores,
   updateHealthScore,
 } from '@/src/lib/healthUtils';
-import { fetchBudgetCategories, type BudgetCategory } from '@/src/lib/budgetUtils';
+import { fetchBudgetCategories, fetchBudgetFromFirestore, type BudgetCategory } from '@/src/lib/budgetUtils';
 import { fetchTransactions, type Transaction } from '@/src/lib/anomalyUtils';
 
 interface HealthScoreDashboardProps {
@@ -73,6 +73,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
   const [calculating, setCalculating] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([]);
+  const [budgetCategoriesByMonth, setBudgetCategoriesByMonth] = useState<Record<string, { name: string; monthlyLimit: number }[]>>({});
   const [historicalScores, setHistoricalScores] = useState<HealthScore[]>([]);
   const [currentScore, setCurrentScore] = useState<HealthScore | null>(null);
 
@@ -80,6 +81,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
     if (!user) {
       setTransactions([]);
       setBudgetCategories([]);
+      setBudgetCategoriesByMonth({});
       setLoading(false);
       return;
     }
@@ -99,6 +101,25 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
 
         if (!active) return;
 
+        const monthKeys: string[] = [];
+        for (let i = 5; i >= 0; i--) {
+          monthKeys.push(format(subMonths(now, i), 'yyyy-MM'));
+        }
+
+        const budgetDocs = await Promise.all(
+          monthKeys.map((key) => fetchBudgetFromFirestore(user.uid, key))
+        );
+
+        const byMonth: Record<string, { name: string; monthlyLimit: number }[]> = {};
+        monthKeys.forEach((key, idx) => {
+          const doc = budgetDocs[idx];
+          if (doc && doc.categoryBudgets) {
+            byMonth[key] = Object.entries(doc.categoryBudgets).map(
+              ([name, monthlyLimit]) => ({ name, monthlyLimit: monthlyLimit as number })
+            );
+          }
+        });
+
         const filtered = txns.filter((t) => {
           const date = t.date instanceof Date ? t.date : new Date(t.date as any);
           return date >= startDate && date <= endDate;
@@ -106,6 +127,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
 
         setTransactions(filtered);
         setBudgetCategories(cats);
+        setBudgetCategoriesByMonth(byMonth);
         setHistoricalScores(scores);
 
         const existing = scores.find((s) => {
@@ -149,7 +171,8 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
 
       const spending = calculateSpendingScore(monthTxns);
       const savings = calculateSavingsScore(monthTxns);
-      const budget = calculateBudgetAdherence(monthTxns, budgetCategories);
+      const catsForMonth = budgetCategoriesByMonth[monthKey] ?? budgetCategories;
+      const budget = calculateBudgetAdherence(monthTxns, catsForMonth);
       const overall = calculateOverallScore(spending, savings, budget);
 
       const historical = historicalScores.find((s) => s.month === monthKey);
@@ -164,7 +187,7 @@ export function HealthScoreDashboard({ user }: HealthScoreDashboardProps) {
     }
 
     return data;
-  }, [transactions, budgetCategories, historicalScores]);
+  }, [transactions, budgetCategories, budgetCategoriesByMonth, historicalScores]);
 
   const metrics = useMemo((): HealthMetric[] => {
     const now = new Date();

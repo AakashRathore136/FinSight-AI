@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { type User as FirebaseUser } from 'firebase/auth';
 import {
   collection,
   query,
@@ -87,7 +88,7 @@ const QUICK_ACTIONS = [
 ];
 
 interface ChatAssistantProps {
-  user: { uid: string } | null;
+  user: FirebaseUser | null;
 }
 
 export function ChatAssistant({ user }: ChatAssistantProps) {
@@ -306,10 +307,13 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
 
       // The agentic copilot calls real analysis tools (and the model) instead of
       // returning a hardcoded template after a fake delay. It falls back to the
-      // deterministic keyword router when no model/token is configured.
+      // deterministic keyword router when no model/server key is configured.
+      // Model calls run through the authenticated /api/agent-chat endpoint so
+      // the HF inference key never reaches the client bundle. (Issue #1341)
       const response: ChatResponse = await generateAgentChatResponse(
         content,
         context,
+        async () => (await user?.getIdToken?.()) ?? null,
         generateChatResponse,
       );
       const assistantMessage: ChatMessage = {

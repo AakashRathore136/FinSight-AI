@@ -11,6 +11,7 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import cors from "cors";
+import { randomUUID } from "crypto";
 import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 import logger from "./src/lib/logger.js";
@@ -225,16 +226,16 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
 
   const fullReport = String(payload.full_report || "").trim();
   const wordCount = fullReport.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 120) {
+  if (wordCount < 600) {
     throw new Error(
       `Model response full_report is too short (${wordCount} words)`,
     );
   }
-  if (wordCount < 450) {
-    console.warn(
-      `AI_SCHEMA_VALIDATION_WARNING: full_report is ${wordCount} words; accepting shorter valid analysis.`,
-    );
-  }
+
+  const rawSentiment = Number(payload.sentiment_score);
+  const sentiment_score = Number.isFinite(rawSentiment)
+    ? Math.max(-1, Math.min(1, rawSentiment))
+    : 0;
 
   return {
     summary: sanitizeString(String(payload.summary || "")),
@@ -257,6 +258,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],
     sentiment_score: clampSentiment(payload.sentiment_score),
+    sentiment_score,
     entities: Array.isArray(payload.entities)
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
       : [],
@@ -400,6 +402,7 @@ function sanitizeString(text: string): string {
 /** Recursively sanitize string leaves of an arbitrary value (objects/arrays)
  * so untrusted model output rendered in the UI cannot carry HTML/script. */
 function sanitizeDeep(value: any): any {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") return sanitizeString(value);
   if (Array.isArray(value)) return value.map(sanitizeDeep);
   if (value && typeof value === "object") {
@@ -412,9 +415,8 @@ function sanitizeDeep(value: any): any {
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
   const normalized = String(value || "").toLowerCase();
-  if (normalized.includes("high")) return "high";
-  if (normalized.includes("medium") || normalized.includes("moderate"))
-    return "medium";
+  if (/(high|critical|severe|extreme|danger|alarm)/.test(normalized)) return "high";
+  if (/(medium|moderate|elevated|warning|caution)/.test(normalized)) return "medium";
   return "low";
 }
 
@@ -1088,7 +1090,7 @@ CRITICAL RULES:
         // SECURITY: For security, store only the storage path, not a permanent download URL
         // Signed URLs will be generated on-demand with short expiration (15 minutes)
         const safeFilename = sanitizeStorageFilename(file.originalname);
-        const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+        const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
         // Real Storage object URL, derived after upload. Included in docData and
         // every response record so client-side Firestore fallback writes pass
         // firestore.rules isValidDocument (requires a https `fileUrl`).
@@ -1268,7 +1270,7 @@ CRITICAL RULES:
             // Local-fallback: keep the uploaded Storage object so the owner can
             // download the source PDF (Issue #1029). Orphan cleanup for these
             // records is handled when the local document is deleted.
-            documentId = `local-${ownerId}-${now.getTime()}`;
+            documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
             console.warn(
               "FIRESTORE_WRITE_FALLBACK: returning local analysis record because Firestore writes are not available",
             );
@@ -1349,6 +1351,63 @@ CRITICAL RULES:
     analyzeRateLimiter,
     analyzePipelineHandler,
   );
+
+  // Agentic chat model calls. The browser never holds the HF inference key:
+  // it posts the message history (system + turns, no secrets) here and the
+  // server performs the model call with HUGGINGFACE_API_KEY, keeping the
+  // inference credential out of the client bundle entirely. The route sits
+  // behind requireFirebaseAuth (/api/*), so only signed-in users can spend
+  // the server key. (Issue #1341)
+  app.post("/api/agent-chat", async (req: any, res: any) => {
+    const { systemPrompt, messages, model } = req.body || {};
+    if (typeof systemPrompt !== "string" || !Array.isArray(messages)) {
+      return res.status(400).json({
+        error: {
+          stage: "BAD_REQUEST",
+          reason: "systemPrompt (string) and messages (array) are required",
+        },
+      });
+    }
+    // Only a plain model id is accepted, never arbitrary strings, so the model
+    // field cannot be abused to smuggle prompt content into the request.
+    const requestedModel =
+      typeof model === "string" && /^[\w.\-/]+$/.test(model)
+        ? model
+        : "meta-llama/Meta-Llama-3-8B-Instruct";
+    const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
+    if (!huggingFaceApiKey) {
+      return res.status(503).json({
+        error: {
+          stage: "MODEL_UNAVAILABLE",
+          reason: "HUGGINGFACE_API_KEY is not configured on the server",
+        },
+      });
+    }
+    try {
+      const hfClient = new InferenceClient(huggingFaceApiKey);
+      const completion = await hfClient.chatCompletion({
+        model: requestedModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ] as any,
+        max_tokens: 800,
+        temperature: 0.2,
+      });
+      const content = (completion as any)?.choices?.[0]?.message?.content ?? null;
+      if (content == null) {
+        return res.status(502).json({
+          error: { stage: "MODEL_ERROR", reason: "Empty model response" },
+        });
+      }
+      return res.json({ content });
+    } catch (err: any) {
+      console.error("AGENT_CHAT_ERROR:", err?.message || err);
+      return res.status(502).json({
+        error: { stage: "MODEL_ERROR", reason: "Model request failed" },
+      });
+    }
+  });
 
   // Generate short-lived signed URL for secure document download
   // Prevents permanent URL access to sensitive financial documents
@@ -1527,10 +1586,12 @@ CRITICAL RULES:
   // object in one operation. Firestore deletes do not cascade, and a bare
   // client-side deleteDoc would leave the PDF readable via signed URLs
   // forever. Ownership is verified against the Firestore record before any
-  // metadata or object is removed.
+  // metadata or object is removed. Local-fallback documents (Issue #1343)
+  // have no Firestore record, so they are purged from Storage directly after
+  // the same namespace + uploadedBy ownership checks.
   app.post("/api/documents/delete", async (req: any, res) => {
     try {
-      const { documentId } = req.body;
+      const { documentId, storagePath: bodyStoragePath } = req.body;
 
       if (!documentId || typeof documentId !== "string") {
         return res.status(400).json({
@@ -1553,35 +1614,56 @@ CRITICAL RULES:
       }
 
       const dbAdmin = getFirestore(firestoreDatabaseId);
-      const docRef = dbAdmin.collection("documents").doc(documentId);
-      const docSnap = await docRef.get();
+      const isLocalDoc = documentId.startsWith("local-");
+      let storagePath =
+        typeof bodyStoragePath === "string" ? bodyStoragePath : "";
 
-      if (!docSnap.exists) {
-        return res.status(404).json({
-          error: {
-            stage: "DOCUMENT_DELETE",
-            reason: "Document not found",
-            recommendation: "The document may have already been deleted.",
-          },
-        });
+      if (isLocalDoc) {
+        // Local-fallback documents exist only as Storage objects (the Firestore
+        // write that would have recorded them was permission-denied). They must
+        // still be purgeable through this endpoint or their PDFs accumulate
+        // forever in Storage. The storagePath is required from the client and
+        // its ownership is verified below (namespace + uploadedBy metadata).
+        if (!storagePath) {
+          return res.status(400).json({
+            error: {
+              stage: "DOCUMENT_DELETE",
+              reason: "storagePath is required for local documents",
+              recommendation: "Provide the storage path of the local document to purge.",
+            },
+          });
+        }
+      } else {
+        const docRef = dbAdmin.collection("documents").doc(documentId);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          return res.status(404).json({
+            error: {
+              stage: "DOCUMENT_DELETE",
+              reason: "Document not found",
+              recommendation: "The document may have already been deleted.",
+            },
+          });
+        }
+
+        const docData = docSnap.data();
+        if (docData?.ownerId !== req.ownerId) {
+          console.warn(
+            `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
+        storagePath =
+          typeof docData?.storagePath === "string" ? docData.storagePath : "";
       }
-
-      const docData = docSnap.data();
-      if (docData?.ownerId !== req.ownerId) {
-        console.warn(
-          `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
-        );
-        return res.status(403).json({
-          error: {
-            stage: "AUTHORIZATION",
-            reason: "You do not have access to this document",
-            recommendation: "Verify the document belongs to your account.",
-          },
-        });
-      }
-
-      const storagePath =
-        typeof docData?.storagePath === "string" ? docData.storagePath : "";
 
       // SECURITY: the ownership check above only proves the caller owns the
       // Firestore record. The record's storagePath is client-controlled at
@@ -1642,13 +1724,16 @@ CRITICAL RULES:
       }
 
       // Delete the analyses subcollection docs and the parent document in a
-      // single batch so the record cannot be left half-purged.
-      const analysesRef = docRef.collection("analyses");
-      const analysesSnap = await analysesRef.get();
-      const batch = dbAdmin.batch();
-      analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
-      batch.delete(docRef);
-      await batch.commit();
+      // single batch so the record cannot be left half-purged. Local-fallback
+      // documents have no Firestore record to purge.
+      if (!isLocalDoc) {
+        const analysesRef = docRef.collection("analyses");
+        const analysesSnap = await analysesRef.get();
+        const batch = dbAdmin.batch();
+        analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
+        batch.delete(docRef);
+        await batch.commit();
+      }
 
 
       // Remove the Storage object. If it is already gone (code 404) there is
