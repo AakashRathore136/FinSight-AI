@@ -105,24 +105,35 @@ export async function fetchTransactionsForDateRange(
     });
   } catch (error) {
     if ((error as any)?.code === "failed-precondition") {
-      const q = query(
-        collection(db, "transactions"),
-        where("userId", "==", userId),
-        orderBy("date", "desc"),
-      );
-      const snap = await getDocs(q);
-      const startTime = startOfDay(startDate).getTime();
-      const endTime = endOfDay(endDate).getTime();
-      return snap.docs
-        .map((d) => {
-          const data = d.data() as any;
-          const date = toDate(data.date) || new Date();
-          return { ...data, id: d.id, date } as ReportTransaction;
-        })
-        .filter((t) => {
-          const time = t.date.getTime();
-          return time >= startTime && time <= endTime;
-        });
+      // The primary query needs the {userId,date} composite index. On a fresh
+      // project that index is commonly absent, so fall back to a single-field
+      // userId query (no orderBy) and filter/sort in memory. The previous
+      // fallback still required orderBy("date","desc") and re-threw the SAME
+      // failed-precondition uncaught, so all report generation failed entirely
+      // (issue #1351).
+      try {
+        const q = query(
+          collection(db, "transactions"),
+          where("userId", "==", userId),
+        );
+        const snap = await getDocs(q);
+        const startTime = startOfDay(startDate).getTime();
+        const endTime = endOfDay(endDate).getTime();
+        return snap.docs
+          .map((d) => {
+            const data = d.data() as any;
+            const date = toDate(data.date) || new Date();
+            return { ...data, id: d.id, date } as ReportTransaction;
+          })
+          .filter((t) => {
+            const time = t.date.getTime();
+            return time >= startTime && time <= endTime;
+          })
+          .sort((a, b) => b.date.getTime() - a.date.getTime());
+      } catch (fallbackErr) {
+        handleFirestoreError(fallbackErr, OperationType.LIST, "transactions");
+        return [];
+      }
     }
     handleFirestoreError(error, OperationType.LIST, "transactions");
     return [];
