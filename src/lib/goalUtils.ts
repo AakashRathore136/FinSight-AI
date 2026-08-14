@@ -60,11 +60,12 @@ export function generateContributionSuggestions(
   const remaining = targetAmount - currentAmount;
   if (remaining <= 0) return [{ label: 'Goal reached', amount: 0 }];
 
-  // Guard against empty/invalid deadlines; return a NaN sentinel (consistent
-  // with calculateMonthlyContribution) instead of poisoning formatCurrency.
-  if (!deadline) return [{ label: 'No deadline set', amount: NaN }];
+  // Guard against empty/invalid deadlines; return 0 (not a NaN sentinel) so
+  // formatCurrency renders \$0 instead of "NaN" (consistent with the
+  // calculateMonthlyContribution guard added for issue #1375).
+  if (!deadline) return [{ label: 'No deadline set', amount: 0 }];
   const deadlineDate = new Date(deadline);
-  if (Number.isNaN(deadlineDate.getTime())) return [{ label: 'No deadline set', amount: NaN }];
+  if (Number.isNaN(deadlineDate.getTime())) return [{ label: 'No deadline set', amount: 0 }];
 
   const now = new Date();
   if (differenceInDays(deadlineDate, now) <= 0) {
