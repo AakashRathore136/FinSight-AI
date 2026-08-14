@@ -413,9 +413,8 @@ function sanitizeDeep(value: any): any {
 
 function normalizeRiskLevel(value: unknown): "low" | "medium" | "high" {
   const normalized = String(value || "").toLowerCase();
-  if (normalized.includes("high")) return "high";
-  if (normalized.includes("medium") || normalized.includes("moderate"))
-    return "medium";
+  if (/(high|critical|severe|extreme|danger|alarm)/.test(normalized)) return "high";
+  if (/(medium|moderate|elevated|warning|caution)/.test(normalized)) return "medium";
   return "low";
 }
 
