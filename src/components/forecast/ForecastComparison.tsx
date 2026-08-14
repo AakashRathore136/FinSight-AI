@@ -112,13 +112,15 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
       try {
         const existing = await getForecasts(user.uid);
         if (existing.length > 0 && active) {
-          const mapped: MonthlyForecast[] = existing.map((f) => ({
-            month: f.month,
-            income: f.projectedIncome,
-            expenses: f.projectedExpenses,
-            net: f.netBalance,
-            confidence: f.confidence,
-          }));
+          const mapped: MonthlyForecast[] = existing
+            .map((f) => ({
+              month: f.month,
+              income: f.projectedIncome,
+              expenses: f.projectedExpenses,
+              net: f.netBalance,
+              confidence: f.confidence,
+            }))
+            .sort((a, b) => a.month.localeCompare(b.month));
           setMonthly(mapped);
           setQuarterly(generateQuarterlyForecast(mapped));
         } else if (active) {
