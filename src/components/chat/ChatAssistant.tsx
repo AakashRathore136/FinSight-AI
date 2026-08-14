@@ -47,7 +47,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { format, startOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, subMonths, parseISO } from 'date-fns';
 
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
@@ -387,7 +387,7 @@ export function ChatAssistant({ user }: ChatAssistantProps) {
               dataKey="month"
               stroke="#94a3b8"
               fontSize={11}
-              tickFormatter={(value) => format(new Date(value), 'MMM yyyy')}
+              tickFormatter={(value) => format(parseISO(`${value}-01`), 'MMM yyyy')}
             />
             <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(value) => formatCurrency(value)} />
             <Tooltip
