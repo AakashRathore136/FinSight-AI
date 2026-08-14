@@ -263,7 +263,8 @@ export function detectAnomalies(
       amount: a.amount,
       period: a.comparisonPeriod || format(toDate(a.date), "MMM d, yyyy"),
       createdAt: new Date().toISOString(),
-    }));
+    }))
+    .filter((a) => !ignoredTransactionIds?.has(a.id));
 
   return insights.sort((a, b) => b.amount - a.amount);
 }
