@@ -118,7 +118,7 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
             expenses: f.projectedExpenses,
             net: f.netBalance,
             confidence: f.confidence,
-          }));
+          })).sort((a, b) => a.month.localeCompare(b.month));
           setMonthly(mapped);
           setQuarterly(generateQuarterlyForecast(mapped));
         } else if (active) {
