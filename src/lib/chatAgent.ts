@@ -48,6 +48,28 @@ const MAX_ITERATIONS = 4;
 const MODEL_CALL_TIMEOUT_MS = 30_000;
 const AGENT_LOOP_DEADLINE_MS = 45_000;
 
+// Rough token estimate (~4 chars/token) used to bound the agent context so the
+// model stays within its ~8k window. Overflowing it makes runAgentLoop return
+// null (silent fallback), so we trim oldest observations before re-calling.
+const CONTEXT_TOKEN_BUDGET = 6000;
+
+function approxTokens(text: string): number {
+  return Math.ceil((text?.length || 0) / 4);
+}
+
+// Drop the oldest observation (assistant tool-call + user observation) pairs
+// until the message history fits the token budget. The initial user query
+// (index 0) is always kept so the model still knows what was asked.
+function enforceContextBudget(
+  messages: { role: "user" | "assistant"; content: string }[],
+): void {
+  while (messages.length > 1) {
+    const total = messages.reduce((n, m) => n + approxTokens(m.content), 0);
+    if (total <= CONTEXT_TOKEN_BUDGET) break;
+    messages.splice(1, 2);
+  }
+}
+
 export interface AgentStep {
   thought: string;
   tool?: string;
@@ -368,8 +390,26 @@ function parseAgentJson(text: string): Record<string, unknown> | null {
 function summariseObservation(obs: unknown): string {
   try {
     const json = JSON.stringify(obs);
-    // Keep observations compact so they fit in the model context.
-    return json.length > 2000 ? json.slice(0, 2000) + "…" : json;
+    const budget = 2000;
+    if (json.length <= budget) return json;
+    // Walk backwards from the budget so a numeric literal or JSON token is
+    // never split mid-value. Prefer stopping at a structural/whitespace
+    // boundary (space, newline, "}", "]", or '"') if one is reachable near
+    // the budget; otherwise fall back to just before the offending number.
+    let cut = budget;
+    if (/\d/.test(json[cut - 1] ?? "")) {
+      while (cut > 0 && /\d/.test(json[cut - 1])) cut--;
+    }
+    let boundary = cut;
+    for (let i = budget; i >= cut; i--) {
+      const c = json[i];
+      if (c === " " || c === "\n" || c === "}" || c === "]" || c === '"') {
+        boundary = i;
+        break;
+      }
+    }
+    const safe = boundary > 0 ? boundary : cut;
+    return json.slice(0, safe) + "…";
   } catch {
     return String(obs);
   }
