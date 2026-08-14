@@ -295,28 +295,43 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     const symbol = input.symbol.trim();
     const now = new Date().toISOString();
 
-    // Queries are not allowed inside client transactions — resolve the holding
-    // document ref first, then lock/update it atomically with the ledger write.
-    let holdingRef = input.holdingId ? doc(db, 'portfolioHoldings', input.holdingId) : null;
-    if (!holdingRef && (input.type === 'buy' || input.type === 'sell')) {
+    // Best-effort lookup for a *legacy* holding created under a non-stable id
+    // (e.g. via addHolding). This is only a hint: the authoritative existence
+    // check for a brand-new symbol happens inside runTransaction below, so two
+    // concurrent buys of the same new symbol cannot each mint a duplicate
+    // holding (TOCTOU outside the transaction).
+    let legacyHoldingRef: ReturnType<typeof doc> | null = null;
+    if (!input.holdingId && (input.type === 'buy' || input.type === 'sell')) {
       const holdingsSnap = await getDocs(
         query(holdings, where('userId', '==', userId), where('symbol', '==', symbol)),
       );
       if (!holdingsSnap.empty) {
-        holdingRef = holdingsSnap.docs[0].ref;
-      } else if (input.type === 'buy') {
-        holdingRef = doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
-      } else {
-        throw new Error(`Cannot sell ${input.quantity} shares: no holding exists for ${symbol}`);
+        legacyHoldingRef = holdingsSnap.docs[0].ref;
       }
     }
 
     const transaction = await runTransaction(db, async (tx) => {
-      let resolvedHoldingId = holdingRef?.id || input.holdingId || '';
+      let resolvedHoldingId = input.holdingId || '';
 
-      if ((input.type === 'buy' || input.type === 'sell') && holdingRef) {
+      if (input.type === 'buy' || input.type === 'sell') {
+        // Resolve the holding ref deterministically from userId+symbol so
+        // Firestore guards the create against concurrent transactions. The
+        // existence read happens inside the transaction, keeping the ledger
+        // write atomic with the holding resolution.
+        let holdingRef = input.holdingId
+          ? doc(db, 'portfolioHoldings', input.holdingId)
+          : doc(db, 'portfolioHoldings', `${userId}_${symbol.toUpperCase()}`);
+
         const holdingSnap = await tx.get(holdingRef);
-        const existing = holdingSnap.data();
+        let existing = holdingSnap.data();
+
+        // Fall back to a legacy holding found outside the transaction only if
+        // the stable id does not yet exist, so existing non-stable holdings are
+        // still updated rather than duplicated.
+        if (!existing && legacyHoldingRef && legacyHoldingRef.id !== holdingRef.id) {
+          holdingRef = legacyHoldingRef;
+          existing = (await tx.get(holdingRef)).data();
+        }
 
         if (!existing) {
           if (input.type === 'sell') {
