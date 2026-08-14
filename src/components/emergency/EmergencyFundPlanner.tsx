@@ -51,6 +51,7 @@ import {
   createEmergencyFund,
   updateEmergencyFund,
   addContribution,
+  removeContribution,
   isFundComplete,
   DEFAULT_MAX_MONTHS,
 } from '@/src/lib/emergencyUtils';
@@ -210,8 +211,8 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
 
   const handleAdjustTarget = async () => {
     if (!fund) return;
-    const targetAmount = parseFloat(monthlyContribution) || fund.targetAmount;
-    const months = parseInt((document.getElementById('ef-months') as HTMLSelectElement)?.value || '6', 10) || fund.monthsCovered;
+    const targetAmount = fund.targetAmount;
+    const months = targetMonths || fund.monthsCovered;
     const newContribution = calculateMonthlySavings(targetAmount, fund.currentAmount, months);
     await updateGoal({
       targetAmount,
@@ -231,18 +232,16 @@ export function EmergencyFundPlanner({ user }: EmergencyFundPlannerProps) {
 
   const handleDeleteContribution = async (contribution: Contribution) => {
     if (!fund) return;
-    const contributions = fund.contributions.filter((c) => c.id !== contribution.id);
-    const currentAmount = Math.max(0, fund.currentAmount - contribution.amount);
-    await updateGoal({
-      contributions,
-      currentAmount,
-      estimatedCompletionDate: estimateCompletionDate(
-        fund.targetAmount,
-        currentAmount,
-        fund.monthlyContribution
-      ),
-    });
-    toast.success('Contribution removed');
+    // Removal runs as a Firestore transaction with increment(-amount) /
+    // arrayRemove (mirroring addContribution) so a concurrent add cannot be
+    // lost to an absolute overwrite of currentAmount/contributions.
+    const updated = await removeContribution(fund, contribution);
+    if (updated) {
+      setFund(updated);
+      toast.success('Contribution removed');
+    } else {
+      toast.error('Failed to remove contribution');
+    }
   };
 
   return (

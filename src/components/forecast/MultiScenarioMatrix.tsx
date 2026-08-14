@@ -31,7 +31,8 @@ export const MultiScenarioMatrix: React.FC = () => {
     scenarios.forEach((scen) => {
       const growthFactor = 1 + (scen.revenueGrowthModifier / 100) * ((idx + 1) / 12);
       const expenseFactor = 1 + (scen.expenseInflationModifier / 100) * ((idx + 1) / 12);
-      const netCash = Math.round(baseMonthlyCash * (idx + 1) * (growthFactor / expenseFactor));
+      const realization = Math.max(0, 1 - (scen.defaultProbabilityModifier / 100) * ((idx + 1) / 12));
+      const netCash = Math.round(baseMonthlyCash * (idx + 1) * (growthFactor / expenseFactor) * realization);
       dataPoint[scen.name] = netCash;
     });
     return dataPoint;

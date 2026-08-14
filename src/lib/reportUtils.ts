@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
 import { toDate, formatCurrency } from "@/src/lib/utils";
+import { convertAmount } from "@/src/lib/currencyUtils";
 import { format, startOfDay, endOfDay } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -44,6 +45,7 @@ export interface ReportTransaction {
   date: Date;
   description?: string;
   type?: "expense" | "income";
+  currency: string;
 }
 
 export interface ExpenseSummaryItem {
@@ -131,14 +133,22 @@ export async function fetchTransactionsForDateRange(
 
 export function generateExpenseSummary(
   transactions: ReportTransaction[],
+  baseCurrency: string,
+  rates: Record<string, number> | null,
 ): ExpenseSummaryItem[] {
   const expenses = transactions.filter((t) => t.type !== "income");
   const map = new Map<string, { total: number; count: number }>();
 
   expenses.forEach((t) => {
     const cat = t.category || "Other";
+    const from = t.currency || baseCurrency;
+    const converted =
+      rates === null
+        ? null
+        : convertAmount(Math.abs(t.amount), from, baseCurrency, rates);
+    const amt = converted === null ? Math.abs(t.amount) : converted;
     const existing = map.get(cat) || { total: 0, count: 0 };
-    existing.total += Math.abs(t.amount);
+    existing.total += amt;
     existing.count += 1;
     map.set(cat, existing);
   });
@@ -154,14 +164,22 @@ export function generateExpenseSummary(
 
 export function generateIncomeSummary(
   transactions: ReportTransaction[],
+  baseCurrency: string,
+  rates: Record<string, number> | null,
 ): IncomeSummaryItem[] {
   const incomes = transactions.filter((t) => t.type === "income");
   const map = new Map<string, { total: number; count: number }>();
 
   incomes.forEach((t) => {
     const source = t.category || "Other";
+    const from = t.currency || baseCurrency;
+    const converted =
+      rates === null
+        ? null
+        : convertAmount(Math.abs(t.amount), from, baseCurrency, rates);
+    const amt = converted === null ? Math.abs(t.amount) : converted;
     const existing = map.get(source) || { total: 0, count: 0 };
-    existing.total += Math.abs(t.amount);
+    existing.total += amt;
     existing.count += 1;
     map.set(source, existing);
   });
@@ -202,7 +220,7 @@ export function generateCSV(reportData: ReportData): string {
   );
   lines.push("");
   lines.push("Transaction Details");
-  lines.push("Date,Description,Category,Amount,Type");
+  lines.push("Date,Description,Category,Amount,Type,Currency");
   reportData.transactions.forEach((t) => {
     lines.push(
       [
@@ -211,6 +229,7 @@ export function generateCSV(reportData: ReportData): string {
         csvEscape(t.category),
         csvEscape(t.amount.toFixed(2)),
         csvEscape(t.type || "expense"),
+        csvEscape(t.currency),
       ].join(","),
     );
   });
@@ -373,23 +392,36 @@ export function buildReportData(
   transactions: ReportTransaction[],
   expenseSummary: ExpenseSummaryItem[],
   incomeSummary: IncomeSummaryItem[],
-  currency: string = "USD",
+  baseCurrency: string,
+  rates: Record<string, number> | null,
 ): ReportData {
   const totalIncome = incomeSummary.reduce((sum, item) => sum + item.total, 0);
   const totalExpenses = expenseSummary.reduce(
     (sum, item) => sum + item.total,
     0,
   );
+  const convertedTransactions: ReportTransaction[] = transactions.map((t) => {
+    const from = t.currency || baseCurrency;
+    const converted =
+      rates === null
+        ? null
+        : convertAmount(Math.abs(t.amount), from, baseCurrency, rates);
+    return {
+      ...t,
+      amount: converted === null ? Math.abs(t.amount) : converted,
+      currency: converted === null ? from : baseCurrency,
+    };
+  });
   return {
     userId,
     type,
     dateRange: { start: startDate, end: endDate },
-    transactions,
+    transactions: convertedTransactions,
     expenseSummary,
     incomeSummary,
     totalIncome,
     totalExpenses,
-    currency,
+    currency: baseCurrency,
     createdAt: new Date(),
   };
 }
