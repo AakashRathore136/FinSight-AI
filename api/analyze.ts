@@ -251,7 +251,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
   }
   const fullReport = String(payload.full_report || "").trim();
   const wordCount = fullReport.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 120)
+  if (wordCount < 600)
     throw new Error(`full_report too short (${wordCount} words)`);
 
   return {
