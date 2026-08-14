@@ -127,6 +127,9 @@ function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
 }
 
 const analyzeRateBuckets = new Map<string, number[]>();
+// Per-user in-flight counter so the serverless route enforces the same
+// concurrency cap as the Express backend (max 2 concurrent analyses per user).
+const inFlightAnalyzeByUser = new Map<string, number>();
 
 function acceptAnalyzeRequest(ip: string, limit = 10, windowMs = 10 * 60 * 1000): boolean {
   const now = Date.now();
@@ -534,22 +537,6 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return;
   }
 
-  const clientIp = String(
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      "unknown",
-  );
-  if (!acceptAnalyzeRequest(clientIp)) {
-    res.status(429).json({
-      error: {
-        stage: "RATE_LIMIT",
-        reason: "Too many analysis requests. Please try again later.",
-        recommendation: "Wait a few minutes before retrying.",
-      },
-    });
-    return;
-  }
-
   try {
     await ensureAdminInitialized();
 
@@ -606,6 +593,35 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       });
       return;
     }
+
+    // Per-user quota keyed on the verified uid, mirroring the Express backend
+    // (server.ts): 5 analyses / 24h per user and max 2 concurrent. The previous
+    // bucket key was the client-supplied X-Forwarded-For IP, which any client
+    // can spoof to mint a fresh bucket per request, voiding the limit.
+    if (!acceptAnalyzeRequest(ownerId, 5, 24 * 60 * 60 * 1000)) {
+      res.status(429).json({
+        error: {
+          stage: "RATE_LIMIT",
+          reason: "Daily analysis quota exceeded (5 analyses per 24 hours per user)",
+          recommendation: "Please try again tomorrow or upgrade your plan.",
+        },
+      });
+      return;
+    }
+
+    const inFlight = inFlightAnalyzeByUser.get(ownerId) || 0;
+    if (inFlight >= 2) {
+      res.status(429).json({
+        error: {
+          stage: "CONCURRENT_LIMIT",
+          reason: "Too many concurrent analysis requests (max 2 at a time)",
+          recommendation:
+            "Please wait for an in-progress analysis to finish before submitting another.",
+        },
+      });
+      return;
+    }
+    inFlightAnalyzeByUser.set(ownerId, inFlight + 1);
 
     const contentType = String(req.headers["content-type"] || "");
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
@@ -851,5 +867,13 @@ full_report MUST be at least 300 words.`;
         stack: isProd ? undefined : error?.stack,
       },
     });
+  } finally {
+    // Release the concurrency slot held for this user once the pipeline settles,
+    // regardless of whether it succeeded or failed.
+    if (ownerId) {
+      const updated = (inFlightAnalyzeByUser.get(ownerId) || 1) - 1;
+      if (updated <= 0) inFlightAnalyzeByUser.delete(ownerId);
+      else inFlightAnalyzeByUser.set(ownerId, updated);
+    }
   }
 }
