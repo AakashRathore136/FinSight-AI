@@ -27,7 +27,8 @@ export function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 /**
- * Generates lightweight TF-IDF-like pseudo-embedding vector for text similarity scoring.
+ * Generates a raw term-frequency pseudo-embedding vector for text similarity scoring.
+ * IDF weighting is applied separately by the vector store.
  */
 export function generateSparseEmbedding(text: string, vocabulary: string[]): number[] {
   const words = text.toLowerCase().match(/\b[a-z0-9_]+\b/g) || [];
@@ -43,6 +44,7 @@ export class InMemoryVectorStore {
   private chunks: DocumentChunk[] = [];
   private embeddings: number[][] = [];
   private vocabulary: string[] = [];
+  private idf: number[] = [];
 
   /**
    * Indexes document chunks into the store.
@@ -60,8 +62,23 @@ export class InMemoryVectorStore {
     });
 
     this.vocabulary = Array.from(vocabSet);
-    this.embeddings = chunks.map((chunk) =>
-      generateSparseEmbedding(chunk.text, this.vocabulary)
+
+    // Compute document frequencies and IDF weights.
+    const df = new Array(this.vocabulary.length).fill(0);
+    this.embeddings = chunks.map((chunk) => {
+      const e = generateSparseEmbedding(chunk.text, this.vocabulary);
+      e.forEach((c, i) => {
+        if (c > 0) df[i]++;
+      });
+      return e;
+    });
+
+    const N = chunks.length;
+    this.idf = df.map((d) => (d > 0 ? Math.log((N + 1) / (d + 1)) + 1 : 0));
+
+    // Weight stored embeddings by IDF.
+    this.embeddings = this.embeddings.map((e) =>
+      e.map((c, i) => c * this.idf[i])
     );
   }
 
@@ -71,7 +88,9 @@ export class InMemoryVectorStore {
   public similaritySearch(query: string, topK: number = 3): ScoredChunk[] {
     if (this.chunks.length === 0 || this.vocabulary.length === 0) return [];
 
-    const queryEmbedding = generateSparseEmbedding(query, this.vocabulary);
+    const queryEmbedding = generateSparseEmbedding(query, this.vocabulary).map(
+      (c, i) => c * this.idf[i]
+    );
 
     const scored = this.chunks.map((chunk, index) => {
       const score = cosineSimilarity(queryEmbedding, this.embeddings[index]);
