@@ -118,6 +118,10 @@ export interface TransactionInput {
   /** Optional asset class for the new holding created by a first buy. When
    * omitted, addTransaction infers it from the symbol. (Issue #1030) */
   assetClass?: AssetClass;
+  /** Optional currency for the holding created by a first buy. When omitted,
+   * addTransaction falls back to the user's base currency, then 'USD'.
+   * (Issue #1217) */
+  currency?: string;
 }
 
 // Well-known symbols that are not equities. Anything unrecognized defaults to
@@ -295,6 +299,21 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     const symbol = input.symbol.trim();
     const now = new Date().toISOString();
 
+    // Resolve the user's base currency so a new holding created by a first buy
+    // is persisted in the correct currency rather than hard-coded 'USD'.
+    // (Issue #1217)
+    let userBaseCurrency = 'USD';
+    try {
+      const settingsDoc = await getDoc(doc(db, 'currencies', userId));
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data() as { baseCurrency?: string };
+        userBaseCurrency = data.baseCurrency || 'USD';
+      }
+    } catch {
+      userBaseCurrency = 'USD';
+    }
+    const holdingCurrency = input.currency || userBaseCurrency;
+
     // Queries are not allowed inside client transactions — resolve the holding
     // document ref first, then lock/update it atomically with the ledger write.
     let holdingRef = input.holdingId ? doc(db, 'portfolioHoldings', input.holdingId) : null;
@@ -334,7 +353,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             quantity,
             avgCost,
             currentPrice: input.price,
-            currency: 'USD',
+            currency: holdingCurrency,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
