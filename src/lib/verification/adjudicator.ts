@@ -36,6 +36,7 @@ export interface AdjudicationVerdict {
   verdict: "supported" | "partial" | "unsupported";
   chunkId: string;
   reason: string;
+  retrievedChunkIds: string[];
 }
 
 /**
@@ -74,6 +75,11 @@ export async function adjudicateClaims(
         chunks: relevantChunks,
       };
     });
+
+    const retrievedByClaim: Record<string, string[]> = {};
+    for (const { claim, chunks: retrieved } of claimsWithContext) {
+      retrievedByClaim[claim.id] = retrieved.map((c) => c.id);
+    }
 
     const claimsFormatted = claimsWithContext.map(({ claim, chunks: retrieved }) => {
       const chunksText = retrieved.map((c) => `Chunk [ID: ${c.id}] (Page ${c.pageNumber || "unknown"}):\n${c.text}`).join("\n---\n");
@@ -132,6 +138,7 @@ ${claimsFormatted}`;
               verdict: item.verdict || "unsupported",
               chunkId: item.chunkId || "",
               reason: item.reason || "",
+              retrievedChunkIds: retrievedByClaim[item.claimId] || [],
             };
           }
         }
