@@ -173,7 +173,8 @@ export function groupByCategoryAndPeriod(
 
   transactions.forEach((t) => {
     if (normalizeTransactionType(t.type) !== 'expense') return;
-    const tDate = toDate(t.date) || new Date();
+    const tDate = toDate(t.date);
+    if (!tDate) return;
     const key = isMonth ? formatMonthKey(tDate) : formatWeekKey(tDate);
     if (!byCategory.has(t.category)) {
       const base: CategoryPeriodDatum = { category: t.category };
@@ -206,7 +207,8 @@ export function generateMonthlyComparison(
   const map = new Map<string, CategoryPeriodDatum>();
   transactions.forEach((t) => {
     if (normalizeTransactionType(t.type) !== 'expense') return;
-    const tDate = toDate(t.date) || new Date();
+    const tDate = toDate(t.date);
+    if (!tDate) return;
     const key = formatMonthKey(tDate);
     if (!key.match(/^\d{4}-\d{2}$/)) return;
     if (!map.has(t.category)) {
@@ -237,7 +239,8 @@ export function generateWeeklyComparison(
   const map = new Map<string, CategoryPeriodDatum>();
   transactions.forEach((t) => {
     if (normalizeTransactionType(t.type) !== 'expense') return;
-    const tDate = toDate(t.date) || new Date();
+    const tDate = toDate(t.date);
+    if (!tDate) return;
     const key = formatWeekKey(tDate);
     if (!map.has(t.category)) {
       const base: CategoryPeriodDatum = { category: t.category };
@@ -303,7 +306,8 @@ export function generateTrendLines(
   transactions.forEach((t) => {
     if (normalizeTransactionType(t.type) !== 'expense') return;
     if (filterCategory && t.category !== filterCategory) return;
-    const tDate = toDate(t.date) || new Date();
+    const tDate = toDate(t.date);
+    if (!tDate) return;
     const key = formatMonthKey(tDate);
     if (matrix.has(key)) {
       const monthMap = matrix.get(key)!;
