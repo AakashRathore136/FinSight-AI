@@ -16,7 +16,11 @@ export function useBaseCurrency(user: { uid: string } | null): string {
   const [baseCurrency, setBaseCurrency] = useState('USD')
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setDefaultCurrency('USD')
+      setBaseCurrency('USD')
+      return
+    }
 
     let cancelled = false
 
@@ -37,7 +41,7 @@ export function useBaseCurrency(user: { uid: string } | null): string {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [user?.uid])
 
   return baseCurrency
 }
