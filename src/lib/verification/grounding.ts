@@ -183,6 +183,48 @@ function nearestValue(index: SourceIndex, value: number): number | null {
   );
 }
 
+const DIGIT_BOUNDARY = /[\d.,]/;
+
+/**
+ * Finds the first verbatim occurrence of `literal` in `index.fullText` that is
+ * word-bounded on both sides and whose surrounding figure parses to the same
+ * value as `claimValue`. A bare substring match (e.g. "50" inside "1500") is
+ * rejected so scaled figures are not false-verified against the wrong number.
+ *
+ * Returns the character offset of the match, or -1 when none qualifies.
+ */
+function findVerbatimMatch(
+  index: SourceIndex,
+  literal: string,
+  claimValue: number,
+): number {
+  let at = index.fullText.indexOf(literal);
+  while (at !== -1) {
+    const before = index.fullText[at - 1] ?? "";
+    const after = index.fullText[at + literal.length] ?? "";
+
+    const boundedBefore = !before || !DIGIT_BOUNDARY.test(before);
+    const boundedAfter = !after || !DIGIT_BOUNDARY.test(after);
+
+    if (boundedBefore && boundedAfter) {
+      // Value-consistency: parse the figure around the match and require it to
+      // equal the claim value, so "50" does not verify a "50 million" claim.
+      const windowStart = Math.max(0, at - 20);
+      const windowEnd = Math.min(index.fullText.length, at + literal.length + 20);
+      const parsed = parseNumber(
+        index.fullText.slice(windowStart, windowEnd),
+        index.convention,
+      );
+      if (parsed && valuesEqual(parsed.value, claimValue)) {
+        return at;
+      }
+    }
+
+    at = index.fullText.indexOf(literal, at + literal.length);
+  }
+  return -1;
+}
+
 /**
  * Decides whether a single claim is supported by the document.
  *
@@ -198,7 +240,7 @@ export function groundClaim(
   const literal = claim.raw.trim();
 
   if (literal) {
-    const exactOffset = index.fullText.indexOf(literal);
+    const exactOffset = findVerbatimMatch(index, literal, claim.value);
     if (exactOffset !== -1) {
       return {
         ...claim,
