@@ -28,10 +28,16 @@ export const MultiScenarioMatrix: React.FC = () => {
 
   const chartData = months.map((month, idx) => {
     const dataPoint: Record<string, any> = { month };
+    const timeFraction = (idx + 1) / 12;
     scenarios.forEach((scen) => {
-      const growthFactor = 1 + (scen.revenueGrowthModifier / 100) * ((idx + 1) / 12);
-      const expenseFactor = 1 + (scen.expenseInflationModifier / 100) * ((idx + 1) / 12);
-      const netCash = Math.round(baseMonthlyCash * (idx + 1) * (growthFactor / expenseFactor));
+      const growthFactor = 1 + (scen.revenueGrowthModifier / 100) * timeFraction;
+      const expenseFactor = 1 + (scen.expenseInflationModifier / 100) * timeFraction;
+      // defaultProbabilityModifier scales cumulative risk-of-default across the
+      // year: a positive modifier (higher default risk) reduces projected net
+      // cash, a negative one (lower risk) raises it. Without this the
+      // default-probability dimension had no effect on the projection.
+      const defaultFactor = 1 - (scen.defaultProbabilityModifier / 100) * timeFraction;
+      const netCash = Math.round(baseMonthlyCash * (idx + 1) * (growthFactor / expenseFactor) * defaultFactor);
       dataPoint[scen.name] = netCash;
     });
     return dataPoint;
