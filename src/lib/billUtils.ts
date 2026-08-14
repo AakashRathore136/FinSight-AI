@@ -303,7 +303,11 @@ export function calculateMonthlyObligations(bills: Bill[]): number {
       case 'yearly':
         return total + bill.amount / 12;
       default:
-        return total;
+        // custom / one-off bills (e.g. a one-off tax payment) are amortized
+        // across the current month so they count toward monthly cash-flow
+        // obligations instead of being silently excluded while still
+        // inflating the per-week "Due This Week" summary.
+        return total + (bill.amount / 30) * 7;
     }
   }, 0);
 }
