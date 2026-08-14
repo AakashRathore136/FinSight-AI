@@ -132,7 +132,7 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
   useEffect(() => {
     if (!user) return;
     goals.forEach((goal) => {
-      if (goal.status === 'completed') return;
+      if (goal.status === 'completed' || goal.status === 'paused') return;
       if (notifiedGoalIds.current.has(goal.id)) return;
       if (updatingGoalIds.current.has(goal.id)) return;
       const isComplete = goal.currentAmount >= goal.targetAmount;
