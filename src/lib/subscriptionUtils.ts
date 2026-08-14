@@ -580,7 +580,13 @@ export async function detectAndSaveSubscriptions(
     const analysis = analyzeSubscriptionPattern(txns);
     if (!analysis || analysis.confidence < 0.4) continue;
 
-    const name = txns[0].description || key;
+    // Sort chronologically and use the most recent charge for amount/category/id
+    // so the detected cost reflects the current price, not an arbitrary first
+    // transaction in Firestore document/insertion order (issue #1365).
+    const sorted = [...txns].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const latest = sorted[sorted.length - 1];
+
+    const name = latest.description || key;
 
     if (existingNames.has(name.toLowerCase())) continue;
 
@@ -594,12 +600,12 @@ export async function detectAndSaveSubscriptions(
     try {
       const id = await saveSubscription(userId, {
         name: name,
-        amount: txns[0].amount,
+        amount: latest.amount,
         frequency: analysis.frequency,
-        category: txns[0].category || "Other",
+        category: latest.category || "Other",
         nextRenewalDate: nextRenewal,
         isActive: true,
-        detectedFromTransactionId: txns[0].id,
+        detectedFromTransactionId: latest.id,
         annualizationFactor,
       });
 
@@ -607,12 +613,12 @@ export async function detectAndSaveSubscriptions(
         id,
         userId,
         name: name,
-        amount: txns[0].amount,
+        amount: latest.amount,
         frequency: analysis.frequency,
-        category: txns[0].category || "Other",
+        category: latest.category || "Other",
         nextRenewalDate: nextRenewal,
         isActive: true,
-        detectedFromTransactionId: txns[0].id,
+        detectedFromTransactionId: latest.id,
         createdAt: new Date(),
         annualizationFactor,
       });
