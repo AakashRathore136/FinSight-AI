@@ -563,7 +563,7 @@ function buildPeriodSummary(
 /**
  * Produce a friendly, plain-language sentence describing a period summary.
  */
-export function generatePlainSummary(summary: PeriodSummary): string {
+export function generatePlainSummary(summary: PeriodSummary, currency?: string): string {
   if (summary.transactionCount === 0) {
     return `No spending recorded for ${summary.label.toLowerCase()} yet. Once you add transactions, we'll break down where your money goes.`;
   }
@@ -571,16 +571,16 @@ export function generatePlainSummary(summary: PeriodSummary): string {
   const top = summary.topCategories[0];
   const parts: string[] = [];
   parts.push(
-    `You spent ${formatCurrency(summary.total)} across ${summary.transactionCount} transaction${
-      summary.transactionCount === 1 ? "" : "s"
-    } ${summary.label.toLowerCase()}.`,
+    `You spent ${formatCurrency(summary.total, currency)} across ${summary.transactionCount} transaction${
+       summary.transactionCount === 1 ? "" : "s"
+     } ${summary.label.toLowerCase()}.`,
   );
 
   if (top) {
     const share =
       summary.total > 0 ? Math.round((top.total / summary.total) * 100) : 0;
     parts.push(
-      `${top.category} was your biggest category at ${formatCurrency(top.total)} (${share}% of spend).`,
+      `${top.category} was your biggest category at ${formatCurrency(top.total, currency)} (${share}% of spend).`,
     );
   }
 
