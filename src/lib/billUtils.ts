@@ -292,7 +292,7 @@ export function getDaysUntilDue(bill: Bill, reference: Date = new Date()): numbe
   return differenceInCalendarDays(startOfDay(due), startOfDay(reference));
 }
 
-export function calculateMonthlyObligations(bills: Bill[]): number {
+export function calculateMonthlyObligations(bills: Bill[], reference: Date = new Date()): number {
   return bills.reduce((total, bill) => {
     if (bill.deleted || bill.isPaid) return total;
     switch (bill.frequency) {
@@ -302,8 +302,18 @@ export function calculateMonthlyObligations(bills: Bill[]): number {
         return total + bill.amount;
       case 'yearly':
         return total + bill.amount / 12;
-      default:
-        return total;
+      default: {
+        // Custom / one-off bills are not recurring, but they are still a real
+        // cash-flow obligation in the month they fall due. Surface a one-off
+        // bill whose next/initial due date is in the current month so the
+        // per-month obligation picture agrees with the per-week "Due This
+        // Week" summary (issue #1315).
+        const due = toDate(bill.nextDueDate || bill.dueDate);
+        if (!due) return total;
+        const refMonth = reference.getUTCFullYear() * 12 + reference.getUTCMonth();
+        const dueMonth = due.getUTCFullYear() * 12 + due.getUTCMonth();
+        return dueMonth === refMonth ? total + bill.amount : total;
+      }
     }
   }, 0);
 }
