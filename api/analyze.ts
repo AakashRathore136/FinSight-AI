@@ -5,6 +5,7 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
+import { randomUUID } from "crypto";
 
 dotenv.config({ quiet: true });
 
@@ -714,7 +715,7 @@ full_report MUST be at least 300 words.`;
     const riskLevel = normalizeRiskLevel(rawRisk);
     const now = new Date();
     const safeFilename = sanitizeStorageFilename(filename);
-    const storagePath = `analyses/${ownerId}/${now.getTime()}_${safeFilename}`;
+    const storagePath = `analyses/${ownerId}/${now.getTime()}_${randomUUID()}_${safeFilename}`;
 
     // SECURITY: upload the PDF to Firebase Storage before persisting metadata,
     // then derive fileUrl from the real object URL instead of a placeholder domain.
@@ -769,7 +770,7 @@ full_report MUST be at least 300 words.`;
       processedAt: now,
     };
 
-    let documentId = `local-${ownerId}-${now.getTime()}`;
+    let documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
     let firestorePersisted = false;
 
     if (admin.apps.length) {
@@ -799,7 +800,7 @@ full_report MUST be at least 300 words.`;
         firestorePersisted = true;
       } catch (writeErr: any) {
         console.warn("[analyze] Firestore server write skipped:", writeErr?.message);
-        documentId = `local-${ownerId}-${now.getTime()}`;
+        documentId = `local-${ownerId}-${now.getTime()}-${randomUUID()}`;
         // The PDF was already uploaded to Storage above, but without a
         // Firestore record it can never be downloaded, so clean it up.
         if (storagePath) {
