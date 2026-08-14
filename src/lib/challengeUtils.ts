@@ -350,18 +350,23 @@ export async function createChallenge(userId: string, data: Omit<Challenge, 'id'
 }
 
 export async function updateChallengeProgress(challengeId: string, currentProgress: number): Promise<void> {
-  const snap = await getDoc(doc(db, 'challenges', challengeId));
+  const ref = doc(db, 'challenges', challengeId);
+  const snap = await getDoc(ref);
   if (!snap.exists()) return;
   const data = snap.data() as Challenge;
   if (data.isCompleted) return;
   const targetAmount = data.targetAmount ?? 0;
-  const completed = currentProgress >= targetAmount && targetAmount > 0;
-  const patch: Record<string, unknown> = { currentProgress };
+  // Take the max of the latest server value and the caller-computed value so
+  // concurrent "Log progress" clicks (both computed from the same stale
+  // onSnapshot snapshot) never clobber each other's increment (issue #1319).
+  const resolvedProgress = Math.max(data.currentProgress ?? 0, currentProgress);
+  const completed = resolvedProgress >= targetAmount && targetAmount > 0;
+  const patch: Record<string, unknown> = { currentProgress: resolvedProgress };
   if (completed) {
     patch.isCompleted = true;
     patch.completedAt = serverTimestamp();
   }
-  await updateDoc(doc(db, 'challenges', challengeId), patch);
+  await updateDoc(ref, patch);
 }
 
 export async function completeChallenge(challengeId: string, badge: BadgeTier): Promise<void> {
