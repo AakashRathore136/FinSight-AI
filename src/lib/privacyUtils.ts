@@ -16,7 +16,7 @@ import {
   deleteDoc,
   type DocumentReference,
 } from "firebase/firestore";
-import { deleteObject, listAll, ref } from "firebase/storage";
+import { deleteObject, list, ref } from "firebase/storage";
 import { db, auth, storage, handleFirestoreError, OperationType } from "./firebase";
 import { DEFAULT_ROLE } from "./roleConstants";
 import { clearAllLocalData } from "./storageUtils";
@@ -223,11 +223,19 @@ async function collectStoragePaths(
   prefixRef: ReturnType<typeof ref>,
   out: Set<string>,
 ): Promise<void> {
-  const result = await listAll(prefixRef);
-  result.items.forEach((item) => out.add(item.fullPath));
-  for (const prefix of result.prefixes) {
-    await collectStoragePaths(prefix, out);
-  }
+  // Use the paginated `list` API instead of `listAll`, which Firebase
+  // documents as capped at 1000 results. A user with >1000 stored PDFs would
+  // otherwise have the remainder silently truncated and orphaned after
+  // account erasure (issue #1366).
+  let pageToken: string | undefined;
+  do {
+    const result = await list(prefixRef, { maxResults: 1000, pageToken });
+    result.items.forEach((item) => out.add(item.fullPath));
+    for (const prefix of result.prefixes) {
+      await collectStoragePaths(prefix, out);
+    }
+    pageToken = result.nextPageToken;
+  } while (pageToken);
 }
 
 /**
