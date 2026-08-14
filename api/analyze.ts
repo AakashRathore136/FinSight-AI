@@ -271,7 +271,10 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],
-    sentiment_score: Number(payload.sentiment_score || 0),
+    sentiment_score: Math.max(
+      -1,
+      Math.min(1, Number.isFinite(Number(payload.sentiment_score)) ? Number(payload.sentiment_score) : 0),
+    ),
     entities: Array.isArray(payload.entities)
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
       : [],
