@@ -565,7 +565,6 @@ export async function migrateEmbeddedHoldings(userId: string): Promise<number> {
     const portfolios = await fetchUserPortfolios(userId);
     const existing = await fetchUserHoldings(userId);
     const existingIds = new Set(existing.map((h) => h.id));
-    const existingSymbols = new Set(existing.map((h) => h.symbol.toUpperCase()));
     let migrated = 0;
 
     for (const portfolio of portfolios) {
@@ -578,8 +577,12 @@ export async function migrateEmbeddedHoldings(userId: string): Promise<number> {
           raw as unknown as Record<string, unknown>,
           userId,
         );
+        // Dedupe only by stable id, not symbol. Two portfolios that merely
+        // share a ticker (e.g. the same stock in "Retirement" and "Taxable")
+        // are distinct positions and must both survive; symbol dedup
+        // permanently lost the non-first portfolios' holdings after clearing
+        // the embedded arrays (issue #1356).
         if (existingIds.has(holding.id)) continue;
-        if (holding.symbol && existingSymbols.has(holding.symbol.toUpperCase())) continue;
 
         await setDoc(doc(db, 'portfolioHoldings', holding.id), {
           ...holding,
@@ -588,7 +591,6 @@ export async function migrateEmbeddedHoldings(userId: string): Promise<number> {
           updatedAt: serverTimestamp(),
         });
         existingIds.add(holding.id);
-        if (holding.symbol) existingSymbols.add(holding.symbol.toUpperCase());
         migrated += 1;
       }
 
