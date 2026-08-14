@@ -166,9 +166,11 @@ function total(transactions: Transaction[]): number {
 
 /**
  * Fetch a user's transactions for the analysis windows. The query is bounded
- * server-side (orderBy date desc + limit) so reads stay flat as the user's
- * history grows; the analysis windows all sit inside the most recent
- * transactions, so a large limit is never exhausted in practice.
+ * server-side (date >= startDate + orderBy date desc + limit) so reads stay
+ * flat as the user's history grows while never silently truncating earlier
+ * months inside the analysis windows (e.g. weekly, monthly, 6-month trends).
+ * The 12-month startDate covers every analysis window plus a buffer, so the
+ * limit is only a safety cap rather than the source of truth.
  *
  * Returns an empty array (never throws) so the dashboard can render an
  * onboarding/empty state gracefully when no data exists yet.
@@ -179,9 +181,11 @@ export async function fetchTransactions(
 ): Promise<Transaction[]> {
   if (!userId) return [];
   try {
+    const startDate = startOfMonth(subMonths(new Date(), 12)); // cover all windows + buffer
     const q = query(
       collection(db, "transactions"),
       where("userId", "==", userId),
+      where("date", ">=", startDate),
       orderBy("date", "desc"),
       limit(limitCount),
     );
