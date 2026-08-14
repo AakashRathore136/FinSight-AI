@@ -201,6 +201,12 @@ function safeJsonParse(text: string): unknown {
   return result.data;
 }
 
+function clampSentiment(v: unknown): number {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-1, Math.min(1, n));
+}
+
 function validateAnalysisPayload(payload: any): AnalysisResponse {
   const required = [
     "summary",
@@ -251,6 +257,7 @@ function validateAnalysisPayload(payload: any): AnalysisResponse {
     action_items: Array.isArray(payload.action_items)
       ? payload.action_items.map((v: unknown) => sanitizeString(String(v)))
       : [],
+    sentiment_score: clampSentiment(payload.sentiment_score),
     sentiment_score,
     entities: Array.isArray(payload.entities)
       ? payload.entities.map((v: unknown) => sanitizeString(String(v)))
