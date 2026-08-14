@@ -702,7 +702,9 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Calendar className="h-3 w-3" />
                   <span>Deadline: {format(new Date(goalDetail.deadline), 'MMM d, yyyy')}</span>
-                  <span className="text-slate-600">({goalDetail.daysRemaining} days remaining)</span>
+                  <span className="text-slate-600">
+                    ({goalDetail.daysRemaining == null ? 'no deadline' : `${goalDetail.daysRemaining} days remaining`})
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   {goalDetail.status === 'active' && goalDetail.progress >= 100 && (
