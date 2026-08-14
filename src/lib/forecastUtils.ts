@@ -246,14 +246,22 @@ export function applyFilters<T extends { month: string }>(
   });
 }
 
-export function exportForecastChart(data: MonthlyForecast[]): string {
+export interface ForecastExportRow {
+  period: string;
+  income: number;
+  expenses: number;
+  net: number;
+  confidence: string;
+}
+
+export function exportForecastChart(data: ForecastExportRow[]): string {
   const lines = [
     'FinSight AI — Forecast Export',
     '============================',
     '',
-    'Month,Income,Expenses,Net Balance,Confidence',
+    'Period,Income,Expenses,Net Balance,Confidence',
     ...data.map((d) =>
-      [csvEscape(d.month), csvEscape(d.income), csvEscape(d.expenses), csvEscape(d.net), csvEscape(d.confidence + '%')].join(','),
+      [csvEscape(d.period), csvEscape(d.income), csvEscape(d.expenses), csvEscape(d.net), csvEscape(d.confidence)].join(','),
     ),
     '',
     `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
