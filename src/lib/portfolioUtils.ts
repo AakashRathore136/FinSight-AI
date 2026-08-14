@@ -387,6 +387,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             quantity,
             avgCost,
             portfolioId: input.portfolioId,
+            ...(input.type === 'buy' ? { currentPrice: input.price } : {}),
             updatedAt: serverTimestamp(),
           };
           if (input.type === "buy") update.currentPrice = input.price;
