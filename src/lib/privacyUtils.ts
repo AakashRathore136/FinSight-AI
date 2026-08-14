@@ -292,11 +292,11 @@ export async function deleteUserData(userId: string): Promise<void> {
     throw error;
   }
 
-  // Delete the user's stored PDFs in Storage (including orphans) before the
-  // Firestore records are removed, so document records are available to map
-  // storage paths even if a later erasure step fails.
-  await deleteUserStorageFiles(userId);
-
+  // Delete the Firestore records first (retrying in batches), and only then
+  // delete the user's stored PDFs in Storage. Erasure must be resilient: if a
+  // Firestore batch fails and re-throws, Storage objects are not yet gone, so
+  // surviving documents never point at deleted Storage objects and the
+  // operation stays idempotent on retry (issue #1367).
   const docRefs: DocumentReference[] = [];
   for (const colName of USER_COLLECTIONS) {
     try {
@@ -347,6 +347,12 @@ export async function deleteUserData(userId: string): Promise<void> {
     handleFirestoreError(error, OperationType.DELETE, "userData");
     throw error;
   }
+
+  // Only after the Firestore records have been removed (and any document refs
+  // they carried are no longer needed) do we delete the stored PDFs in
+  // Storage. A Storage failure here never leaves dangling Firestore
+  // references; re-running deleteUserData re-enumerates Storage and retries.
+  await deleteUserStorageFiles(userId);
 }
 
 export function downloadJSON(data: Record<string, any>, filename: string) {
