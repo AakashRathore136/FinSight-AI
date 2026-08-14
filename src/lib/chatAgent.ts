@@ -289,11 +289,16 @@ function parseAgentJson(text: string): Record<string, unknown> | null {
   return null;
 }
 
-function summariseObservation(obs: unknown): string {
+function summariseObservation(obs: unknown, limit = 4000): string {
   try {
     const json = JSON.stringify(obs);
-    // Keep observations compact so they fit in the model context.
-    return json.length > 2000 ? json.slice(0, 2000) + "…" : json;
+    if (json.length <= limit) return json;
+    // Cut at the last whitespace boundary at or before the limit so we never
+    // split inside a number or JSON token (which would corrupt the figure the
+    // model reads and cites). Fall back to a hard cut only if there is no
+    // whitespace in range.
+    const cut = json.lastIndexOf(" ", limit);
+    return json.slice(0, cut > 0 ? cut : limit) + " …(truncated)";
   } catch {
     return String(obs);
   }
