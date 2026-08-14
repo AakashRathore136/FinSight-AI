@@ -245,6 +245,7 @@ export async function checkHistoricalSimilarAnomalies(
 
 export function detectAnomalies(
   transactions: Transaction[],
+  threshold: number = 3,
 ): Omit<Anomaly, "id" | "createdAt">[] {
   const anomalies: Omit<Anomaly, "id" | "createdAt">[] = [];
   const categoryAverages = new Map<string, { total: number; count: number }>();
@@ -268,12 +269,12 @@ export function detectAnomalies(
       if (baselineTotal <= 0) return;
       const mean = baselineTotal / baselineCount;
       const amount = Math.abs(t.amount);
-      if (amount > mean * 3 && amount > 1000) {
+      if (amount > mean * threshold && amount > 1000) {
         anomalies.push({
           userId: t.userId,
           transactionId: t.id,
           type: "large_transaction",
-          severity: amount > mean * 5 ? "critical" : "high",
+          severity: amount > mean * (threshold + 2) ? "critical" : "high",
           category: cat,
           amount,
           averageAmount: Math.round(mean * 100) / 100,
