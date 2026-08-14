@@ -18,6 +18,7 @@ import {
 
 interface ChallengeCardProps {
   challenge: Challenge;
+  baseCurrency?: string;
   onLogProgress: (challengeId: string, amount: number) => void;
   onComplete: (challenge: Challenge) => void;
 }
@@ -33,7 +34,7 @@ const TYPE_ICON = {
   monthly: TrendingDown,
 };
 
-export function ChallengeCard({ challenge, onLogProgress, onComplete }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, baseCurrency, onLogProgress, onComplete }: ChallengeCardProps) {
   const [amountInput, setAmountInput] = useState('');
   const progress = getProgressPercentage(challenge.currentProgress, challenge.targetAmount);
   const TypeIcon = TYPE_ICON[challenge.type];
@@ -90,7 +91,7 @@ export function ChallengeCard({ challenge, onLogProgress, onComplete }: Challeng
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-400">
-              {formatCurrency(challenge.currentProgress)} of {formatCurrency(challenge.targetAmount)}
+              {formatCurrency(challenge.currentProgress, baseCurrency)} of {formatCurrency(challenge.targetAmount, baseCurrency)}
             </span>
             <span className="text-white font-semibold tabular-nums">{progress}%</span>
           </div>

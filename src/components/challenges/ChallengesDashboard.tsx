@@ -23,6 +23,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { cn, formatCurrency } from '@/src/lib/utils';
+import { useBaseCurrency } from '@/src/hooks/useBaseCurrency';
 import { db, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import {
   type Challenge,
@@ -49,6 +50,7 @@ interface ChallengesDashboardProps {
 }
 
 export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
+  const baseCurrency = useBaseCurrency(user);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -179,13 +181,13 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
       const newProgress = Math.min(challenge.currentProgress + amount, challenge.targetAmount);
       try {
         await updateChallengeProgress(challengeId, newProgress);
-        toast.success(`Logged ${formatCurrency(amount)} saved`);
+        toast.success(`Logged ${formatCurrency(amount, baseCurrency)} saved`);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `challenges/${challengeId}`);
         toast.error('Failed to log progress');
       }
     },
-    [challenges]
+    [challenges, baseCurrency]
   );
 
   const handleComplete = useCallback(
@@ -269,6 +271,7 @@ export function ChallengesDashboard({ user }: ChallengesDashboardProps) {
           >
             <ChallengeCard
               challenge={challenge}
+              baseCurrency={baseCurrency}
               onLogProgress={handleLogProgress}
               onComplete={handleComplete}
             />
