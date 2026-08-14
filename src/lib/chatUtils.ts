@@ -279,6 +279,11 @@ export function generateChatResponse(
     const result = generateSpendingSummary(context);
     response = result.message;
     chartData = result.chartData;
+  } else if (lowerMessage.includes('saving') || lowerMessage.includes('savings')) {
+    // Check savings before the generic 'advice'/'budget' token, otherwise
+    // "give me savings advice" is hijacked by the budget branch (issue #1371).
+    const result = generateSavingsRecommendations(context);
+    response = result.message;
   } else if (lowerMessage.includes('budget') || lowerMessage.includes('advice')) {
     const result = generateBudgetAdvice(context);
     response = result.message;
@@ -287,9 +292,6 @@ export function generateChatResponse(
     response = result.message;
     chartData = result.chartData;
     suggestions = result.suggestions;
-  } else if (lowerMessage.includes('saving') || lowerMessage.includes('savings')) {
-    const result = generateSavingsRecommendations(context);
-    response = result.message;
   } else if (lowerMessage.includes('pattern') || lowerMessage.includes('trend')) {
     const result = analyzeSpendingPatterns(context);
     response = result.message;
