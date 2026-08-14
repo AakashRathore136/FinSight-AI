@@ -1578,10 +1578,12 @@ CRITICAL RULES:
   // object in one operation. Firestore deletes do not cascade, and a bare
   // client-side deleteDoc would leave the PDF readable via signed URLs
   // forever. Ownership is verified against the Firestore record before any
-  // metadata or object is removed.
+  // metadata or object is removed. Local-fallback documents (Issue #1343)
+  // have no Firestore record, so they are purged from Storage directly after
+  // the same namespace + uploadedBy ownership checks.
   app.post("/api/documents/delete", async (req: any, res) => {
     try {
-      const { documentId } = req.body;
+      const { documentId, storagePath: bodyStoragePath } = req.body;
 
       if (!documentId || typeof documentId !== "string") {
         return res.status(400).json({
@@ -1604,35 +1606,56 @@ CRITICAL RULES:
       }
 
       const dbAdmin = getFirestore(firestoreDatabaseId);
-      const docRef = dbAdmin.collection("documents").doc(documentId);
-      const docSnap = await docRef.get();
+      const isLocalDoc = documentId.startsWith("local-");
+      let storagePath =
+        typeof bodyStoragePath === "string" ? bodyStoragePath : "";
 
-      if (!docSnap.exists) {
-        return res.status(404).json({
-          error: {
-            stage: "DOCUMENT_DELETE",
-            reason: "Document not found",
-            recommendation: "The document may have already been deleted.",
-          },
-        });
+      if (isLocalDoc) {
+        // Local-fallback documents exist only as Storage objects (the Firestore
+        // write that would have recorded them was permission-denied). They must
+        // still be purgeable through this endpoint or their PDFs accumulate
+        // forever in Storage. The storagePath is required from the client and
+        // its ownership is verified below (namespace + uploadedBy metadata).
+        if (!storagePath) {
+          return res.status(400).json({
+            error: {
+              stage: "DOCUMENT_DELETE",
+              reason: "storagePath is required for local documents",
+              recommendation: "Provide the storage path of the local document to purge.",
+            },
+          });
+        }
+      } else {
+        const docRef = dbAdmin.collection("documents").doc(documentId);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          return res.status(404).json({
+            error: {
+              stage: "DOCUMENT_DELETE",
+              reason: "Document not found",
+              recommendation: "The document may have already been deleted.",
+            },
+          });
+        }
+
+        const docData = docSnap.data();
+        if (docData?.ownerId !== req.ownerId) {
+          console.warn(
+            `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
+          );
+          return res.status(403).json({
+            error: {
+              stage: "AUTHORIZATION",
+              reason: "You do not have access to this document",
+              recommendation: "Verify the document belongs to your account.",
+            },
+          });
+        }
+
+        storagePath =
+          typeof docData?.storagePath === "string" ? docData.storagePath : "";
       }
-
-      const docData = docSnap.data();
-      if (docData?.ownerId !== req.ownerId) {
-        console.warn(
-          `UNAUTHORIZED_PURGE_ATTEMPT: userId=${req.ownerId}, documentId=${documentId}`,
-        );
-        return res.status(403).json({
-          error: {
-            stage: "AUTHORIZATION",
-            reason: "You do not have access to this document",
-            recommendation: "Verify the document belongs to your account.",
-          },
-        });
-      }
-
-      const storagePath =
-        typeof docData?.storagePath === "string" ? docData.storagePath : "";
 
       // SECURITY: the ownership check above only proves the caller owns the
       // Firestore record. The record's storagePath is client-controlled at
@@ -1693,13 +1716,16 @@ CRITICAL RULES:
       }
 
       // Delete the analyses subcollection docs and the parent document in a
-      // single batch so the record cannot be left half-purged.
-      const analysesRef = docRef.collection("analyses");
-      const analysesSnap = await analysesRef.get();
-      const batch = dbAdmin.batch();
-      analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
-      batch.delete(docRef);
-      await batch.commit();
+      // single batch so the record cannot be left half-purged. Local-fallback
+      // documents have no Firestore record to purge.
+      if (!isLocalDoc) {
+        const analysesRef = docRef.collection("analyses");
+        const analysesSnap = await analysesRef.get();
+        const batch = dbAdmin.batch();
+        analysesSnap.docs.forEach((analysisDoc) => batch.delete(analysisDoc.ref));
+        batch.delete(docRef);
+        await batch.commit();
+      }
 
 
       // Remove the Storage object. If it is already gone (code 404) there is
