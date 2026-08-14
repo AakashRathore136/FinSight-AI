@@ -293,7 +293,11 @@ export function RolloverManager({ user }: RolloverManagerProps) {
               const rolloverAmount = category.rolloverEnabled
                 ? calculateRolloverAmount(unusedBudget, category.rolloverPercentage)
                 : 0;
-              const rolloverPercentage = category.monthlyLimit > 0 ? (unusedBudget / category.monthlyLimit) * 100 : 0;
+              // Effective limit = base limit + already-rolled-over amount, so the
+              // utilization % and "unused" badge stay consistent with the
+              // "Effective Limit" display (which uses monthlyLimit + rolledOverAmount).
+              const effectiveLimit = category.monthlyLimit + (category.rolledOverAmount || 0);
+              const rolloverPercentage = effectiveLimit > 0 ? (unusedBudget / effectiveLimit) * 100 : 0;
 
               return (
                 <motion.div
@@ -316,7 +320,7 @@ export function RolloverManager({ user }: RolloverManagerProps) {
                             )}
                             {unusedBudget > 0 && (
                               <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                {formatCurrency(unusedBudget)} unused
+                                {formatCurrency(Math.max(0, unusedBudget - (category.rolledOverAmount || 0)))} unused
                               </Badge>
                             )}
                           </div>
