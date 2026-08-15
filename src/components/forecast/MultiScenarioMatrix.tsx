@@ -32,7 +32,7 @@ export const MultiScenarioMatrix: React.FC = () => {
       const growthFactor = 1 + (scen.revenueGrowthModifier / 100) * ((idx + 1) / 12);
       const expenseFactor = 1 + (scen.expenseInflationModifier / 100) * ((idx + 1) / 12);
       const realization = Math.max(0, 1 - (scen.defaultProbabilityModifier / 100) * ((idx + 1) / 12));
-      const netCash = Math.round(baseMonthlyCash * (idx + 1) * (growthFactor / expenseFactor) * realization);
+      const netCash = Math.round(baseMonthlyCash * (growthFactor / expenseFactor) * realization);
       dataPoint[scen.name] = netCash;
     });
     return dataPoint;
