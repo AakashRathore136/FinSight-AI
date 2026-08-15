@@ -204,8 +204,16 @@ export function calculateTotalValue(
   }, 0);
 }
 
-export function calculateProfitLoss(holding: Holding): { value: number; percent: number } {
-  const value = (holding.currentPrice - holding.avgCost) * holding.quantity;
+export function calculateProfitLoss(
+  holding: Holding,
+  rates?: Record<string, number>,
+  baseCurrency?: string,
+): { value: number; percent: number } {
+  const localValue = (holding.currentPrice - holding.avgCost) * holding.quantity;
+  const value =
+    !rates || !holding.currency || holding.currency === baseCurrency
+      ? localValue
+      : (convertAmount(localValue, holding.currency, baseCurrency, rates) ?? localValue);
   const percent = holding.avgCost > 0 ? ((holding.currentPrice - holding.avgCost) / holding.avgCost) * 100 : 0;
   return { value, percent };
 }
