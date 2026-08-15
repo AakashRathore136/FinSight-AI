@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   format,
   subMonths,
+  parseISO,
 } from 'date-fns';
 import {
   TrendingUp,
@@ -372,8 +373,8 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={filteredMonthly}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickFormatter={(v) => format(new Date(v), 'MMM yyyy')} />
-                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickFormatter={(v) => format(parseISO(`${v}-01`), 'MMM yyyy')} />
+                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => formatCurrency(v)} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                       labelStyle={{ color: '#f8fafc' }}
@@ -393,7 +394,7 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
                   <AreaChart data={filteredQuarterly.map((q) => ({ month: q.quarter, income: q.income, expenses: q.expenses, net: q.net, confidence: q.confidence }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => formatCurrency(v)} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                       labelStyle={{ color: '#f8fafc' }}
@@ -414,8 +415,8 @@ export function ForecastComparison({ user }: ForecastComparisonProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsLineChart data={filteredMonthly}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickFormatter={(v) => format(new Date(v), 'MMM yy')} />
-                  <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickFormatter={(v) => format(parseISO(`${v}-01`), 'MMM yy')} />
+                  <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => formatCurrency(v)} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                     labelStyle={{ color: '#f8fafc' }}
