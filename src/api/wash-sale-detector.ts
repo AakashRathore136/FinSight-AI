@@ -50,27 +50,39 @@ export async function detectWashSales(req: any, res: any) {
     for (const lossTrade of losses) {
       const lossDate = new Date(lossTrade.date).getTime();
 
-      for (const buyTrade of buys) {
-        if (buyTrade.ticker === lossTrade.ticker) {
-          const buyDate = new Date(buyTrade.date).getTime();
-          const daysDiff = Math.abs((buyDate - lossDate) / DAY_IN_MS);
+      // Aggregate replacement shares across all matching buys within the 30-day window.
+      const replacementShares = buys.reduce((sum, buyTrade) => {
+        if (buyTrade.ticker !== lossTrade.ticker) return sum;
+        const buyDate = new Date(buyTrade.date).getTime();
+        const daysDiff = Math.abs((buyDate - lossDate) / DAY_IN_MS);
+        return daysDiff <= 30 ? sum + buyTrade.shares : sum;
+      }, 0);
 
-          // If the buy is within a 61-day window (30 days before, day of, 30 days after)
-          if (daysDiff <= 30) {
-            
-            // Calculate the disallowed portion (pro-rated if they didn't buy back the full amount)
-            const disallowedRatio = Math.min(buyTrade.shares / lossTrade.shares, 1);
-            const disallowedLoss = (lossTrade.realizedLoss || 0) * disallowedRatio;
+      if (replacementShares > 0) {
+        // The disallowed loss is capped at the realized loss (ratio never exceeds 1).
+        const disallowedRatio = Math.min(replacementShares / lossTrade.shares, 1);
+        const disallowedLoss = (lossTrade.realizedLoss || 0) * disallowedRatio;
 
-            violations.push({
-              sellTradeId: lossTrade.id,
-              buyTradeId: buyTrade.id,
-              ticker: lossTrade.ticker,
-              disallowedLoss,
-              daysDifference: Math.round(daysDiff)
-            });
-          }
-        }
+        const nearestBuy = buys
+          .filter(b => b.ticker === lossTrade.ticker)
+          .reduce((closest, buyTrade) => {
+            const buyDate = new Date(buyTrade.date).getTime();
+            const daysDiff = Math.abs((buyDate - lossDate) / DAY_IN_MS);
+            if (daysDiff > 30) return closest;
+            return !closest || daysDiff < Math.abs((new Date(closest.date).getTime() - lossDate) / DAY_IN_MS)
+              ? buyTrade
+              : closest;
+          }, null as Trade | null);
+
+        violations.push({
+          sellTradeId: lossTrade.id,
+          buyTradeId: nearestBuy ? nearestBuy.id : "",
+          ticker: lossTrade.ticker,
+          disallowedLoss,
+          daysDifference: nearestBuy
+            ? Math.round(Math.abs((new Date(nearestBuy.date).getTime() - lossDate) / DAY_IN_MS))
+            : 0
+        });
       }
     }
 
