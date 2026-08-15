@@ -701,15 +701,7 @@ export default async function handler(req: any, res: any) {
       // so it must go through the same string sanitization as the AI path before
       // it can be persisted (stored-XSS / script-injection defense).
       analysisResult = sanitizeFallbackPayload(
-        buildFallbackAnalysis(
-          textForAnalysis,
-          filename,
-          hfKey ? "AI model returned invalid or timed out response" : "HUGGINGFACE_API_KEY not set in Vercel environment variables",
-        ),
-      analysisResult = buildFallbackAnalysis(
-        extractedText,
-        filename,
-        fallbackReason,
+        buildFallbackAnalysis(extractedText, filename, fallbackReason),
       );
     }
 
