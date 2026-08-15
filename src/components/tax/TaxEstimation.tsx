@@ -166,6 +166,21 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
     }
   };
 
+  const handleCalculate = () => {
+    if (annualIncome <= 0) {
+      toast.error('Enter a valid income to estimate first');
+      return;
+    }
+    const deductionsValue = parseFloat(deductionsInput);
+    const result = calculateTax(annualIncome, countryCode, regionCode, {
+      filingStatus: countryCode === 'US' ? filingStatus : undefined,
+      deductions:
+        !isNaN(deductionsValue) && deductionsValue > 0 ? deductionsValue : undefined,
+    });
+    setBreakdown(result);
+    toast.success('Estimate updated');
+  };
+
   const handleDownloadPDF = () => {
     if (!breakdown) {
       toast.error('Nothing to download yet');
@@ -370,12 +385,8 @@ export function TaxEstimation({ user }: TaxEstimationProps) {
             </div>
 
             <Button
-              onClick={() => {
-                if (annualIncome > 0 && breakdown) {
-                  toast.success('Estimate updated');
-                }
-              }}
-              disabled={!breakdown}
+              onClick={handleCalculate}
+              disabled={annualIncome <= 0}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12"
             >
               <Calculator className="mr-2" size={16} />
