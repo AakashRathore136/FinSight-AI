@@ -6,6 +6,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import DOMPurify from "isomorphic-dompurify";
 import type { IncomingMessage, ServerResponse } from "http";
 import { randomUUID } from "crypto";
+import { repairTruncatedJSON } from "../src/lib/jsonRepairEngine.js";
 
 dotenv.config({ quiet: true });
 
@@ -175,68 +176,9 @@ function sanitizeString(text: string): string {
 }
 
 function safeJsonParse(text: string): unknown {
-  const cleaned = (text || "").trim();
-  if (!cleaned) throw new Error("Empty model response");
-
-  let extracted = cleaned;
-  const firstObj = cleaned.indexOf("{");
-  const lastObj = cleaned.lastIndexOf("}");
-  const firstArr = cleaned.indexOf("[");
-  const lastArr = cleaned.lastIndexOf("]");
-
-  if (
-    firstObj !== -1 &&
-    lastObj !== -1 &&
-    (firstArr === -1 || firstObj < firstArr)
-  ) {
-    extracted = cleaned.substring(firstObj, lastObj + 1);
-  } else if (firstArr !== -1 && lastArr !== -1) {
-    extracted = cleaned.substring(firstArr, lastArr + 1);
-  }
-
-  try {
-    return JSON.parse(extracted);
-  } catch (err: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const e = err as any;
-    const repaired = extracted
-      .replace(/,\s*([}\]])/g, "$1")
-      .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (_m, p1) => {
-        return '"' + p1.replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
-      });
-    try {
-      return JSON.parse(repaired);
-    } catch {
-      let openBraces = 0;
-      let openBrackets = 0;
-      let inString = false;
-      let escape = false;
-      let repairStr = repaired;
-      for (const char of repairStr) {
-        if (escape) { escape = false; continue; }
-        if (char === "\\") { escape = true; continue; }
-        if (char === '"') { inString = !inString; continue; }
-        if (!inString) {
-          if (char === "{") openBraces++;
-          else if (char === "}") openBraces--;
-          else if (char === "[") openBrackets++;
-          else if (char === "]") openBrackets--;
-        }
-      }
-      if (inString) repairStr += '"';
-      while (openBrackets > 0) { repairStr += "]"; openBrackets--; }
-      while (openBraces > 0) { repairStr += "}"; openBraces--; }
-      try {
-        return JSON.parse(repairStr);
-      } catch (err3: unknown) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const err3e = err3 as any;
-        throw new Error(
-          `JSON parsing failed after all repairs: ${e.message} / ${err3e.message}`,
-        );
-      }
-    }
-  }
+  const result = repairTruncatedJSON(text);
+  if (!result.data) throw new Error(result.error || "JSON parse failed");
+  return result.data;
 }
 
 function clampSentiment(v: unknown): number {
