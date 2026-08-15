@@ -39,6 +39,30 @@ function applyCors(req: any, res: any): void {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
+// In-memory per-user rate limiter for the paid 60s HF model call. Bounds cost
+// and mitigates DoS: each authenticated user may issue at most RATE_LIMIT_MAX
+// requests within RATE_LIMIT_WINDOW_MS. (State lives per serverless instance;
+// this is a best-effort throttle, not a distributed guarantee.)
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const userRequestLog = new Map<string, number[]>();
+
+function checkRateLimit(uid: string): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const hits = (userRequestLog.get(uid) || []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS
+  );
+  if (hits.length >= RATE_LIMIT_MAX) {
+    const oldest = hits[0];
+    const retryAfterSec = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - oldest)) / 1000);
+    userRequestLog.set(uid, hits);
+    return { allowed: false, retryAfterSec };
+  }
+  hits.push(now);
+  userRequestLog.set(uid, hits);
+  return { allowed: true, retryAfterSec: 0 };
+}
+
 async function getAdminApp(): Promise<any | null> {
   try {
     const { default: admin } = await import("firebase-admin");
@@ -102,6 +126,21 @@ export default async function handler(req: any, res: any) {
         reason: `Invalid ID token: ${authErr?.message || String(authErr)}`,
         recommendation:
           "Your session token has expired or is invalid. Please sign out and sign in again.",
+      },
+    });
+    return;
+  }
+
+  // Per-user rate limit / quota on the paid HF model call to bound cost and
+  // prevent abuse / DoS from a single account.
+  const rate = checkRateLimit(decoded.uid);
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(rate.retryAfterSec));
+    res.status(429).json({
+      error: {
+        stage: "RATE_LIMIT",
+        reason: "Too many requests to the AI copilot. Please wait and try again.",
+        retryAfterSec: rate.retryAfterSec,
       },
     });
     return;
