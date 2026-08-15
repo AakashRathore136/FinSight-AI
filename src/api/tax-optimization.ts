@@ -46,14 +46,31 @@ export async function optimizeTaxLots(req: any, res: any) {
     }
 
     // Optimization Strategies
-    
+
     // 1. FIFO (First In, First Out)
     const lotsFIFO = [...mockLots].sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
     const resultFIFO = calculateLiquidation(lotsFIFO, targetLiquidationAmount, currentPrice, 'FIFO');
 
-    // 2. HIFO (Highest In, First Out) - Minimizes Capital Gains
+    // 2. LIFO (Last In, First Out)
+    const lotsLIFO = [...mockLots].sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+    const resultLIFO = calculateLiquidation(lotsLIFO, targetLiquidationAmount, currentPrice, 'LIFO');
+
+    // 3. HIFO (Highest In, First Out) - Minimizes Capital Gains
     const lotsHIFO = [...mockLots].sort((a, b) => b.purchasePrice - a.purchasePrice);
     const resultHIFO = calculateLiquidation(lotsHIFO, targetLiquidationAmount, currentPrice, 'HIFO');
+
+    // Use the user's effective capital-gains rate when supplied, otherwise default to 15%.
+    const taxRate = typeof req.body?.taxRate === 'number' && req.body.taxRate >= 0 ? req.body.taxRate : 15;
+    const taxRateDecimal = taxRate / 100;
+
+    // Choose the strategy with the lowest total capital gains across all three strategies.
+    const strategyResults: OptimizationResult[] = [resultFIFO, resultLIFO, resultHIFO];
+    const recommendedStrategy = strategyResults.reduce((best, r) =>
+      r.totalCapitalGains < best.totalCapitalGains ? r : best
+    , strategyResults[0]).strategy;
+
+    const maxGains = Math.max(...strategyResults.map(r => r.totalCapitalGains));
+    const minGains = Math.min(...strategyResults.map(r => r.totalCapitalGains));
 
     res.json({
       success: true,
@@ -63,10 +80,11 @@ export async function optimizeTaxLots(req: any, res: any) {
         targetLiquidationAmount,
         strategies: {
           FIFO: resultFIFO,
+          LIFO: resultLIFO,
           HIFO: resultHIFO
         },
-        recommendedStrategy: resultHIFO.totalCapitalGains < resultFIFO.totalCapitalGains ? 'HIFO' : 'FIFO',
-        taxSavingsEstimated: Math.max(0, resultFIFO.totalCapitalGains - resultHIFO.totalCapitalGains) * 0.15 // Assuming 15% Cap Gains Tax
+        recommendedStrategy,
+        taxSavingsEstimated: Math.max(0, maxGains - minGains) * taxRateDecimal
       }
     });
 
