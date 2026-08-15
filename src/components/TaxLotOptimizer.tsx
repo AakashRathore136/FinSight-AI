@@ -100,7 +100,7 @@ export default function TaxLotOptimizer() {
                 <CheckCircle2 className="w-5 h-5" /> Recommended Strategy: {data.recommendedStrategy}
               </h3>
               <p className="text-emerald-700 text-sm mt-1">
-                By selecting specific tax lots (Highest In, First Out), you lower your recognized capital gains.
+                 By selecting specific tax lots ({data.recommendedStrategy}), you lower your recognized capital gains.
               </p>
             </div>
             <div className="bg-white px-6 py-4 rounded-xl shadow-sm text-center border border-emerald-100">
@@ -109,13 +109,13 @@ export default function TaxLotOptimizer() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* HIFO Column */}
             <div className="border border-emerald-200 rounded-2xl overflow-hidden shadow-sm relative">
               <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div>
               <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                <h4 className="font-bold text-slate-800">HIFO Strategy (Optimized)</h4>
-                <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">Winner</span>
+                <h4 className="font-bold text-slate-800">HIFO Strategy</h4>
+                {data.recommendedStrategy === 'HIFO' && <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">Winner</span>}
               </div>
               <div className="p-5">
                 <div className="flex justify-between items-end mb-6">
@@ -156,6 +156,34 @@ export default function TaxLotOptimizer() {
                 <p className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Lots to Sell:</p>
                 <div className="space-y-2 opacity-75">
                   {data.strategies.FIFO.lotsSold.map((lot: any) => (
+                    <div key={lot.lotId} className="flex justify-between text-sm p-3 bg-white rounded-lg border border-slate-100">
+                      <span className="font-medium text-slate-500">{lot.sharesSold} sh @ {formatCurrency(lot.costBasis / lot.sharesSold)}</span>
+                      <span className={`${lot.gainLoss > 0 ? 'text-rose-400' : 'text-emerald-400'} font-semibold`}>
+                        {lot.gainLoss > 0 ? '+' : ''}{formatCurrency(lot.gainLoss)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* LIFO Column */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h4 className="font-bold text-slate-800">LIFO Strategy</h4>
+                {data.recommendedStrategy === 'LIFO' && <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">Winner</span>}
+              </div>
+              <div className="p-5">
+                <div className="flex justify-between items-end mb-6">
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Total Cap Gains</p>
+                    <p className="text-2xl font-bold text-slate-500">{formatCurrency(data.strategies.LIFO.totalCapitalGains)}</p>
+                  </div>
+                </div>
+
+                <p className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Lots to Sell:</p>
+                <div className="space-y-2 opacity-75">
+                  {data.strategies.LIFO.lotsSold.map((lot: any) => (
                     <div key={lot.lotId} className="flex justify-between text-sm p-3 bg-white rounded-lg border border-slate-100">
                       <span className="font-medium text-slate-500">{lot.sharesSold} sh @ {formatCurrency(lot.costBasis / lot.sharesSold)}</span>
                       <span className={`${lot.gainLoss > 0 ? 'text-rose-400' : 'text-emerald-400'} font-semibold`}>
