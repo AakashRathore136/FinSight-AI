@@ -16,12 +16,13 @@ export default function ExpenseApprovalInbox() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   
-  // Shared threshold mock value
+  // Shared approval threshold. Sent to the API so the server filters by the exact
+  // same value that is displayed, keeping the list consistent with the label.
   const threshold = 500.00; 
 
   const fetchInbox = async () => {
     try {
-      const res = await fetch('/api/shared-accounts/approvals');
+      const res = await fetch(`/api/shared-accounts/approvals?threshold=${threshold}`);
       const json = await res.json();
       if (json.success) setInbox(json.data);
     } catch (err) {
