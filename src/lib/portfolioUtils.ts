@@ -316,7 +316,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
   try {
     const transactionRef = doc(collection(db, 'portfolioTransactions'));
     const holdings = collection(db, 'portfolioHoldings');
-    const symbol = input.symbol.trim();
+    const symbol = input.symbol.trim().toUpperCase();
     const now = new Date().toISOString();
 
     // Resolve the user's base currency so a new holding created by a first buy
