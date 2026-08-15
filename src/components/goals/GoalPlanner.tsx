@@ -43,7 +43,7 @@ import { Input } from '@/src/components/ui/input';
 import { Badge } from '@/src/components/ui/badge';
 import { Progress, ProgressTrack, ProgressIndicator } from '@/src/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
-import { cn, formatCurrency } from '@/src/lib/utils';
+import { cn, formatCurrency, toDate } from '@/src/lib/utils';
 import { GoalCard } from './GoalCard';
 import {
   type Goal,
@@ -114,7 +114,9 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
         fetchedGoals.sort((a, b) => {
           if (a.status === 'completed' && b.status !== 'completed') return 1;
           if (a.status !== 'completed' && b.status === 'completed') return -1;
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          const ta = a.createdAt ? toDate(a.createdAt)?.getTime() ?? 0 : 0;
+          const tb = b.createdAt ? toDate(b.createdAt)?.getTime() ?? 0 : 0;
+          return tb - ta;
         });
 
         setGoals(fetchedGoals);
