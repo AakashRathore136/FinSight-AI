@@ -7,10 +7,12 @@ interface Log {
   newPostedId: string;
   confidenceScore: number;
   merchantName: string;
+  merged?: boolean;
 }
 
 export default function ReconciliationDashboard() {
   const [logs, setLogs] = useState<Log[]>([]);
+  const [duplicatesPrevented, setDuplicatesPrevented] = useState(0);
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
 
@@ -18,7 +20,15 @@ export default function ReconciliationDashboard() {
     try {
       const res = await fetch('/api/plaid/reconciliation-logs');
       const json = await res.json();
-      if (json.success) setLogs(json.data);
+      if (json.success) {
+        setLogs(json.data);
+        // Count actual prevented duplicates from the API, falling back to
+        // logs explicitly flagged as merged rather than the raw log length.
+        const prevented = typeof json.duplicatesPrevented === 'number'
+          ? json.duplicatesPrevented
+          : (json.data || []).filter((l: Log) => l.merged).length;
+        setDuplicatesPrevented(prevented);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -90,7 +100,7 @@ export default function ReconciliationDashboard() {
         </div>
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-center">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Duplicates Prevented</p>
-          <p className="font-black text-slate-800 text-2xl">{logs.length}</p>
+          <p className="font-black text-slate-800 text-2xl">{duplicatesPrevented}</p>
         </div>
       </div>
 
