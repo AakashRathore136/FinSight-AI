@@ -34,12 +34,23 @@ export async function calculateRebalance(req: any, res: any) {
     }
 
     // 1. Calculate total portfolio value
+    const invalidPrice = assets.find(
+      asset => !isFinite(asset.currentPrice) || asset.currentPrice <= 0
+    );
+    if (invalidPrice) {
+      return res.status(400).json({ error: "Invalid asset price." });
+    }
+
     let totalValue = 0;
     const currentAllocations = assets.map(asset => {
       const value = asset.shares * asset.currentPrice;
       totalValue += value;
       return { ...asset, currentValue: value };
     });
+
+    if (!isFinite(totalValue) || totalValue <= 0) {
+      return res.status(400).json({ error: "Portfolio total value must be greater than zero." });
+    }
 
     const orders: RebalanceOrder[] = [];
     let driftWarning = false;
