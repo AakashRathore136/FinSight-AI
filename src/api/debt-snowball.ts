@@ -53,23 +53,19 @@ export async function calculateDebtPayoff(req: any, res: any) {
         // Sort active debts based on the strategy
         currentDebts = currentDebts.filter(d => d.balance > 0).sort(sortFn);
         
-        // 1. Pay minimums on everything
-        let availableCash = extraPayment;
+        // 1. Pay each debt's own legally-due minimum first
         for (let d of currentDebts) {
-          availableCash += d.minimumPayment;
+          const pay = Math.min(d.minimumPayment, d.balance);
+          d.balance -= pay;
         }
 
-        // 2. Cascade payments down the sorted list
+        // 2. Apply the leftover extra payment to the priority target only
+        let extra = extraPayment;
         for (let d of currentDebts) {
-          if (availableCash <= 0) break;
-          
-          if (d.balance <= availableCash) {
-            availableCash -= d.balance; // Pay off entirely, roll remaining cash forward
-            d.balance = 0;
-          } else {
-            d.balance -= availableCash; // Apply all remaining cash to this debt
-            availableCash = 0;
-          }
+          if (extra <= 0) break;
+          const pay = Math.min(extra, d.balance);
+          d.balance -= pay;
+          extra -= pay;
         }
 
         totalBalance = currentDebts.reduce((sum, d) => sum + d.balance, 0);
