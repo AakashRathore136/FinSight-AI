@@ -1,6 +1,21 @@
 import logger from "../lib/logger.js";
 import crypto from "crypto";
 
+interface ZKPShare {
+  userId: string;
+  threshold: number;
+  verifiedAt: number;
+  expiresAt: number;
+}
+
+// In-memory store mapping sharingToken -> record. In production this would be
+// persisted to a database so the public verify route below can resolve it.
+const zkpShares = new Map<string, ZKPShare>();
+
+export function resolveZKPShare(token: string): ZKPShare | undefined {
+  return zkpShares.get(token);
+}
+
 export async function verifyIncomeZKP(req: any, res: any) {
   try {
     const user = req.user;
@@ -39,9 +54,15 @@ export async function verifyIncomeZKP(req: any, res: any) {
     // to view the verified status without logging in.
     const sharingToken = crypto.randomBytes(24).toString('hex');
     const verificationUrl = `https://finsight.app/verify/zkp/${sharingToken}`;
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
-    // Store the mapping in DB (token -> { userId, threshold, verifiedAt: Date.now() })
-    // ...
+    // Persist the mapping so the public verify route can resolve it.
+    zkpShares.set(sharingToken, {
+      userId: user.uid,
+      threshold,
+      verifiedAt: Date.now(),
+      expiresAt
+    });
 
     logger.info(`[ZKP_VERIFIED] User ${user.uid} successfully proved income > $${threshold}/mo.`);
 
@@ -51,12 +72,44 @@ export async function verifyIncomeZKP(req: any, res: any) {
         verified: true,
         threshold,
         verificationUrl,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Valid for 7 days
+        expiresAt: new Date(expiresAt).toISOString() // Valid for 7 days
       }
     });
 
   } catch (error: any) {
     logger.error("ZKP_VERIFICATION_ERROR", { message: error.message });
     res.status(500).json({ error: "Failed to verify Zero-Knowledge Proof" });
+  }
+}
+
+// Public, unauthenticated endpoint that resolves a sharing token minted by
+// verifyIncomeZKP and reports the verified income status. Unknown or expired
+// tokens are rejected so an issued link can only ever show a live verification.
+export async function verifyZKPShareRoute(req: any, res: any) {
+  try {
+    const { token } = req.params;
+
+    const record = resolveZKPShare(token);
+    if (!record) {
+      return res
+        .status(404)
+        .json({ verified: false, error: "Unknown or revoked sharing token." });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      return res
+        .status(410)
+        .json({ verified: false, error: "Sharing token has expired." });
+    }
+
+    res.json({
+      verified: true,
+      threshold: record.threshold,
+      verifiedAt: new Date(record.verifiedAt).toISOString(),
+      expiresAt: new Date(record.expiresAt).toISOString(),
+    });
+  } catch (error: any) {
+    logger.error("ZKP_SHARE_RESOLVE_ERROR", { message: error.message });
+    res.status(500).json({ verified: false, error: "Failed to resolve sharing token" });
   }
 }

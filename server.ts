@@ -16,6 +16,7 @@ import rateLimit from "express-rate-limit";
 import DOMPurify from "isomorphic-dompurify";
 import logger from "./src/lib/logger.js";
 import { repairTruncatedJSON } from "./src/lib/jsonRepairEngine.js";
+import { verifyZKPShareRoute } from "./src/api/zkp-verifier.js";
 
 dotenv.config({ quiet: true });
 
@@ -736,6 +737,11 @@ async function startServer() {
       checks,
     });
   });
+
+  // Public, unauthenticated endpoint that resolves a ZKP income-verification
+  // sharing token minted by verifyIncomeZKP. Placed before the /api auth
+  // middleware so a landlord/creditor can view verified status without logging in.
+  app.get("/verify/zkp/:token", verifyZKPShareRoute);
 
   // Require a valid Firebase ID token on every other /api/* route so a
   // route added in the future can't accidentally ship without auth.
