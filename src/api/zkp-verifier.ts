@@ -1,5 +1,7 @@
 import logger from "../lib/logger.js";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 export async function verifyIncomeZKP(req: any, res: any) {
   try {
@@ -10,29 +12,43 @@ export async function verifyIncomeZKP(req: any, res: any) {
 
     const { proof, publicSignals, threshold } = req.body;
 
-    if (!proof || !publicSignals || !threshold) {
-      return res.status(400).json({ error: "Missing required ZKP parameters (proof, signals, threshold)" });
+    if (
+      !proof ||
+      !Array.isArray(publicSignals) ||
+      publicSignals.length === 0 ||
+      threshold == null
+    ) {
+      return res.status(400).json({ error: "Missing or malformed ZKP parameters (proof, signals, threshold)" });
     }
 
-    // In a production environment with circom/snarkjs, we would load our Verification Key (vkey.json)
-    // and run `await snarkjs.groth16.verify(vkey, publicSignals, proof)`
-    
-    // Simulating heavy cryptographic verification delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Mocking the verification outcome. A valid proof from the frontend will pass.
-    // If the public signal doesn't match the requested threshold, it's a tampered request.
-    const isProofValid = true; 
-    const signalThreshold = parseInt(publicSignals[0], 10);
-
-    if (signalThreshold !== threshold) {
-      logger.warn(`[ZKP_TAMPERING] User ${user.uid} sent mismatched public signals.`);
-      return res.status(400).json({ error: "Cryptographic signals do not match the requested threshold." });
+    // Cryptographically verify the Groth16 proof against the trusted verification
+    // key. The proof is never trusted: a valid attestation is only issued when
+    // snarkjs confirms the proof matches the public signals.
+    let isProofValid = false;
+    try {
+      // @ts-ignore - snarkjs is an optional runtime dependency (added to package.json)
+      const snarkjs = await import("snarkjs");
+      const vkey = JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), "verification_key.json"), "utf8"),
+      );
+      isProofValid = await snarkjs.groth16.verify(vkey, publicSignals, proof);
+    } catch (verifyErr: any) {
+      logger.error("ZKP_VERIFY_LOAD_ERROR", { message: verifyErr?.message });
+      return res.status(500).json({ error: "Verification key unavailable; cannot verify proof." });
     }
 
     if (!isProofValid) {
-      logger.warn(`[ZKP_REJECTED] User ${user.uid} submitted invalid proof.`);
+      logger.warn(`[ZKP_REJECTED] User ${user.uid} submitted an invalid proof.`);
       return res.status(400).json({ error: "Cryptographic proof is mathematically invalid." });
+    }
+
+    // Bind the attested income to the VERIFIED public signal (publicSignals[0])
+    // rather than the client-supplied `threshold` copy, which the caller could
+    // otherwise tamper with to self-assert any income.
+    const verifiedThreshold = parseInt(String(publicSignals[0]), 10);
+    if (Number.isNaN(verifiedThreshold)) {
+      logger.warn(`[ZKP_TAMPERING] User ${user.uid} sent a non-numeric public signal.`);
+      return res.status(400).json({ error: "Cryptographic signals do not match the requested threshold." });
     }
 
     // Generate a secure sharing token that a landlord/creditor can hit
@@ -43,13 +59,13 @@ export async function verifyIncomeZKP(req: any, res: any) {
     // Store the mapping in DB (token -> { userId, threshold, verifiedAt: Date.now() })
     // ...
 
-    logger.info(`[ZKP_VERIFIED] User ${user.uid} successfully proved income > $${threshold}/mo.`);
+    logger.info(`[ZKP_VERIFIED] User ${user.uid} successfully proved income > $${verifiedThreshold}/mo.`);
 
     res.json({
       success: true,
       data: {
         verified: true,
-        threshold,
+        threshold: verifiedThreshold,
         verificationUrl,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Valid for 7 days
       }
