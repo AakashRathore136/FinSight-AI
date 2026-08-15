@@ -20,7 +20,11 @@ function getEnv(key: string, fallback = ""): string {
 }
 
 function getAllowedOrigins(): Set<string> {
-  const raw = getEnv("VITE_ALLOWED_ORIGINS") || getEnv("ALLOWED_ORIGINS");
+  // Read the server-side deployment variable only. `VITE_`-prefixed vars are
+  // inlined into the client bundle at build time and are NOT available as
+  // `process.env.VITE_*` at server runtime, so reading them here always
+  // yielded an empty set and blocked every production browser request.
+  const raw = getEnv("ALLOWED_ORIGINS");
   if (!raw) return new Set();
   return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
 }
@@ -29,7 +33,9 @@ function applyCors(req: any, res: any): void {
   const origin = String(req.headers?.origin ?? "");
   const allowed = getAllowedOrigins();
   if (origin && allowed.has(origin)) {
+    // Reflect the verified origin (never "*") so credentialed requests work.
     res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
   } else if (!origin && !process.env.NODE_ENV?.includes("production")) {
     // Non-browser / same-origin tooling in development
