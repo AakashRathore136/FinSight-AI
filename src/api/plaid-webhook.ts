@@ -13,6 +13,7 @@ interface Transaction {
 }
 
 interface ReconciliationLog {
+  userId: string;
   timestamp: string;
   mergedPendingId: string;
   newPostedId: string;
@@ -181,6 +182,7 @@ export async function handlePlaidWebhook(req: any, res: any) {
         logger.info(`[RECONCILIATION] Merged pending tx ${matchedPending.id} with posted tx ${postedTx.transaction_id}`);
         
         reconciliationLogs.unshift({
+          userId: matchedPending.userId,
           timestamp: new Date().toISOString(),
           mergedPendingId: matchedPending.id,
           newPostedId: postedTx.transaction_id,
@@ -214,5 +216,13 @@ export async function handlePlaidWebhook(req: any, res: any) {
 
 // Endpoint for the UI to fetch the worker logs
 export async function getReconciliationLogs(req: any, res: any) {
-  res.json({ success: true, data: reconciliationLogs });
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Scope results to the authenticated user so cross-account log leakage is prevented.
+  const userLogs = reconciliationLogs.filter(log => log.userId === user.uid);
+
+  res.json({ success: true, data: userLogs });
 }
