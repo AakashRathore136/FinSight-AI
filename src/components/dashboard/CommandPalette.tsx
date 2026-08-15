@@ -48,7 +48,11 @@ export function CommandPalette({ onAction, onDocSelect }: CommandPaletteProps) {
 
   // Self-contained Firestore & local document subscription
   useEffect(() => {
+    let unsubscribeDocs: () => void = () => {};
+
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      unsubscribeDocs();
+
       if (!user) {
         setRecentDocs([]);
         return;
@@ -75,7 +79,7 @@ export function CommandPalette({ onAction, onDocSelect }: CommandPaletteProps) {
         setRecentDocs(combined.slice(0, 8));
       };
 
-      const unsubscribeDocs = onSnapshot(
+      unsubscribeDocs = onSnapshot(
         docsQuery,
         (snapshot) => {
           const docs = snapshot.docs.map((doc) => ({
@@ -89,11 +93,12 @@ export function CommandPalette({ onAction, onDocSelect }: CommandPaletteProps) {
           updateCombinedDocs([]);
         },
       );
-
-      return () => unsubscribeDocs();
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeDocs();
+      unsubscribeAuth();
+    };
   }, []);
 
   useEffect(() => {
