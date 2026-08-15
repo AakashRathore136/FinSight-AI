@@ -15,7 +15,8 @@ export default function ExpenseApprovalInbox() {
   const [inbox, setInbox] = useState<ExpenseApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  
+  const [error, setError] = useState<string | null>(null);
+
   // Shared threshold mock value
   const threshold = 500.00; 
 
@@ -37,6 +38,7 @@ export default function ExpenseApprovalInbox() {
 
   const handleReview = async (id: string, action: 'APPROVE' | 'REJECT') => {
     setProcessingId(id);
+    setError(null);
     try {
       const res = await fetch('/api/shared-accounts/review', {
         method: 'POST',
@@ -44,12 +46,19 @@ export default function ExpenseApprovalInbox() {
         body: JSON.stringify({ expenseId: id, action })
       });
       const json = await res.json();
-      
-      if (json.success) {
-        // Remove it from the pending inbox locally
+
+      // Only remove from the inbox when the server confirms the review actually
+      // succeeded. Otherwise keep the item so local UI state never silently
+      // diverges from the server.
+      if (res.ok && json.success) {
         setInbox(prev => prev.filter(exp => exp.id !== id));
+      } else {
+        const reason = json?.error || `Request failed with status ${res.status}`;
+        setError(`Could not ${action.toLowerCase()} expense: ${reason}`);
+        console.error("Expense review failed:", reason);
       }
     } catch (err) {
+      setError(`Could not ${action.toLowerCase()} expense. Please try again.`);
       console.error(err);
     } finally {
       setProcessingId(null);
@@ -85,6 +94,13 @@ export default function ExpenseApprovalInbox() {
           <span className="font-bold text-sm text-amber-700">{inbox.length} Pending</span>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2">
+          <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {inbox.length === 0 ? (
         <div className="text-center p-12 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
