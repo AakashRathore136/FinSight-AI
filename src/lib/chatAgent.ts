@@ -415,40 +415,6 @@ function summariseObservation(obs: unknown): string {
   }
 }
 
-async function callModel(
-  systemPrompt: string,
-  messages: { role: "user" | "assistant"; content: string }[],
-): Promise<string | null> {
-  const token = getHfToken();
-  if (!token) return null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const hf = new HfInference(token);
-    // Abort the HF request if the model does not respond within the per-call
-    // budget. Without this a hung API call would block the agent loop until
-    // the platform function/request timeout. (Issue #1036)
-    const controller = new AbortController();
-    timer = setTimeout(() => controller.abort(), MODEL_CALL_TIMEOUT_MS);
-    const completion = await hf.chatCompletion(
-      {
-        model: DEFAULT_AGENT_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ] as any,
-        max_tokens: 800,
-        temperature: 0.2,
-      },
-      { signal: controller.signal },
-    );
-    return (completion as any)?.choices?.[0]?.message?.content ?? null;
-  } catch {
-    return null;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 /**
  * Run the agentic tool-calling loop. Returns null when no model/token is
  * configured or the model cannot produce a valid answer, so callers can fall
