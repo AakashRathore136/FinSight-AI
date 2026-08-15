@@ -104,14 +104,20 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
     }
   };
 
-  const summary = useMemo(() => {
+  const estimatedMonthlyIncome = useMemo(() => {
     const incomeTxns = recentTransactions.filter((t) => t.type === "income");
     const months =
       new Set(incomeTxns.map((t) => format(t.date, "yyyy-MM"))).size || 1;
-    const estimatedMonthlyIncome =
-      incomeTxns.reduce((s, t) => s + t.amount, 0) / months;
+    return incomeTxns.reduce((s, t) => s + t.amount, 0) / months;
+  }, [recentTransactions]);
+
+  const summary = useMemo(() => {
     return generateSubscriptionSummary(subscriptions, estimatedMonthlyIncome);
-  }, [subscriptions, recentTransactions]);
+  }, [subscriptions, estimatedMonthlyIncome]);
+
+  // Currency-aware reference for the annual-burn bar: scale against the user's
+  // own annual income (in base currency) instead of a hardcoded USD amount.
+  const annualBurnReference = estimatedMonthlyIncome * 12;
 
   const filteredSubscriptions = useMemo(() => {
     let result = [...subscriptions];
@@ -230,20 +236,22 @@ export function SubscriptionAnalyzer({ user }: { user: any }) {
                   Total yearly burn
                 </p>
                 <div className="mt-3">
-                  <Progress
-                    value={Math.min(
-                      (summary.totalYearly / 60000) * 100,
-                      100,
-                    )}
-                    className="h-1.5 bg-slate-800"
-                  >
-                    <div
-                      className="h-full bg-emerald-500 rounded-full"
-                      style={{
-                        width: `${Math.min((summary.totalYearly / 60000) * 100, 100)}%`,
-                      }}
-                    />
-                  </Progress>
+                  {annualBurnReference > 0 ? (
+                    <Progress
+                      value={Math.min(
+                        (summary.totalYearly / annualBurnReference) * 100,
+                        100,
+                      )}
+                      className="h-1.5 bg-slate-800"
+                    >
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{
+                          width: `${Math.min((summary.totalYearly / annualBurnReference) * 100, 100)}%`,
+                        }}
+                      />
+                    </Progress>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
