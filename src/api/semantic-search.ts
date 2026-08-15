@@ -1,13 +1,45 @@
 import logger from "../lib/logger.js";
 
-// Mocking the generation of a vector embedding using a model like all-MiniLM-L6-v2
+// Mocking the generation of a vector embedding using a model like all-MiniLM-L6-v2.
+// The embedding is DETERMINISTIC per text (bag-of-words hashed into a 384-dim,
+// L2-normalized vector) so that semantically similar texts yield similar vectors
+// and cosine similarity is meaningful. A random embedding would make the search
+// ignore the query entirely.
 async function generateEmbedding(text: string): Promise<number[]> {
   // Simulating external API call to HuggingFace or OpenAI text-embedding-3-small
   await new Promise(resolve => setTimeout(resolve, 300));
-  
-  // Return a mock vector of 384 dimensions (standard for MiniLM)
-  // For mocking, we just generate an array of random floats between -1 and 1
-  return Array.from({ length: 384 }, () => Math.random() * 2 - 1);
+
+  const vector = new Array(384).fill(0);
+  const tokens = String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  for (const token of tokens) {
+    let hash = 0;
+    for (let i = 0; i < token.length; i++) {
+      hash = (hash * 31 + token.charCodeAt(i)) >>> 0;
+    }
+    vector[hash % 384] += 1;
+  }
+
+  const norm = Math.sqrt(vector.reduce((acc, v) => acc + v * v, 0)) || 1;
+  return vector.map(v => v / norm);
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dim = Math.min(a.length, b.length);
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < dim; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (na === 0 || nb === 0) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
 // Mocking PostgreSQL pgvector cosine similarity search
@@ -22,23 +54,17 @@ async function vectorSearchTransactions(queryVector: number[], threshold = 0.7) 
     { id: "tx_05", merchant: "Seattle Coffee Works", category: "Food & Dining", location: "Seattle, WA", date: "2023-08-22", amount: 12.00 },
   ];
 
-  // Since we can't do actual cosine similarity on random vectors and get meaningful results,
-  // we'll mock the semantic matching logic based on keyword heuristics just for the demo,
-  // but architecturally returning it as if it were a vector match.
+  const scored = [];
+  for (const tx of mockTransactions) {
+    const txVector = await generateEmbedding(`${tx.merchant} ${tx.category} ${tx.location}`);
+    const similarity = cosineSimilarity(queryVector, txVector);
+    scored.push({ ...tx, similarityScore: parseFloat(similarity.toFixed(4)) });
+  }
 
-  return mockTransactions.map(tx => {
-    // Generate a fake similarity score (0.0 to 1.0)
-    // We'll arbitrarily boost the score if it's the Seattle coffee transaction to simulate a good semantic match
-    let similarity = Math.random() * 0.5; 
-    
-    if (tx.location.includes("Seattle") && tx.category.includes("Food")) {
-      similarity = 0.85 + (Math.random() * 0.1); // Score ~ 0.85 - 0.95
-    }
+  scored.sort((a, b) => b.similarityScore - a.similarityScore);
 
-    return { ...tx, similarityScore: parseFloat(similarity.toFixed(4)) };
-  })
-  .filter(tx => tx.similarityScore >= threshold)
-  .sort((a, b) => b.similarityScore - a.similarityScore);
+  const aboveThreshold = scored.filter(tx => tx.similarityScore >= threshold);
+  return aboveThreshold.length > 0 ? aboveThreshold : scored.slice(0, 5);
 }
 
 
