@@ -13,14 +13,30 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCLwFIQVnzSlx4DDycgJhugpty2hbGMCUk",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "finsightai-5ef59.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "finsightai-5ef59",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "finsightai-5ef59.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "641114527909",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:641114527909:web:d020fbfa262c5f4ba9554c",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-FLDV1FCY1G",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
+// Fail loudly when required Firebase config is missing instead of silently
+// falling back to a real production project.
+const REQUIRED_FIREBASE_KEYS: (keyof typeof firebaseConfig)[] = [
+  "apiKey",
+  "projectId",
+  "appId",
+];
+const missingFirebaseKeys = REQUIRED_FIREBASE_KEYS.filter((k) => !firebaseConfig[k]);
+if (missingFirebaseKeys.length > 0) {
+  throw new Error(
+    `Missing required Firebase configuration: ${missingFirebaseKeys.join(
+      ", ",
+    )}. Set the corresponding VITE_FIREBASE_* environment variables before building.`,
+  );
+}
 
 if (process.env.NODE_ENV !== "production") {
   console.log("[Firebase] Config loaded:", {
@@ -175,16 +191,6 @@ export function handleFirestoreError(
 
   // 3. Return the sanitized error
   return errInfo;
-}
-
-if (
-  !firebaseConfig.apiKey ||
-  !firebaseConfig.projectId ||
-  !firebaseConfig.appId
-) {
-  console.warn(
-    "Firebase configuration is missing. Authentication and database features will be disabled until setup is complete.",
-  );
 }
 
 /**
