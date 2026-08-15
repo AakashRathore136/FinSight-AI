@@ -60,14 +60,15 @@ export default function DebtVisualizer() {
     for (let i = 0; i < maxMonths; i++) {
       chartData.push({
         month: `Month ${i}`,
-        snowball: result.snowball.trajectory[i] || 0,
-        avalanche: result.avalanche.trajectory[i] || 0
+        snowball: i < result.snowball.trajectory.length ? result.snowball.trajectory[i] : undefined,
+        avalanche: i < result.avalanche.trajectory.length ? result.avalanche.trajectory[i] : undefined
       });
     }
   }
 
   const interestSaved = result ? result.snowball.totalInterestPaid - result.avalanche.totalInterestPaid : 0;
   const monthsSaved = result ? result.snowball.monthsToFreedom - result.avalanche.monthsToFreedom : 0;
+  const avalancheFaster = monthsSaved > 0;
 
   return (
     <div className="w-full max-w-5xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col lg:flex-row gap-8">
@@ -173,7 +174,7 @@ export default function DebtVisualizer() {
                 <Sparkles className="w-6 h-6 text-emerald-500 shrink-0" />
                 <div>
                   <p className="text-sm font-bold text-emerald-800">Avalanche is Optimal</p>
-                  <p className="text-xs text-emerald-700 mt-1">By prioritizing high-interest debt first, you will save <span className="font-bold">{formatCurrency(interestSaved)}</span> and be debt-free <span className="font-bold">{monthsSaved} months earlier</span> than the Snowball method.</p>
+                  <p className="text-xs text-emerald-700 mt-1">By prioritizing high-interest debt first, you will save <span className="font-bold">{formatCurrency(interestSaved)}</span>{avalancheFaster ? <> and be debt-free <span className="font-bold">{monthsSaved} months earlier</span> than the Snowball method.</> : <> compared to the Snowball method.</>}</p>
                 </div>
               </div>
             )}
