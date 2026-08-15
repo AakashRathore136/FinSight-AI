@@ -11,6 +11,8 @@ interface StrategyResult {
   monthsToFreedom: number;
   totalInterestPaid: number;
   trajectory: number[];
+  paidOff: boolean;
+  remainingBalance: number;
 }
 
 export async function calculateDebtPayoff(req: any, res: any) {
@@ -80,9 +82,11 @@ export async function calculateDebtPayoff(req: any, res: any) {
       }
 
       return {
-        monthsToFreedom: monthsPassed,
+        monthsToFreedom: totalBalance > 0 ? -1 : monthsPassed,
         totalInterestPaid: parseFloat(totalInterestPaid.toFixed(2)),
-        trajectory
+        trajectory,
+        paidOff: totalBalance <= 0,
+        remainingBalance: parseFloat(totalBalance.toFixed(2))
       };
     };
 
@@ -93,7 +97,7 @@ export async function calculateDebtPayoff(req: any, res: any) {
     const avalanche = runStrategy((a, b) => b.interestRate - a.interestRate);
 
     res.json({
-      success: true,
+      success: snowball.paidOff && avalanche.paidOff,
       data: {
         snowball,
         avalanche
