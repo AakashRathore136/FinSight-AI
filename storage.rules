@@ -87,6 +87,7 @@ service firebase.storage {
 //      by hand — nothing enforces this automatically.
 function isAdmin(uid) {
   return request.auth != null &&
+    request.auth.token.email_verified == true &&
     firestore.exists(/databases/(default)/documents/users/$(uid)) &&
     firestore.get(/databases/(default)/documents/users/$(uid)).data.role == 'admin';
 }
