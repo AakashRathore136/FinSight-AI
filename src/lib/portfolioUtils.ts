@@ -338,7 +338,12 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     let legacyHoldingRef: ReturnType<typeof doc> | null = null;
     if (!input.holdingId && (input.type === 'buy' || input.type === 'sell')) {
       const holdingsSnap = await getDocs(
-        query(holdings, where('userId', '==', userId), where('symbol', '==', symbol)),
+        query(
+          holdings,
+          where('userId', '==', userId),
+          where('symbol', '==', symbol),
+          where('deleted', '==', false),
+        ),
       );
       if (!holdingsSnap.empty) {
         legacyHoldingRef = holdingsSnap.docs[0].ref;
@@ -385,6 +390,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             avgCost,
             currentPrice: input.price,
             currency: holdingCurrency,
+            deleted: false,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
