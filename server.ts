@@ -1605,12 +1605,10 @@ CRITICAL RULES:
   // object in one operation. Firestore deletes do not cascade, and a bare
   // client-side deleteDoc would leave the PDF readable via signed URLs
   // forever. Ownership is verified against the Firestore record before any
-  // metadata or object is removed.
-  app.post("/api/documents/delete", documentDeleteRateLimiter, async (req: any, res) => {
   // metadata or object is removed. Local-fallback documents (Issue #1343)
   // have no Firestore record, so they are purged from Storage directly after
   // the same namespace + uploadedBy ownership checks.
-  app.post("/api/documents/delete", async (req: any, res) => {
+  app.post("/api/documents/delete", documentDeleteRateLimiter, async (req: any, res) => {
     try {
       const { documentId, storagePath: bodyStoragePath } = req.body;
 
