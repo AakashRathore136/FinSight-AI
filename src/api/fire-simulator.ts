@@ -14,6 +14,43 @@ interface SimulationYear {
   isFI: boolean;
 }
 
+// Standard-normal sample via Box-Muller, used by the Monte-Carlo below.
+function gaussianRandom(mean: number, stdDev: number): number {
+  const u1 = Math.random() || 1e-9;
+  const u2 = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return mean + z * stdDev;
+}
+
+// Estimate the empirical probability (0-100) of reaching `fireNumber` within
+// 40 years across many randomized return paths.
+function runMonteCarloSuccessProbability(
+  currentNetWorth: number,
+  monthlySavings: number,
+  fireNumber: number,
+  paths = 1000,
+  years = 40,
+): number {
+  let successes = 0;
+  for (let p = 0; p < paths; p++) {
+    let nw = currentNetWorth;
+    let reached = false;
+    for (let year = 1; year <= years; year++) {
+      const annualReturn = gaussianRandom(0.07, 0.15);
+      const mr = annualReturn / 12;
+      for (let m = 0; m < 12; m++) {
+        nw = (nw + monthlySavings) * (1 + mr);
+      }
+      if (nw >= fireNumber) {
+        reached = true;
+        break;
+      }
+    }
+    if (reached) successes++;
+  }
+  return parseFloat(((successes / paths) * 100).toFixed(1));
+}
+
 export async function runFIRESimulation(req: any, res: any) {
   try {
     const user = req.user;
@@ -30,11 +67,13 @@ export async function runFIRESimulation(req: any, res: any) {
     // FIRE Number Formula: Target Annual Expenses / (Withdrawal Rate / 100)
     const fireNumber = targetAnnualExpenses / (withdrawalRate / 100);
 
-    // Run a deterministic Monte-Carlo style projection based on historical S&P 500 averages
-    // Adjusted for inflation (Real Return of ~7%)
+    // Run a deterministic projection using historical S&P 500 real averages
+    // (~7% real return), compounded MONTHLY so contributions earn ~half a
+    // year of return (matching gradual, monthly contributions). The previous
+    // yearly lump-sum compounding overstated net worth.
     const annualRealReturn = 0.07;
-    const annualSavings = monthlySavings * 12;
-    
+    const monthlyRealReturn = annualRealReturn / 12;
+
     let simulatedNetWorth = currentNetWorth;
     const trajectory: SimulationYear[] = [];
     let yearsToFI = 0;
@@ -42,9 +81,11 @@ export async function runFIRESimulation(req: any, res: any) {
     let targetAge = currentAge;
 
     for (let year = 1; year <= 40; year++) { // Project out up to 40 years
-      simulatedNetWorth = (simulatedNetWorth * (1 + annualRealReturn)) + annualSavings;
+      for (let m = 0; m < 12; m++) {
+        simulatedNetWorth = (simulatedNetWorth + monthlySavings) * (1 + monthlyRealReturn);
+      }
       const isFI = simulatedNetWorth >= fireNumber;
-      
+
       trajectory.push({
         year: new Date().getFullYear() + year,
         age: currentAge + year,
@@ -59,9 +100,13 @@ export async function runFIRESimulation(req: any, res: any) {
       }
     }
 
-    // In a real Monte Carlo simulation, we would run 10,000 iterations using randomized historical returns
-    // to calculate a "Probability of Success". Mocking a high probability if FI is reached within 40 years.
-    const successProbability = reachedFI ? Math.max(99 - (yearsToFI * 0.5), 50) : 0;
+    // Real Monte-Carlo: estimate the probability of reaching the FIRE number by
+    // simulating many randomized return paths (no fabricated scalar).
+    const successProbability = runMonteCarloSuccessProbability(
+      currentNetWorth,
+      monthlySavings,
+      fireNumber,
+    );
 
     logger.info(`[FIRE_SIM] User ${user.uid} ran simulation. FI Target: $${fireNumber}. Years to FI: ${yearsToFI}`);
 
