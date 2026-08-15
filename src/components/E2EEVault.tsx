@@ -25,9 +25,10 @@ export default function E2EEVault() {
       "raw", enc.encode(pass), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]
     );
     
-    // In production, salt should be stored per-user. Mocking static salt for demo.
-    const salt = enc.encode("finsight-static-salt-v1"); 
-    
+    // Generate a cryptographically random salt per document so identical
+    // passwords derive different keys. Persisted alongside the ciphertext.
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+
     const key = await window.crypto.subtle.deriveKey(
       { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
       keyMaterial,
@@ -49,7 +50,8 @@ export default function E2EEVault() {
 
     return {
       ciphertextBuffer: ciphertext,
-      ivBase64: btoa(String.fromCharCode(...iv))
+      ivBase64: btoa(String.fromCharCode(...iv)),
+      saltBase64: btoa(String.fromCharCode(...salt))
     };
   };
 
@@ -59,14 +61,15 @@ export default function E2EEVault() {
     try {
       // Step 1: Encrypt locally
       setEncrypting(true);
-      const { ciphertextBuffer, ivBase64 } = await encryptFileClientSide(selectedFile, password);
+      const { ciphertextBuffer, ivBase64, saltBase64 } = await encryptFileClientSide(selectedFile, password);
       setEncrypting(false);
 
       // Convert buffer to base64 for JSON transport (in prod, use multipart form for large files)
       const cipherArray = Array.from(new Uint8Array(ciphertextBuffer));
       const ciphertextBase64 = btoa(String.fromCharCode.apply(null, cipherArray as unknown as number[]));
 
-      // Step 2: Upload to server
+      // Step 2: Upload to server (salt persisted with the record so the key
+      // can be re-derived from the same password on download/decrypt)
       setUploading(true);
       const res = await fetch('/api/vault/upload', {
         method: 'POST',
@@ -75,6 +78,7 @@ export default function E2EEVault() {
           filename: selectedFile.name,
           fileSize: selectedFile.size,
           iv: ivBase64,
+          salt: saltBase64,
           ciphertextBase64
         })
       });
