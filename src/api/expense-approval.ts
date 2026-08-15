@@ -14,17 +14,29 @@ interface ExpenseApproval {
 let sharedExpenseInbox: ExpenseApproval[] = [
   { id: "exp_101", initiator: "Partner A", merchant: "Apple Store", amount: 1299.00, category: "Electronics", date: new Date().toISOString(), status: 'PENDING' },
   { id: "exp_102", initiator: "Partner A", merchant: "Delta Airlines", amount: 645.50, category: "Travel", date: new Date(Date.now() - 86400000).toISOString(), status: 'PENDING' },
+  { id: "exp_103", initiator: "Partner A", merchant: "Corner Coffee", amount: 12.00, category: "Food", date: new Date(Date.now() - 3600000).toISOString(), status: 'PENDING' },
 ];
+
+// Shared multi-signature threshold. Expenses at or above this amount require
+// joint approval; the same value is used by the UI for display and by the API
+// for filtering so the shown list always matches the stated threshold.
+const APPROVAL_THRESHOLD = 500.00;
 
 export async function getPendingApprovals(req: any, res: any) {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-    // Filter to only show PENDING in the inbox
-    const pending = sharedExpenseInbox.filter(exp => exp.status === 'PENDING');
+    // Accept an explicit threshold from the caller, falling back to the shared default.
+    const parsed = parseFloat(req.query.threshold as string);
+    const threshold = Number.isFinite(parsed) && parsed > 0 ? parsed : APPROVAL_THRESHOLD;
+
+    // Show only PENDING expenses at or above the approval threshold.
+    const pending = sharedExpenseInbox.filter(
+      exp => exp.status === 'PENDING' && exp.amount >= threshold
+    );
     
-    res.json({ success: true, data: pending });
+    res.json({ success: true, data: pending, threshold });
   } catch (error: any) {
     logger.error("APPROVAL_FETCH_ERROR", { message: error.message });
     res.status(500).json({ error: "Failed to fetch inbox" });
