@@ -20,6 +20,7 @@ export const CryptoWebSocketProvider: React.FC<{ children: React.ReactNode }> = 
   const [prices, setPrices] = useState<CryptoPrices>({});
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     // Connect to Binance WebSocket for real-time trade streams
@@ -56,13 +57,15 @@ export const CryptoWebSocketProvider: React.FC<{ children: React.ReactNode }> = 
       wsRef.current.onclose = () => {
         setConnectionStatus('disconnected');
         // Simple exponential backoff or auto-reconnect logic would go here
-        setTimeout(connect, 5000); 
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(connect, 5000); 
       };
     };
 
     connect();
 
     return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
       }
