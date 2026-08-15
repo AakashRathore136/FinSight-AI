@@ -62,17 +62,38 @@ export function chunkFinancialDocument(
   // Financial section headers regex patterns
   const sectionHeaderRegex = /(?:BALANCE SHEET|INCOME STATEMENT|CASH FLOWS|NOTES TO FINANCIAL STATEMENTS|RISK FACTORS|MANAGEMENT'S DISCUSSION|AUDITOR'S REPORT|MD&A|NOTE \d+)/i;
 
-  const paragraphs = text.split(/\n\s*\n/);
+  // Split into paragraphs while computing true character offsets in the source
+  // text. Using text.indexOf() would resolve repeated or substring paragraphs
+  // to the wrong offset, corrupting page/citation data.
+  const paragraphBounds: { para: string; start: number; end: number }[] = [];
+  {
+    const paraRegex = /\n\s*\n/g;
+    let segmentStart = 0;
+    let m: RegExpExecArray | null;
+    while ((m = paraRegex.exec(text)) !== null) {
+      paragraphBounds.push({
+        para: text.slice(segmentStart, m.index).trim(),
+        start: segmentStart,
+        end: m.index,
+      });
+      segmentStart = m.index + m[0].length;
+    }
+    paragraphBounds.push({
+      para: text.slice(segmentStart).trim(),
+      start: segmentStart,
+      end: text.length,
+    });
+  }
+
   let currentChunkText = "";
   let currentHeader = "Executive Summary";
   let chunkIndex = 0;
 
-  let searchIndex = 0;
   let currentChunkParas: { start: number; end: number }[] = [];
   let currentChunkCharStart = 0;
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    const para = paragraphs[i].trim();
+  for (let i = 0; i < paragraphBounds.length; i++) {
+    const para = paragraphBounds[i].para;
     if (!para) continue;
 
     // Detect section headers if enabled
@@ -86,11 +107,8 @@ export function chunkFinancialDocument(
     const paraTokens = estimateTokens(para);
     const currentTokens = estimateTokens(currentChunkText);
 
-    const paraStart = text.indexOf(para, searchIndex);
-    const paraEnd = paraStart + para.length;
-    if (paraStart !== -1) {
-      searchIndex = paraEnd;
-    }
+    const paraStart = paragraphBounds[i].start;
+    const paraEnd = paragraphBounds[i].end;
 
     if (currentTokens + paraTokens > chunkSize && currentChunkText.length > 0) {
       const charStart = currentChunkCharStart;
