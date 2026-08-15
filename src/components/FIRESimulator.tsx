@@ -38,6 +38,16 @@ export default function FIRESimulator() {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
 
+  // Axis tick formatter that scales by magnitude so small net-worth values
+  // don't render as ".0M".
+  const formatAxisValue = (val: number) => {
+    const abs = Math.abs(val);
+    if (abs >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
+    if (abs >= 1e3) return `$${(val / 1e3).toFixed(0)}K`;
+    return `$${val.toFixed(0)}`;
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col lg:flex-row gap-8">
       
@@ -156,7 +166,7 @@ export default function FIRESimulator() {
                   <YAxis 
                     axisLine={false} tickLine={false} 
                     tick={{ fill: '#64748b', fontSize: 12 }}
-                    tickFormatter={(val) => `$${(val/1000000).toFixed(1)}M`}
+                    tickFormatter={formatAxisValue}
                   />
                   <Tooltip 
                     formatter={(value: number) => [formatCurrency(value), 'Projected Net Worth']}
