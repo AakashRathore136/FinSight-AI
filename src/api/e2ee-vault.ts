@@ -8,6 +8,7 @@ interface EncryptedDocumentRecord {
   uploadDate: string;
   fileSize: number;
   iv: string; // Base64 Initialization Vector used by the client for AES-GCM
+  salt: string; // Base64 PBKDF2 salt, unique per document, persisted so the key can be re-derived
   ciphertextBlobId: string; // Reference to S3/GCS bucket object
 }
 
@@ -19,9 +20,9 @@ export async function uploadEncryptedDocument(req: any, res: any) {
     const user = req.user;
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-    const { filename, fileSize, iv, ciphertextBase64 } = req.body;
+    const { filename, fileSize, iv, salt, ciphertextBase64 } = req.body;
 
-    if (!filename || !iv || !ciphertextBase64) {
+    if (!filename || !iv || !salt || !ciphertextBase64) {
       return res.status(400).json({ error: "Missing required encryption parameters." });
     }
 
@@ -37,6 +38,7 @@ export async function uploadEncryptedDocument(req: any, res: any) {
       uploadDate: new Date().toISOString(),
       fileSize,
       iv,
+      salt,
       ciphertextBlobId: mockBlobId
     };
 
@@ -71,7 +73,8 @@ export async function getVaultDocuments(req: any, res: any) {
       filename: d.filename,
       uploadDate: d.uploadDate,
       fileSize: d.fileSize,
-      iv: d.iv
+      iv: d.iv,
+      salt: d.salt
       // Note: We don't send the raw ciphertext here to save bandwidth, 
       // the client would request the specific blob via a separate /download endpoint
     }));
