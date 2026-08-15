@@ -96,38 +96,22 @@ function toNumber(value: unknown, fallback = 0): number {
 }
 
 /**
- * Phrases that indicate an attempt to override the agent's system behavior
- * ("ignore previous instructions", "you are now", etc.). They are stripped from
- * user-supplied text before it is placed in the prompt so a crafted message
- * cannot reframe itself as a system directive.
+ * The user's message and tool observations are treated as untrusted data. The
+ * actual protection against prompt injection is structural: every such value is
+ * wrapped in explicit `<<...>>` delimiters (see runAgentLoop) and the system
+ * prompt tells the model to treat everything inside them as data, never as
+ * instructions.
  *
- * This is deliberately kept as defense-in-depth only: the real protection is
- * structural — the user turn is wrapped in explicit delimiters and the system
- * prompt tells the model to treat everything inside them as untrusted data.
- * No word list can catch every phrasing ("disregard the prior guidance",
- * "from now on you are…", "act as…"), so the model is never asked to obey
- * anything appearing in a delimited block regardless of how it is worded.
+ * We deliberately do NOT rewrite/mangle the text with an injection word-list.
+ * A blocklist both fails to catch every phrasing ("disregard the prior
+ * guidance", "act as…") and, worse, corrupts legitimate financial text — a
+ * merchant named "New instructions training" or a memo "system message to
+ * accounting" would be silently mutated, degrading the data the agent and its
+ * tools operate on. The delimiters already prevent the model from obeying
+ * anything said inside the block, so no string rewriting is needed here.
  */
-const INJECTION_PATTERNS: RegExp[] = [
-  /\bignore\s+(all\s+)?(previous|prior|above|earlier)\s+instructions?\b/gi,
-  /\bdisregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|guidance|rules?)\b/gi,
-  /\bforget\s+(everything|all\s+instructions?|the\s+prompt|that)\b/gi,
-  /\byou\s+are\s+now\b/gi,
-  /\bfrom\s+now\s+on\s+you\s+are\b/gi,
-  /\byour\s+new\s+(objective|goal|instructions?)\s+is\b/gi,
-  /\bnew\s+instructions?\s*:?/gi,
-  /\bsystem\s+(prompt|configuration|message)\b/gi,
-  /\boverride\s+(your\s+)?(instructions?|guidelines?|rules?)\b/gi,
-  /\bdeveloper\s+mode\b/gi,
-  /\brepeat\s+after\s+me\b/gi,
-];
-
 function sanitizeUserInput(text: string): string {
-  let cleaned = String(text || "");
-  for (const pattern of INJECTION_PATTERNS) {
-    cleaned = cleaned.replace(pattern, "[filtered instruction-like text]");
-  }
-  return cleaned;
+  return String(text || "");
 }
 
 /**
