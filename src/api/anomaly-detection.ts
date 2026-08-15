@@ -25,17 +25,39 @@ export async function detectAnomalies(req: any, res: any) {
 
     // Note: Python script must be executed in an environment with scikit-learn installed.
     // Pass the uid as a discrete argument — never interpolate it into a shell string.
-    const { stdout, stderr } = await execFilePromise("python3", [
-      scriptPath,
-      "--uid",
-      user.uid,
-    ]);
-    
-    if (stderr) {
-      logger.warn("Anomaly detection script stderr:", stderr);
+    // Bound the subprocess with a timeout and a max buffer so a slow/hung python3
+    // cannot block the request indefinitely (a trivial DoS).
+    let stdout = "";
+    try {
+      const result = await execFilePromise("python3", [
+        scriptPath,
+        "--uid",
+        user.uid,
+      ], { timeout: 10000, maxBuffer: 1024 * 1024 });
+      stdout = result.stdout || "";
+      if (result.stderr) {
+        logger.warn("Anomaly detection script stderr:", result.stderr);
+      }
+    } catch (execError: any) {
+      // The model script is absent (ENOENT) or failed/timed out. Provide a
+      // deterministic empty fallback instead of 500-ing the whole request.
+      logger.warn("Anomaly detection model unavailable, falling back to empty result", {
+        code: execError.code,
+        message: execError.message,
+      });
+      return res.json({
+        success: true,
+        anomaliesFound: 0,
+        data: [],
+        modelUnavailable: true,
+      });
     }
 
-    const anomalies = JSON.parse(stdout || "[]");
+    // Only parse the JSON portion of stdout; child scripts may print logs/warnings
+    // to stdout. Extract the first balanced JSON array/object to avoid crashing on
+    // stray output.
+    const jsonMatch = stdout.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+    const anomalies = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
 
     res.json({
       success: true,
