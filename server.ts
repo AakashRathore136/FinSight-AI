@@ -18,6 +18,20 @@ import logger from "./src/lib/logger.js";
 import { repairTruncatedJSON } from "./src/lib/jsonRepairEngine.js";
 import { verifyZKPShareRoute } from "./src/api/zkp-verifier.js";
 
+// Advanced-feature handlers. These were implemented in src/api/* but never
+// mounted, so the corresponding UI features 404'd. (Issue #1497)
+import { calculateDebtPayoff } from "./src/api/debt-snowball.js";
+import { optimizeTaxLots } from "./src/api/tax-optimization.js";
+import { calculateRebalance } from "./src/api/portfolio-rebalance.js";
+import { verifyIncomeZKP } from "./src/api/zkp-verifier.js";
+import { uploadEncryptedDocument } from "./src/api/e2ee-vault.js";
+import { runFIRESimulation } from "./src/api/fire-simulator.js";
+import { predictOverdraftRisk } from "./src/api/overdraft-protection.js";
+import { detectWashSales } from "./src/api/wash-sale-detector.js";
+import { getPendingApprovals, reviewExpenseApproval } from "./src/api/expense-approval.js";
+import { searchTransactionsSemantic } from "./src/api/semantic-search.js";
+import { handlePlaidWebhook, getReconciliationLogs } from "./src/api/plaid-webhook.js";
+
 dotenv.config({ quiet: true });
 
 logger.info("Server starting", { hfKeyExists: !!process.env.HUGGINGFACE_API_KEY });
@@ -475,6 +489,7 @@ async function requireFirebaseAuth(req: any, res: any, next: any) {
     }
     req.ownerId = decoded.uid;
     req.idToken = idToken;
+    req.user = { uid: decoded.uid, emailVerified: decoded.email_verified === true };
     next();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (err: any) {
@@ -1812,6 +1827,25 @@ CRITICAL RULES:
       });
     }
   });
+
+  // Advanced-feature routes. Each is backed by the handler in src/api/* that
+  // the corresponding React component calls, and is protected by the global
+  // requireFirebaseAuth middleware registered above (app.use("/api", ...)).
+  // These were previously implemented but never mounted, so every feature
+  // 404'd. Paths match the URLs the components fetch exactly. (Issue #1497)
+  app.post("/api/planning/debt-snowball", calculateDebtPayoff);
+  app.post("/api/tax/optimize-sale", optimizeTaxLots);
+  app.post("/api/portfolio/rebalance", calculateRebalance);
+  app.post("/api/privacy/verify-income-zkp", verifyIncomeZKP);
+  app.post("/api/vault/upload", uploadEncryptedDocument);
+  app.post("/api/retirement/fire-simulator", runFIRESimulation);
+  app.post("/api/liquidity/predict-overdraft", predictOverdraftRisk);
+  app.post("/api/tax/detect-wash-sales", detectWashSales);
+  app.get("/api/shared-accounts/approvals", getPendingApprovals);
+  app.post("/api/shared-accounts/review", reviewExpenseApproval);
+  app.get("/api/transactions/semantic-search", searchTransactionsSemantic);
+  app.get("/api/plaid/reconciliation-logs", getReconciliationLogs);
+  app.post("/api/plaid/webhook", handlePlaidWebhook);
 
   // Catches errors from the upload.single("file") middleware above —
   // oversized files (LIMIT_FILE_SIZE) and non-PDF rejections from
