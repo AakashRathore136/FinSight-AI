@@ -131,6 +131,28 @@ Output valid JSON only with keys: "collection", "where", "orderBy", "limit".`;
       delete (parsedQuery as any).limit;
     }
 
+    // Harden `orderBy` the same way `where` is sanitized: it must be a single
+    // object with a field restricted to the allowed schema and an optional,
+    // strictly-typed direction. Anything else is dropped so no arbitrary
+    // structure can flow through into the consumer.
+    const ORDER_BY_FIELDS = new Set(["amount", "category", "date", "merchant"]);
+    const orderBy = (parsedQuery as any).orderBy;
+    if (orderBy != null) {
+      const validShape =
+        typeof orderBy === "object" &&
+        !Array.isArray(orderBy) &&
+        typeof orderBy.field === "string" &&
+        ORDER_BY_FIELDS.has(orderBy.field) &&
+        (orderBy.direction == null ||
+          orderBy.direction === "asc" ||
+          orderBy.direction === "desc");
+      if (!validShape) {
+        delete (parsedQuery as any).orderBy;
+      } else if (orderBy.direction == null) {
+        orderBy.direction = "asc";
+      }
+    }
+
     if (!user?.uid) {
       return res.status(401).json({ error: "Unauthorized" });
     }
