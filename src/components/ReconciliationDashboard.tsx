@@ -86,7 +86,7 @@ export default function ReconciliationDashboard() {
         </div>
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-center">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Queue Backend</p>
-          <p className="font-bold text-slate-800">Redis (BullMQ)</p>
+          <p className="font-bold text-slate-800">Firestore (persisted)</p>
         </div>
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-center">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Duplicates Prevented</p>
