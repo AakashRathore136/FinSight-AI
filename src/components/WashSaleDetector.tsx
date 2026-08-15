@@ -6,7 +6,7 @@ interface WashSaleViolation {
   buyTradeId: string;
   ticker: string;
   disallowedLoss: number;
-  daysDifference: number;
+  daysDifference: number; // signed: positive = re-bought after the loss, negative = before
 }
 
 interface DetectorData {
@@ -105,7 +105,10 @@ export default function WashSaleDetector() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> Re-bought {violation.daysDifference} days after realizing loss
+                      <Clock className="w-3.5 h-3.5" />
+                      {violation.daysDifference >= 0
+                        ? `Re-bought ${violation.daysDifference} days after realizing loss`
+                        : `Re-bought ${Math.abs(violation.daysDifference)} days before realizing loss`}
                     </p>
                   </div>
                   

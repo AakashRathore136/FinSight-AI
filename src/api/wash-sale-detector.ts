@@ -15,7 +15,7 @@ interface WashSaleViolation {
   buyTradeId: string;
   ticker: string;
   disallowedLoss: number;
-  daysDifference: number;
+  daysDifference: number; // signed: positive = re-bought after the loss, negative = before
 }
 
 export async function detectWashSales(req: any, res: any) {
@@ -53,7 +53,8 @@ export async function detectWashSales(req: any, res: any) {
       for (const buyTrade of buys) {
         if (buyTrade.ticker === lossTrade.ticker) {
           const buyDate = new Date(buyTrade.date).getTime();
-          const daysDiff = Math.abs((buyDate - lossDate) / DAY_IN_MS);
+          const signedDaysDiff = (buyDate - lossDate) / DAY_IN_MS;
+          const daysDiff = Math.abs(signedDaysDiff);
 
           // If the buy is within a 61-day window (30 days before, day of, 30 days after)
           if (daysDiff <= 30) {
@@ -67,7 +68,7 @@ export async function detectWashSales(req: any, res: any) {
               buyTradeId: buyTrade.id,
               ticker: lossTrade.ticker,
               disallowedLoss,
-              daysDifference: Math.round(daysDiff)
+              daysDifference: Math.round(signedDaysDiff)
             });
           }
         }
