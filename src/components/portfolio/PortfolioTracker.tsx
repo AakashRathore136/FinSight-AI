@@ -513,8 +513,16 @@ export function PortfolioTracker({ user }: PortfolioTrackerProps) {
               </Card>
             ) : (
               holdings.map((h) => {
-                const value = h.quantity * h.currentPrice;
-                const cost = h.quantity * h.avgCost;
+                const localValue = h.quantity * h.currentPrice;
+                const localCost = h.quantity * h.avgCost;
+                const value =
+                  !rates || !h.currency || h.currency === baseCurrency
+                    ? localValue
+                    : (convertAmount(localValue, h.currency, baseCurrency, rates) ?? localValue);
+                const cost =
+                  !rates || !h.currency || h.currency === baseCurrency
+                    ? localCost
+                    : (convertAmount(localCost, h.currency, baseCurrency, rates) ?? localCost);
                 const pl = value - cost;
                 const plPercent = cost > 0 ? (pl / cost) * 100 : 0;
                 return (
