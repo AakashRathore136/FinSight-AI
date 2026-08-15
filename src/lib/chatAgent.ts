@@ -31,6 +31,7 @@ import {
   generateTimelineProjection,
 } from "./goalUtils";
 import { formatCurrency } from "./utils";
+import { repairTruncatedJSON } from "./jsonRepairEngine";
 import type { FinancialContext, ChatResponse } from "./chatUtils";
 
 // HF chat model used for the agent loop. Configurable via env so deployments can
@@ -382,9 +383,12 @@ function parseAgentJson(text: string): Record<string, unknown> | null {
     const v = JSON.parse(candidate.slice(start, end + 1));
     if (v && typeof v === "object") return v;
   } catch {
-    return null;
+    // fall through to the repair engine instead of returning null outright;
+    // the model is capped at max_tokens, so truncation (trailing comma,
+    // half-written value) is common (issue #1370).
   }
-  return null;
+  const repaired = repairTruncatedJSON<Record<string, unknown>>(candidate.slice(start, end + 1));
+  return repaired.data && typeof repaired.data === "object" ? repaired.data : null;
 }
 
 function summariseObservation(obs: unknown): string {
@@ -489,7 +493,13 @@ export async function runAgentLoop(
     if (!parsed) {
       // Model replied with free text — validate it before treating it as a
       // final answer (reject HTML/control tokens so nothing malicious reaches
-      // the chat renderer).
+      // the chat renderer). Also reject raw JSON blobs: when parseAgentJson
+      // (now including the repair engine) could not recover a structure, the
+      // reply is almost certainly a truncated/malformed JSON object rather
+      // than prose, and echoing it shows the user raw JSON (issue #1370).
+      const trimmed = reply.trim();
+      const looksLikeJsonBlob = /^\s*[{[]/.test(trimmed);
+      if (looksLikeJsonBlob) return null;
       const validated = validateModelAnswer(reply);
       return validated
         ? { message: validated, steps, chartData }
