@@ -17,6 +17,9 @@ interface ReconciliationLog {
   newPostedId: string;
   confidenceScore: number;
   merchantName: string;
+  // True only when a pending transaction was actually matched and de-duplicated.
+  // Logs that do not represent a prevented duplicate must not set this.
+  merged: boolean;
 }
 
 // Mock Database of active transactions
@@ -93,7 +96,8 @@ export async function handlePlaidWebhook(req: any, res: any) {
           mergedPendingId: matchedPending.id,
           newPostedId: postedTx.transaction_id,
           confidenceScore,
-          merchantName: postedTx.merchant_name
+          merchantName: postedTx.merchant_name,
+          merged: true
         });
 
       } else {
@@ -122,5 +126,8 @@ export async function handlePlaidWebhook(req: any, res: any) {
 
 // Endpoint for the UI to fetch the worker logs
 export async function getReconciliationLogs(req: any, res: any) {
-  res.json({ success: true, data: reconciliationLogs });
+  // Count only the reconciliation events where a duplicate was actually
+  // prevented (a pending was matched and merged), not every log line.
+  const duplicatesPrevented = reconciliationLogs.filter(l => l.merged).length;
+  res.json({ success: true, data: reconciliationLogs, duplicatesPrevented });
 }
