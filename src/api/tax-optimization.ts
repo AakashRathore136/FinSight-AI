@@ -29,16 +29,38 @@ export async function optimizeTaxLots(req: any, res: any) {
       return res.status(400).json({ error: "Invalid liquidation parameters" });
     }
 
-    // Mock database fetch of user's tax lots for the requested ticker
-    const mockLots: TaxLot[] = [
-      { id: "lot_1", ticker: "AAPL", shares: 10, purchasePrice: 150.00, purchaseDate: "2021-05-10" },
-      { id: "lot_2", ticker: "AAPL", shares: 15, purchasePrice: 175.50, purchaseDate: "2022-08-15" },
-      { id: "lot_3", ticker: "AAPL", shares: 5, purchasePrice: 195.00, purchaseDate: "2023-11-01" },
-      { id: "lot_4", ticker: "AAPL", shares: 20, purchasePrice: 165.25, purchaseDate: "2023-01-20" },
-    ];
+    // Mock database fetch of user's tax lots, keyed by ticker so the requested
+    // symbol is actually used instead of always falling back to AAPL.
+    const requestedTicker = String(ticker).toUpperCase();
+    const mockLotsByTicker: Record<string, TaxLot[]> = {
+      AAPL: [
+        { id: "lot_1", ticker: "AAPL", shares: 10, purchasePrice: 150.00, purchaseDate: "2021-05-10" },
+        { id: "lot_1b", ticker: "AAPL", shares: 15, purchasePrice: 175.50, purchaseDate: "2022-08-15" },
+        { id: "lot_1c", ticker: "AAPL", shares: 5, purchasePrice: 195.00, purchaseDate: "2023-11-01" },
+        { id: "lot_1d", ticker: "AAPL", shares: 20, purchasePrice: 165.25, purchaseDate: "2023-01-20" },
+      ],
+      MSFT: [
+        { id: "lot_2", ticker: "MSFT", shares: 12, purchasePrice: 280.00, purchaseDate: "2021-03-15" },
+        { id: "lot_2b", ticker: "MSFT", shares: 8, purchasePrice: 310.75, purchaseDate: "2022-09-01" },
+      ],
+      TSLA: [
+        { id: "lot_3", ticker: "TSLA", shares: 5, purchasePrice: 210.00, purchaseDate: "2022-01-10" },
+        { id: "lot_3b", ticker: "TSLA", shares: 10, purchasePrice: 245.50, purchaseDate: "2023-06-20" },
+      ],
+    };
 
-    // Mock current market price
-    const currentPrice = 185.00; 
+    const mockLots = mockLotsByTicker[requestedTicker];
+    if (!mockLots || mockLots.length === 0) {
+      return res.status(400).json({ error: `No tax lots found for ticker ${requestedTicker}.` });
+    }
+
+    // Mock current market price, keyed by ticker
+    const currentPriceByTicker: Record<string, number> = {
+      AAPL: 185.00,
+      MSFT: 330.00,
+      TSLA: 240.00,
+    };
+    const currentPrice = currentPriceByTicker[requestedTicker] ?? 100.00;
     const totalAvailableValue = mockLots.reduce((acc, lot) => acc + (lot.shares * currentPrice), 0);
 
     if (targetLiquidationAmount > totalAvailableValue) {
@@ -58,7 +80,7 @@ export async function optimizeTaxLots(req: any, res: any) {
     res.json({
       success: true,
       data: {
-        ticker,
+        ticker: requestedTicker,
         currentPrice,
         targetLiquidationAmount,
         strategies: {
