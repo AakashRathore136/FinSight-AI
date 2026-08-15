@@ -14,9 +14,19 @@ export async function predictOverdraftRisk(req: any, res: any) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // This would normally fetch actual bank balances and historical transaction data
-    // to feed into a time-series model (e.g., Prophet) to predict the next 7 days.
-    const currentBalance = 450.25;
+    // Seed from the authenticated user's real current balance when provided;
+    // otherwise fall back to a demo constant for manual testing only.
+    const currentBalance = typeof req.body?.currentBalance === 'number' ? req.body.currentBalance : 450.25;
+
+    // Use the user's real scheduled/pending transactions when supplied;
+    // otherwise fall back to a demo fixture. Each entry is applied on its `day`
+    // offset (1-7) and flagged as `income` when it credits the balance.
+    const scheduled: { day: number; name: string; amount: number; income: boolean }[] =
+      Array.isArray(req.body?.transactions) ? req.body.transactions : [
+        { day: 4, name: "Auto Insurance Premium", amount: 285.00, income: false },
+        { day: 6, name: "Property Management / Rent", amount: 1550.00, income: false },
+        { day: 7, name: "Paycheck", amount: 3200.00, income: true },
+      ];
 
     // Simulating model prediction delay
     await new Promise(resolve => setTimeout(resolve, 600));
@@ -27,7 +37,7 @@ export async function predictOverdraftRisk(req: any, res: any) {
     let overdraftDetected = false;
     let overdraftDate: string | null = null;
 
-    // Mocking a 7-day projection where a large bill drops the balance below zero
+    // 7-day projection driven by the user's actual expected expenses/income
     for (let i = 1; i <= 7; i++) {
       const projectionDate = new Date(today);
       projectionDate.setDate(today.getDate() + i);
@@ -37,26 +47,20 @@ export async function predictOverdraftRisk(req: any, res: any) {
       let dailySpend = 0;
 
       // Add a small daily average spend
-      dailySpend += 35; 
-      
-      // Introduce a major recurring bill on day 4 that causes the overdraft
-      if (i === 4) {
-        expectedExpenses.push({ name: "Auto Insurance Premium", amount: 285.00 });
-        dailySpend += 285.00;
-      }
-      
-      // Introduce rent/mortgage on day 6
-      if (i === 6) {
-        expectedExpenses.push({ name: "Property Management / Rent", amount: 1550.00 });
-        dailySpend += 1550.00;
+      dailySpend += 35;
+
+      for (const t of scheduled) {
+        if (t.day !== i) continue;
+        const amt = Number(t.amount) || 0;
+        if (t.income) {
+          runningBalance += amt;
+        } else {
+          expectedExpenses.push({ name: t.name, amount: amt });
+          dailySpend += amt;
+        }
       }
 
       runningBalance -= dailySpend;
-
-      // Add income on day 7 to recover
-      if (i === 7) {
-        runningBalance += 3200.00; // Paycheck
-      }
 
       const isRisk = runningBalance < 0;
       
