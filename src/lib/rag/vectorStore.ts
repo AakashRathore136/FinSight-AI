@@ -47,14 +47,32 @@ export class InMemoryVectorStore {
   private idf: number[] = [];
 
   /**
-   * Indexes document chunks into the store.
+   * Indexes document chunks into the store. New chunks are appended to any
+   * already-indexed chunks and the vocabulary + IDF statistics are rebuilt over
+   * the full union, so re-indexing a second document never drops the first and
+   * IDF weights stay consistent across all documents held by this store.
    */
   public addChunks(chunks: DocumentChunk[]): void {
-    this.chunks = chunks;
+    this.chunks.push(...chunks);
+    this.rebuild();
+  }
+
+  /**
+   * Rebuilds the vocabulary, embeddings, and IDF weights over the current set
+   * of chunks (this.chunks). Called after every addChunks so appending new
+   * documents recomputes statistics across all of them.
+   */
+  private rebuild(): void {
+    if (this.chunks.length === 0) {
+      this.vocabulary = [];
+      this.embeddings = [];
+      this.idf = [];
+      return;
+    }
 
     // Build vocabulary
     const vocabSet = new Set<string>();
-    chunks.forEach((chunk) => {
+    this.chunks.forEach((chunk) => {
       const words = chunk.text.toLowerCase().match(/\b[a-z0-9_]+\b/g) || [];
       words.forEach((w) => {
         if (w.length > 2) vocabSet.add(w);
@@ -65,7 +83,7 @@ export class InMemoryVectorStore {
 
     // Compute document frequencies and IDF weights.
     const df = new Array(this.vocabulary.length).fill(0);
-    this.embeddings = chunks.map((chunk) => {
+    this.embeddings = this.chunks.map((chunk) => {
       const e = generateSparseEmbedding(chunk.text, this.vocabulary);
       e.forEach((c, i) => {
         if (c > 0) df[i]++;
@@ -73,7 +91,7 @@ export class InMemoryVectorStore {
       return e;
     });
 
-    const N = chunks.length;
+    const N = this.chunks.length;
     this.idf = df.map((d) => (d > 0 ? Math.log((N + 1) / (d + 1)) + 1 : 0));
 
     // Weight stored embeddings by IDF.
