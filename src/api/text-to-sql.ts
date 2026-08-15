@@ -5,14 +5,70 @@ import logger from "../lib/logger.js";
 function safeJsonParse(text: string): unknown {
   const cleaned = (text || "").trim();
   if (!cleaned) throw new Error("Empty model response");
-  
-  let extracted = cleaned;
-  const firstObj = cleaned.indexOf("{");
-  const lastObj = cleaned.lastIndexOf("}");
-  if (firstObj !== -1 && lastObj !== -1) {
-    extracted = cleaned.substring(firstObj, lastObj + 1);
+
+  let extracted: string | null = null;
+
+  // 1. Prefer a fenced ```json ... ``` block if the model emitted one.
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    extracted = fenceMatch[1].trim();
   }
-  return JSON.parse(extracted);
+
+  // 2. Otherwise locate the balanced outermost `{...}` object by tracking
+  //    brace depth, so prose containing stray `{`/`}` or multiple JSON
+  //    objects no longer corrupts the slice.
+  if (!extracted) {
+    extracted = extractBalancedObject(cleaned);
+  }
+
+  if (!extracted) throw new Error("No JSON object found in model response");
+
+  const parsed = JSON.parse(extracted);
+  // The query is expected to be a single object, not an array or primitive.
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Model response did not contain a single JSON object");
+  }
+  return parsed;
+}
+
+// Scans `text` for the first balanced `{...}` span (matching braces, ignoring
+// braces inside string literals) and returns it, or null if none is found.
+function extractBalancedObject(text: string): string | null {
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      if (depth > 0) {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          return text.substring(start, i + 1);
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function handleTextToQuery(req: any, res: any) {
