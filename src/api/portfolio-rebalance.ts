@@ -85,13 +85,45 @@ export async function calculateRebalance(req: any, res: any) {
       };
     });
 
+    // 3. Net the orders to cash-neutral. Because Σ targetValue === totalValue ===
+    // Σ currentValue, the buy and sell legs should cancel exactly, but per-order
+    // rounding (toFixed) can leave a small residual. Correct that residual on the
+    // largest order so the plan is self-funding (sells fund the buys).
+    let totalBuyValue = 0;
+    let totalSellValue = 0;
+    for (const o of orders) {
+      if (o.action === 'BUY') totalBuyValue += o.estimatedValue;
+      else totalSellValue += o.estimatedValue;
+    }
+    const netCashFlow = parseFloat((totalSellValue - totalBuyValue).toFixed(2));
+
+    if (Math.abs(netCashFlow) > 0.001 && orders.length > 0) {
+      // Absorb the residual into the largest order of the side that needs adjusting.
+      const needsMoreBuy = netCashFlow > 0; // sells exceed buys → buy more
+      const candidateAction: 'BUY' | 'SELL' = needsMoreBuy ? 'BUY' : 'SELL';
+      let target = orders
+        .filter(o => o.action === candidateAction)
+        .sort((a, b) => b.estimatedValue - a.estimatedValue)[0];
+      if (!target) {
+        // No order on the needed side; fall back to the single largest order.
+        target = orders.sort((a, b) => b.estimatedValue - a.estimatedValue)[0];
+      }
+      const price = assets.find(a => a.ticker === target.ticker)?.currentPrice || 1;
+      target.estimatedValue = parseFloat((target.estimatedValue + netCashFlow).toFixed(2));
+      target.shares = parseFloat((target.estimatedValue / price).toFixed(4));
+    }
+
+    const cashNeutral = Math.abs(netCashFlow) <= 0.001;
+
     res.json({
       success: true,
       data: {
         totalPortfolioValue: parseFloat(totalValue.toFixed(2)),
         driftWarning,
         analysis,
-        recommendedOrders: orders.sort((a, b) => b.estimatedValue - a.estimatedValue) // Largest trades first
+        recommendedOrders: orders.sort((a, b) => b.estimatedValue - a.estimatedValue), // Largest trades first
+        cashNeutral,
+        netCashFlow // positive: surplus cash after sells; negative: cash shortfall
       }
     });
 
