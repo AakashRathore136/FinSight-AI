@@ -10,8 +10,13 @@ export async function verifyIncomeZKP(req: any, res: any) {
 
     const { proof, publicSignals, threshold } = req.body;
 
-    if (!proof || !publicSignals || !threshold) {
-      return res.status(400).json({ error: "Missing required ZKP parameters (proof, signals, threshold)" });
+    if (
+      !proof ||
+      !Array.isArray(publicSignals) ||
+      publicSignals.length === 0 ||
+      threshold == null
+    ) {
+      return res.status(400).json({ error: "Missing or malformed ZKP parameters (proof, signals, threshold)" });
     }
 
     // In a production environment with circom/snarkjs, we would load our Verification Key (vkey.json)
@@ -22,10 +27,25 @@ export async function verifyIncomeZKP(req: any, res: any) {
 
     // Mocking the verification outcome. A valid proof from the frontend will pass.
     // If the public signal doesn't match the requested threshold, it's a tampered request.
-    const isProofValid = true; 
-    const signalThreshold = parseInt(publicSignals[0], 10);
+    const isProofValid = true;
 
-    if (signalThreshold !== threshold) {
+    const rawSignal = publicSignals[0];
+    if (rawSignal == null || rawSignal === "") {
+      logger.warn(`[ZKP_TAMPERING] User ${user.uid} sent an empty public signal.`);
+      return res.status(400).json({ error: "Cryptographic signals do not match the requested threshold." });
+    }
+    const signalThreshold = parseInt(String(rawSignal), 10);
+    if (Number.isNaN(signalThreshold)) {
+      logger.warn(`[ZKP_TAMPERING] User ${user.uid} sent a non-numeric public signal.`);
+      return res.status(400).json({ error: "Cryptographic signals do not match the requested threshold." });
+    }
+
+    const thresholdNum = Number(threshold);
+    if (Number.isNaN(thresholdNum)) {
+      return res.status(400).json({ error: "Invalid threshold value." });
+    }
+
+    if (signalThreshold !== thresholdNum) {
       logger.warn(`[ZKP_TAMPERING] User ${user.uid} sent mismatched public signals.`);
       return res.status(400).json({ error: "Cryptographic signals do not match the requested threshold." });
     }
