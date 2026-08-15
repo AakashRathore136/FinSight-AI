@@ -17,6 +17,28 @@ interface ReconciliationLog {
   newPostedId: string;
   confidenceScore: number;
   merchantName: string;
+  needsManualReview?: boolean;
+}
+
+// Normalize a merchant name for fuzzy comparison: lowercase, strip punctuation
+// and whitespace so "SQ *LOCAL COFFEE" ~ "Local Coffee Roasters".
+function normalizeMerchant(name: string): string {
+  return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Similarity in [0, 1] based on substring containment / shared tokens.
+function merchantSimilarity(a: string, b: string): number {
+  const na = normalizeMerchant(a);
+  const nb = normalizeMerchant(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.8;
+  const tokensA = new Set(na.match(/.{4,}/g) || []);
+  const tokensB = new Set(nb.match(/.{4,}/g) || []);
+  let overlap = 0;
+  tokensA.forEach((t) => { if (tokensB.has(t)) overlap++; });
+  const total = tokensA.size + tokensB.size;
+  return total === 0 ? 0 : (2 * overlap) / total;
 }
 
 // Mock Database of active transactions
@@ -66,14 +88,38 @@ export async function handlePlaidWebhook(req: any, res: any) {
 
       let confidenceScore = 0;
 
-      // 2. Fallback: Fuzzy Matching (Amount matches exactly, date within 3 days, partial string match)
+      // 2. Fallback: Fuzzy Matching (Amount matches exactly, date within 3 days).
+      // Collect ALL candidates so we can disambiguate instead of silently
+      // picking the first one (which could merge into the WRONG pending tx).
       if (!matchedPending) {
-        matchedPending = transactionsDb.find(t => 
-          t.status === 'PENDING' && 
+        const candidates = transactionsDb.filter(t =>
+          t.status === 'PENDING' &&
           t.amount === postedTx.amount &&
           Math.abs(new Date(t.date).getTime() - new Date(postedTx.date).getTime()) <= 3 * 24 * 60 * 60 * 1000
         );
-        if (matchedPending) confidenceScore = 0.85; // Fuzzy match confidence
+
+        // Disambiguate using normalized merchant-name similarity.
+        const similar = candidates.filter(t =>
+          merchantSimilarity(t.merchantName, postedTx.merchant_name) >= 0.6
+        );
+
+        if (similar.length === 1) {
+          matchedPending = similar[0];
+          confidenceScore = 0.85; // Fuzzy match confidence
+        } else {
+          // Ambiguous: zero or multiple equally-good candidates. Flag for
+          // manual review rather than merging the first hit (which would
+          // double- or mis-reconcile the ledger).
+          reconciliationLogs.unshift({
+            timestamp: new Date().toISOString(),
+            mergedPendingId: "",
+            newPostedId: postedTx.transaction_id,
+            confidenceScore: 0,
+            merchantName: postedTx.merchant_name,
+            needsManualReview: true,
+          });
+          continue;
+        }
       } else {
         confidenceScore = 1.0; // Deterministic match confidence
       }
