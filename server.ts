@@ -48,10 +48,16 @@ const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
-  // Reject non-PDF uploads before multer buffers the file into memory,
-  // instead of buffering it fully and only checking mimetype afterwards.
+  // Reject non-PDF uploads. The declared MIME type (file.mimetype) comes from
+  // the client-supplied multipart Content-Type header and is trivially
+  // spoofable, so when multer has already buffered the bytes we additionally
+  // verify the `%PDF` magic bytes. The authoritative check runs again in the
+  // pipeline handler, which always has access to file.buffer.
   fileFilter: (_req, file, cb) => {
     if (file.mimetype !== "application/pdf") {
+      return cb(new Error("Only PDF files are accepted"));
+    }
+    if (file.buffer && !isPdfBuffer(file.buffer)) {
       return cb(new Error("Only PDF files are accepted"));
     }
     cb(null, true);
@@ -93,6 +99,21 @@ function sanitizeStorageFilename(filename: string): string {
     name = name.slice(0, 120 - ext.length) + ext;
   }
   return name;
+}
+
+// Confirm a buffer is actually a PDF by checking the `%PDF` magic bytes. The
+// multipart `Content-Type` header (file.mimetype) is fully attacker-controlled
+// and must never be trusted on its own.
+function isPdfBuffer(buffer: Buffer, mimetype?: string): boolean {
+  const mimeOk = !mimetype || mimetype === "application/pdf" || mimetype === "application/x-pdf";
+  const magicOk =
+    !!buffer &&
+    buffer.length >= 4 &&
+    buffer[0] === 0x25 && // %
+    buffer[1] === 0x50 && // P
+    buffer[2] === 0x44 && // D
+    buffer[3] === 0x46;   // F
+  return Boolean(magicOk && mimeOk);
 }
 
 type AnalysisResponse = {
@@ -852,10 +873,10 @@ async function startServer() {
 
 
 
-        if (file.mimetype !== "application/pdf") {
+        if (!file.buffer || !isPdfBuffer(file.buffer, file.mimetype)) {
           throw new PipelineError(
             "PDF_INGESTION",
-            `Invalid MIME type: ${file.mimetype}`,
+            `Invalid file: missing %PDF magic bytes (mimetype=${file.mimetype})`,
             "Only PDF files are supported. Please convert your file to PDF format.",
           );
         }
