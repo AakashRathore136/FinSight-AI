@@ -238,6 +238,13 @@ export function GoalPlanner({ user }: GoalPlannerProps) {
       toast.error('Failed to update goal');
     } finally {
       updatingGoalIds.current.delete(goalId);
+      // Directly auto-complete a fully-funded goal here so completion does not
+      // depend on the auto-complete effect, which skips goals still present in
+      // updatingGoalIds and can leave a 100%-funded goal stuck as 'active'.
+      const projectedAmount = goal.currentAmount + addedAmount;
+      if (goal.status === 'active' && projectedAmount >= goal.targetAmount) {
+        updateGoalStatus(goalId, 'completed', projectedAmount);
+      }
     }
   };
 
