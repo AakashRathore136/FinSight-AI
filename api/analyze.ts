@@ -656,6 +656,7 @@ CRITICAL SECURITY NOTE:
 Return ONLY valid JSON with keys: summary, key_metrics, risk_assessment, action_items, sentiment_score, entities, full_report.
 full_report MUST be at least 300 words. No markdown, no code blocks, no explanations outside JSON.`;
 
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         const completion = await Promise.race([
           hfClient.chatCompletion({
             model: "Qwen/Qwen2.5-Coder-32B-Instruct",
@@ -669,10 +670,12 @@ full_report MUST be at least 300 words. No markdown, no code blocks, no explanat
             max_tokens: 3000,
             temperature: 0.2,
           }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Hugging Face API request timed out (15s)")), 15000),
-          ),
-        ]);
+          new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(() => reject(new Error("Hugging Face API request timed out (15s)")), 15000);
+          }),
+        ]).finally(() => {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        });
 
         const rawText = completion.choices?.[0]?.message?.content || "{}";
         const parsed = safeJsonParse(rawText);
