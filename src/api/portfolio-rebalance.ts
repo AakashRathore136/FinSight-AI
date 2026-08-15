@@ -22,7 +22,7 @@ export async function calculateRebalance(req: any, res: any) {
     }
 
     const { assets } = req.body as { assets: Asset[] };
-    
+
     if (!assets || assets.length === 0) {
       return res.status(400).json({ error: "No assets provided for rebalancing." });
     }
@@ -33,6 +33,11 @@ export async function calculateRebalance(req: any, res: any) {
       return res.status(400).json({ error: `Target percentages must equal 100%. Currently: ${totalTarget}%` });
     }
 
+    // Validate inputs: each asset must have a positive price to avoid divide-by-zero
+    if (assets.some(a => !(a.currentPrice > 0))) {
+      return res.status(400).json({ error: "Each asset must have a positive currentPrice." });
+    }
+
     // 1. Calculate total portfolio value
     let totalValue = 0;
     const currentAllocations = assets.map(asset => {
@@ -40,6 +45,10 @@ export async function calculateRebalance(req: any, res: any) {
       totalValue += value;
       return { ...asset, currentValue: value };
     });
+
+    if (totalValue <= 0) {
+      return res.status(400).json({ error: "Portfolio total value must be greater than zero." });
+    }
 
     const orders: RebalanceOrder[] = [];
     let driftWarning = false;
