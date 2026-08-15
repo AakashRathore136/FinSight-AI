@@ -486,11 +486,10 @@ export function estimateMonthlyIncome(
   const monthCount = incomeByMonth.size;
   if (monthCount === 0) return 0;
   const total = Array.from(incomeByMonth.values()).reduce((a, b) => a + b, 0);
-  const span =
-    minKey && maxKey
-      ? (maxKey.year - minKey.year) * 12 + (maxKey.month - minKey.month) + 1
-      : monthCount;
-  return total / Math.max(1, Math.min(span, windowMonths));
+  // Average over the true requested window length, counting zero-income months
+  // as 0, rather than dividing by the number of months that happened to contain
+  // income (which overstated income for sporadic earners). (Issue #1364)
+  return total / Math.max(1, windowMonths);
 }
 
 export function calculateSubscriptionBurden(
