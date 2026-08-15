@@ -31,6 +31,7 @@ import {
   generateTimelineProjection,
 } from "./goalUtils";
 import { formatCurrency } from "./utils";
+import { repairTruncatedJSON } from "./jsonRepairEngine";
 import type { FinancialContext, ChatResponse } from "./chatUtils";
 
 // HF chat model used for the agent loop. Configurable via env so deployments can
@@ -363,28 +364,13 @@ function buildSystemPrompt(tools: AgentTool[]): string {
 }
 
 // Parse a single JSON object out of the model's (possibly wrapped) text reply.
+// Falls back to the repo's streaming JSON repair engine so truncated streams
+// and trailing commas (common at max_tokens caps) can still be recovered
+// instead of forcing the raw model text to be surfaced to the user.
 function parseAgentJson(text: string): Record<string, unknown> | null {
   if (!text) return null;
-  // Try direct parse first.
-  try {
-    const v = JSON.parse(text.trim());
-    if (v && typeof v === "object") return v;
-  } catch {
-    /* fall through to fenced extraction */
-  }
-  // Extract the first {...} block, tolerating wrapping prose / code fences.
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fence ? fence[1] : text;
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  try {
-    const v = JSON.parse(candidate.slice(start, end + 1));
-    if (v && typeof v === "object") return v;
-  } catch {
-    return null;
-  }
-  return null;
+  const result = repairTruncatedJSON<Record<string, unknown>>(text);
+  return result.data && typeof result.data === "object" ? result.data : null;
 }
 
 function summariseObservation(obs: unknown): string {
@@ -487,13 +473,11 @@ export async function runAgentLoop(
 
     const parsed = parseAgentJson(reply);
     if (!parsed) {
-      // Model replied with free text — validate it before treating it as a
-      // final answer (reject HTML/control tokens so nothing malicious reaches
-      // the chat renderer).
-      const validated = validateModelAnswer(reply);
-      return validated
-        ? { message: validated, steps, chartData }
-        : null;
+      // The model is instructed to emit EXACTLY ONE JSON object. A reply that
+      // cannot be parsed (truncated at the token cap, stray trailing comma, etc.)
+      // is not a valid answer, so fall back to the deterministic keyword router
+      // instead of echoing the raw model text to the user.
+      return null;
     }
 
     if (typeof parsed.answer === "string") {
