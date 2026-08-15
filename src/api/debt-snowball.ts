@@ -20,11 +20,14 @@ export async function calculateDebtPayoff(req: any, res: any) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { debts, extraPayment } = req.body as { debts: Debt[], extraPayment: number };
+    const { debts, extraPayment } = req.body as { debts: Debt[], extraPayment?: number };
 
     if (!debts || debts.length === 0) {
       return res.status(400).json({ error: "No debts provided." });
     }
+
+    // Treat omitted/NaN/non-finite extraPayment as 0 so amortization is valid.
+    const safeExtraPayment = Number.isFinite(extraPayment) ? extraPayment! : 0;
 
     // A helper function to run the amortization loop based on a specific sorting strategy
     const runStrategy = (sortFn: (a: Debt, b: Debt) => number): StrategyResult => {
@@ -54,7 +57,7 @@ export async function calculateDebtPayoff(req: any, res: any) {
         currentDebts = currentDebts.filter(d => d.balance > 0).sort(sortFn);
         
         // 1. Pay minimums on everything
-        let availableCash = extraPayment;
+        let availableCash = safeExtraPayment;
         for (let d of currentDebts) {
           availableCash += d.minimumPayment;
         }
