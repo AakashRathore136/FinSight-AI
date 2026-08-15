@@ -77,6 +77,10 @@ let transactionsDb: Transaction[] = [
 
 let reconciliationLogs: ReconciliationLog[] = [];
 
+// Bound the in-memory log buffer so a long-running server cannot grow memory
+// without limit. Only the most-recent entries are retained.
+const MAX_RECONCILIATION_LOGS = 500;
+
 export async function handlePlaidWebhook(req: any, res: any) {
   try {
     // 1. Verify the Plaid webhook signature before processing anything.
@@ -189,6 +193,10 @@ export async function handlePlaidWebhook(req: any, res: any) {
           confidenceScore,
           merchantName: postedTx.merchant_name
         });
+
+        if (reconciliationLogs.length > MAX_RECONCILIATION_LOGS) {
+          reconciliationLogs.length = MAX_RECONCILIATION_LOGS;
+        }
 
       } else {
         // No match found, safe to insert as a brand new transaction
