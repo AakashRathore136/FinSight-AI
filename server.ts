@@ -1358,7 +1358,25 @@ CRITICAL RULES:
   // inference credential out of the client bundle entirely. The route sits
   // behind requireFirebaseAuth (/api/*), so only signed-in users can spend
   // the server key. (Issue #1341)
-  app.post("/api/agent-chat", async (req: any, res: any) => {
+  // Rate limiting for /api/agent-chat. Every call spends the server's own
+  // HUGGINGFACE_API_KEY quota, so we cap requests per verified user (keyed on
+  // ownerId set by requireFirebaseAuth) and return 429 when exceeded, matching
+  // the other server-key routes (e.g. /api/analyze).
+  const agentChatRateLimiter = rateLimit({
+    keyGenerator: (req: any) => req.ownerId || req.ip,
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 20, // 20 agent-chat requests per user per hour
+    standardHeaders: false,
+    message: {
+      error: {
+        stage: "RATE_LIMIT",
+        reason: "Agent chat quota exceeded (20 requests per hour per user)",
+        recommendation: "Please wait before sending more messages or upgrade your plan.",
+      },
+    },
+  });
+
+  app.post("/api/agent-chat", agentChatRateLimiter, async (req: any, res: any) => {
     const { systemPrompt, messages, model } = req.body || {};
     if (typeof systemPrompt !== "string" || !Array.isArray(messages)) {
       return res.status(400).json({
