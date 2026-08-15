@@ -14,8 +14,21 @@ export default function E2EEVault() {
   const [encrypting, setEncrypting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [docs, setDocs] = useState<StoredDoc[]>([]);
+  const [error, setError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Convert bytes to base64 in chunks to avoid the engine's argument-count limit
+  // (String.fromCharCode.apply/spead overflow for buffers larger than ~64KB).
+  const bytesToBase64 = (bytes: Uint8Array): string => {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  };
 
   // PBKDF2 Key Derivation + AES-GCM Encryption running entirely in the browser
   const encryptFileClientSide = async (file: File, pass: string) => {
@@ -49,12 +62,13 @@ export default function E2EEVault() {
 
     return {
       ciphertextBuffer: ciphertext,
-      ivBase64: btoa(String.fromCharCode(...iv))
+      ivBase64: bytesToBase64(iv)
     };
   };
 
   const handleUpload = async () => {
     if (!selectedFile || !password) return;
+    setError(null);
     
     try {
       // Step 1: Encrypt locally
@@ -63,8 +77,8 @@ export default function E2EEVault() {
       setEncrypting(false);
 
       // Convert buffer to base64 for JSON transport (in prod, use multipart form for large files)
-      const cipherArray = Array.from(new Uint8Array(ciphertextBuffer));
-      const ciphertextBase64 = btoa(String.fromCharCode.apply(null, cipherArray as unknown as number[]));
+      const cipherArray = new Uint8Array(ciphertextBuffer);
+      const ciphertextBase64 = bytesToBase64(cipherArray);
 
       // Step 2: Upload to server
       setUploading(true);
@@ -87,6 +101,7 @@ export default function E2EEVault() {
       }
     } catch (err) {
       console.error("Encryption/Upload failed", err);
+      setError("Encryption or upload failed. Please try again.");
     } finally {
       setEncrypting(false);
       setUploading(false);
@@ -165,6 +180,10 @@ export default function E2EEVault() {
               <><Lock className="w-5 h-5" /> Encrypt & Upload</>
             )}
           </button>
+
+          {error && (
+            <p className="text-xs text-red-500 font-medium">{error}</p>
+          )}
         </div>
       </div>
 
