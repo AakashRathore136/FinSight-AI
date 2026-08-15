@@ -76,7 +76,9 @@ export default function OverdraftProtection() {
           <div>
             <h3 className="text-lg font-bold text-rose-800 mb-1">Overdraft Risk Detected</h3>
             <p className="text-rose-700 text-sm">
-              Your projected balance is expected to drop below $0.00 on <span className="font-bold">{new Date(data.firstOverdraftDate!).toLocaleDateString()}</span>. 
+              Your projected balance is expected to drop below $0.00{data.firstOverdraftDate
+                ? <span className="font-bold"> on {new Date(data.firstOverdraftDate).toLocaleDateString()}</span>
+                : null}. 
               We recommend transferring funds immediately to avoid bank fees.
             </p>
           </div>
