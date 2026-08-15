@@ -47,8 +47,13 @@ export async function detectWashSales(req: any, res: any) {
     const losses = mockTrades.filter(t => t.type === 'SELL' && t.realizedLoss && t.realizedLoss > 0);
     const buys = mockTrades.filter(t => t.type === 'BUY');
 
+    // Track how many shares of each repurchase have already been consumed so a
+    // single rebuy cannot be double-counted across multiple loss events.
+    const consumedByBuy: Record<string, number> = {};
+
     for (const lossTrade of losses) {
       const lossDate = new Date(lossTrade.date).getTime();
+      let coveredShares = 0;
 
       for (const buyTrade of buys) {
         if (buyTrade.ticker === lossTrade.ticker) {
@@ -57,9 +62,17 @@ export async function detectWashSales(req: any, res: any) {
 
           // If the buy is within a 61-day window (30 days before, day of, 30 days after)
           if (daysDiff <= 30) {
-            
-            // Calculate the disallowed portion (pro-rated if they didn't buy back the full amount)
-            const disallowedRatio = Math.min(buyTrade.shares / lossTrade.shares, 1);
+            const remainingBuy = (buyTrade.shares || 0) - (consumedByBuy[buyTrade.id] || 0);
+            const remainingLoss = (lossTrade.shares || 0) - coveredShares;
+            const allocatable = Math.min(remainingBuy, remainingLoss);
+
+            if (allocatable <= 0) continue;
+
+            consumedByBuy[buyTrade.id] = (consumedByBuy[buyTrade.id] || 0) + allocatable;
+            coveredShares += allocatable;
+
+            // Calculate the disallowed portion (pro-rated to shares actually consumed)
+            const disallowedRatio = allocatable / (lossTrade.shares || 1);
             const disallowedLoss = (lossTrade.realizedLoss || 0) * disallowedRatio;
 
             violations.push({
@@ -69,6 +82,8 @@ export async function detectWashSales(req: any, res: any) {
               disallowedLoss,
               daysDifference: Math.round(daysDiff)
             });
+
+            if (coveredShares >= (lossTrade.shares || 0)) break;
           }
         }
       }
