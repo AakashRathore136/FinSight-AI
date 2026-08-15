@@ -28,6 +28,16 @@ let transactionsDb: Transaction[] = [
 
 let reconciliationLogs: ReconciliationLog[] = [];
 
+// Stored Plaid item_id -> user mapping. In production this would be loaded from
+// the persisted Plaid link/access-token store created when the user connects
+// their bank, never derived or guessed from the webhook payload.
+const itemUserMap = new Map<string, string>();
+
+function resolveUserIdFromItemId(itemId: string | undefined): string | undefined {
+  if (!itemId) return undefined;
+  return itemUserMap.get(itemId);
+}
+
 export async function handlePlaidWebhook(req: any, res: any) {
   try {
     // In production, verify the Plaid webhook signature using plaid-node client
@@ -38,6 +48,9 @@ export async function handlePlaidWebhook(req: any, res: any) {
     }
 
     logger.info(`[PLAID_WEBHOOK] Received transactions update for item ${item_id}. Running deduplication worker.`);
+
+    // Owner must come from the stored item_id -> user mapping, never hardcoded.
+    const ownerUserId = resolveUserIdFromItemId(item_id);
 
     // Mock incoming "POSTED" transactions from Plaid's /transactions/get endpoint
     const fetchedPostedTransactions = [
@@ -58,28 +71,53 @@ export async function handlePlaidWebhook(req: any, res: any) {
     ];
 
     for (const postedTx of fetchedPostedTransactions) {
-      
+      // Idempotency guard: if this posted transaction was already reconciled
+      // (webhook retries are common) skip it instead of inserting a duplicate.
+      const alreadyReconciled = transactionsDb.find(
+        t => t.plaidTransactionId === postedTx.transaction_id
+      );
+      if (alreadyReconciled) {
+        logger.info(`[RECONCILIATION] Skipping already-reconciled posted tx ${postedTx.transaction_id}`);
+        continue;
+      }
+
       // 1. Deterministic Matching (Using Plaid's provided pending_transaction_id)
       let matchedPending = transactionsDb.find(
-        t => t.status === 'PENDING' && t.plaidTransactionId === postedTx.pending_transaction_id
+        t => t.status === 'PENDING' &&
+          t.plaidTransactionId === postedTx.pending_transaction_id &&
+          (ownerUserId ? t.userId === ownerUserId : true)
       );
 
       let confidenceScore = 0;
 
-      // 2. Fallback: Fuzzy Matching (Amount matches exactly, date within 3 days, partial string match)
+      // 2. Fallback: Fuzzy Matching — scoped by user, amount, 3-day window, AND a
+      //    merchant signal. Multiple candidates are unsafe, so we bail rather than
+      //    merge into the wrong pending row.
       if (!matchedPending) {
-        matchedPending = transactionsDb.find(t => 
-          t.status === 'PENDING' && 
+        const candidates = transactionsDb.filter(t =>
+          t.status === 'PENDING' &&
           t.amount === postedTx.amount &&
-          Math.abs(new Date(t.date).getTime() - new Date(postedTx.date).getTime()) <= 3 * 24 * 60 * 60 * 1000
+          Math.abs(new Date(t.date).getTime() - new Date(postedTx.date).getTime()) <= 3 * 24 * 60 * 60 * 1000 &&
+          (ownerUserId ? t.userId === ownerUserId : true) &&
+          !!(t.merchantName && postedTx.merchant_name) &&
+          (
+            t.merchantName.toLowerCase().includes(postedTx.merchant_name.toLowerCase()) ||
+            postedTx.merchant_name.toLowerCase().includes(t.merchantName.toLowerCase())
+          )
         );
-        if (matchedPending) confidenceScore = 0.85; // Fuzzy match confidence
+        if (candidates.length === 1) {
+          matchedPending = candidates[0];
+          confidenceScore = 0.85; // Fuzzy match confidence
+        } else if (candidates.length > 1) {
+          logger.warn(`[RECONCILIATION] ${candidates.length} fuzzy candidates for posted tx ${postedTx.transaction_id}; skipping unsafe merge`);
+        }
       } else {
         confidenceScore = 1.0; // Deterministic match confidence
       }
 
       if (matchedPending) {
-        // RECONCILIATION: Update the existing row instead of inserting a duplicate
+        // RECONCILIATION: Update the existing row instead of inserting a duplicate.
+        // Keep the original pending link stable for idempotent re-processing.
         matchedPending.status = 'POSTED';
         matchedPending.plaidTransactionId = postedTx.transaction_id;
         matchedPending.merchantName = postedTx.merchant_name; // Use the cleaner settled name
@@ -97,10 +135,15 @@ export async function handlePlaidWebhook(req: any, res: any) {
         });
 
       } else {
-        // No match found, safe to insert as a brand new transaction
+        // No match found. Only insert as a brand new transaction when we can
+        // attribute it to the correct owner derived from the item_id mapping.
+        if (!ownerUserId) {
+          logger.warn(`[PLAID_WEBHOOK] Cannot attribute posted tx ${postedTx.transaction_id}: no user mapping for item ${item_id}`);
+          continue;
+        }
         const newTx: Transaction = {
           id: `tx_local_${Date.now()}`,
-          userId: "usr_123",
+          userId: ownerUserId,
           amount: postedTx.amount,
           date: postedTx.date,
           merchantName: postedTx.merchant_name || "Unknown",
