@@ -276,7 +276,8 @@ export function calculateTrend(data: { month: string; value: number }[]): 'up' |
   const recent = data.slice(-3).reduce((s, d) => s + d.value, 0) / 3;
   const older = data.slice(0, -3).reduce((s, d) => s + d.value, 0) / (data.length - 3);
   const diff = recent - older;
-  if (Math.abs(diff) < older * 0.05) return 'stable';
+  const EPSILON = 1e-9;
+  if (older <= 0 || Math.abs(diff) < Math.max(older * 0.05, EPSILON)) return 'stable';
   return diff > 0 ? 'up' : 'down';
 }
 
