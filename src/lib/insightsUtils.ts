@@ -248,7 +248,7 @@ export function detectAnomalies(
     type: tx.type,
   } as any));
 
-  const anomalies = detectAnomaliesCore(coreTransactions);
+  const anomalies = detectAnomaliesCore(coreTransactions, threshold);
   const insights: Insight[] = anomalies
     .filter((a) => a.type === "large_transaction") // insights only surfaces large-transaction anomalies
     .filter((a) => !ignoredTransactionIds?.has(a.transactionId))
