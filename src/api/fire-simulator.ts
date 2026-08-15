@@ -27,8 +27,16 @@ export async function runFIRESimulation(req: any, res: any) {
       return res.status(400).json({ error: "Missing required FIRE parameters." });
     }
 
+    if (!isFinite(withdrawalRate) || withdrawalRate <= 0 || withdrawalRate > 100) {
+      return res.status(400).json({ error: "Withdrawal rate must be a positive percentage between 0 and 100." });
+    }
+
     // FIRE Number Formula: Target Annual Expenses / (Withdrawal Rate / 100)
     const fireNumber = targetAnnualExpenses / (withdrawalRate / 100);
+
+    if (!isFinite(fireNumber)) {
+      return res.status(400).json({ error: "Invalid FIRE target computed from the provided parameters." });
+    }
 
     // Run a deterministic Monte-Carlo style projection based on historical S&P 500 averages
     // Adjusted for inflation (Real Return of ~7%)
