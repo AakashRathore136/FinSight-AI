@@ -2,6 +2,12 @@
 
 const LOCAL_DOCS_KEY = "fin_local_documents_v1";
 
+// The AES-GCM key is persisted (wrapped via raw export) so the encrypted
+// localStorage mirror can be decrypted after a page reload, making offline
+// persistence actually work. Previously a fresh key was generated every
+// session and the persisted blob became permanently undecryptable.
+const LOCAL_KEY_KEY = "fin_local_docs_key_v1";
+
 // Bounded local cache: keep at most this many documents in the localStorage
 // mirror so the 5 MB quota can never be exhausted by unbounded growth.
 const MAX_LOCAL_DOCS = 50;
@@ -31,22 +37,65 @@ function isQuotaError(err: unknown): boolean {
  *
  * We therefore keep a decrypted, in-memory mirror for the active session and
  * persist only an AES-GCM-encrypted blob to `localStorage`. The encryption key
- * is generated once per page session and lives only in memory, so:
- *   - the at-rest data is unreadable by other scripts / after an XSS, and
- *   - it does not survive logout or a page reload (a fresh session cannot
- *     decrypt the previous blob), which bounds the exposure window.
+ * is generated once and persisted (wrapped as raw key material) in
+ * `localStorage`, so the blob can be decrypted after a page reload and the
+ * offline document mirror actually survives refreshes. Because the key lives
+ * in `localStorage` it is still readable by any script on the origin (e.g. via
+ * XSS), so the encrypted blob only protects against passive inspection of the
+ * stored value, not active script execution on the page.
  */
 const memoryCache: Record<string, CachedAnalysisPayload> = {};
 
 let sessionCacheKey: CryptoKey | null = null;
 
+// Persist the raw key material so the encrypted blob remains decryptable
+// across page reloads (the key must be extractable for this to work).
+async function persistSessionKey(key: CryptoKey): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = await crypto.subtle.exportKey("raw", key);
+    window.localStorage.setItem(LOCAL_KEY_KEY, bufToBase64(raw));
+  } catch {
+    // Key export/storage failed — the in-memory key still works for this session.
+  }
+}
+
+// Recover a previously persisted key, if one exists and is valid.
+async function loadPersistedKey(): Promise<CryptoKey | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const b64 = window.localStorage.getItem(LOCAL_KEY_KEY);
+    if (!b64) return null;
+    const raw = base64ToBuf(b64);
+    return await crypto.subtle.importKey(
+      "raw",
+      raw,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function getSessionCacheKey(): Promise<CryptoKey> {
   if (sessionCacheKey) return sessionCacheKey;
+
+  // Reuse the key persisted from a previous session so the encrypted
+  // localStorage mirror survives a reload.
+  const persisted = await loadPersistedKey();
+  if (persisted) {
+    sessionCacheKey = persisted;
+    return sessionCacheKey;
+  }
+
   sessionCacheKey = await crypto.subtle.generateKey(
     { name: "AES-GCM", length: 256 },
-    false,
+    true,
     ["encrypt", "decrypt"],
   );
+  await persistSessionKey(sessionCacheKey);
   return sessionCacheKey;
 }
 
@@ -302,6 +351,7 @@ export function clearAllLocalData(userId?: string): void {
 
   try {
     window.localStorage.removeItem(LOCAL_DOCS_KEY);
+    window.localStorage.removeItem(LOCAL_KEY_KEY);
     if (userId) {
       // Remove every per-user localStorage key so privacy/retention/analytics
       // preferences, starting-balance and alert actions don't survive account
