@@ -79,17 +79,38 @@ Output valid JSON only with keys: "collection", "where", "orderBy", "limit".`;
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    // Recursively strip any tenant scoping or NoSQL-injection operators
+    // (keys starting with `$`, e.g. $gt/$in/$or) at EVERY depth of the query
+    // object — not just the top level of `where` — so a nested operator such as
+    // `{ "status": { "$ne": "rejected" } }` or `{ "and": [ { "amount": { "$gt": 100 } } ] }`
+    // cannot survive and be executed against the database.
+    let foundInjectionOperator = false;
+    const stripUnsafeKeys = (node: any): void => {
+      if (Array.isArray(node)) {
+        node.forEach(stripUnsafeKeys);
+        return;
+      }
+      if (node && typeof node === "object") {
+        for (const key of Object.keys(node)) {
+          if (key === "tenantId" || key.startsWith("$")) {
+            delete node[key];
+            foundInjectionOperator = true;
+            continue;
+          }
+          stripUnsafeKeys(node[key]);
+        }
+      }
+    };
+    stripUnsafeKeys(parsedQuery);
+    if (foundInjectionOperator) {
+      return res.status(400).json({ error: "Unsupported query operators detected in request." });
+    }
+
     const where =
       (parsedQuery as any).where && typeof (parsedQuery as any).where === "object" && !(parsedQuery as any).where instanceof Array
         ? (parsedQuery as any).where
         : {};
 
-    // Strip any tenant scoping or injection operators the model tried to inject.
-    for (const key of Object.keys(where)) {
-      if (key === "tenantId" || key.startsWith("$")) {
-        delete where[key];
-      }
-    }
     // Force the authenticated user's tenant id — multi-tenant isolation is
     // guaranteed here, regardless of what the model emitted.
     where.tenantId = user.uid;
