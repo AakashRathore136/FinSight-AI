@@ -53,9 +53,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 
         with:
           node-version: '18'
-          package-manager: npm
-          install-dependencies: 'false'
-          cache: 'true'
+          cache: 'npm'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 
