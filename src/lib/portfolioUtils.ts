@@ -398,6 +398,7 @@ export async function addTransaction(userId: string, input: TransactionInput): P
             avgCost,
             currentPrice: input.price,
             currency: holdingCurrency,
+            deleted: false,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
