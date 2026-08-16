@@ -29,7 +29,10 @@ export const ComplianceAuditDashboard: React.FC<{ user?: any }> = ({ user }) => 
       const realTransactions = transactions.map((t) => ({
         amount: t.amount,
         description: t.description || "",
-        date: t.date instanceof Date ? t.date.toISOString().split("T")[0] : String(t.date),
+        date: (() => {
+          const d = t.date instanceof Date ? t.date : new Date(t.date);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        })(),
         category: t.category,
         currency: baseCurrency,
       }));
