@@ -37,7 +37,7 @@
     "lucide-react": "^0.546.0",
     "motion": "^13.0.0",
     "multer": "^2.2.0",
-    "pdf-parse": "^1.1.1",
+    "pdf-parse": "^2.4.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "snarkjs": "^0.7.5",
