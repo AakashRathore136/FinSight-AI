@@ -15,6 +15,10 @@ interface EncryptedDocumentRecord {
 // Mock Database Table
 const vaultDb: EncryptedDocumentRecord[] = [];
 
+// In-memory ciphertext store (simulates S3/GCS blob storage).
+// Maps blobId → base64 ciphertext so uploaded documents can be retrieved.
+const ciphertextStore = new Map<string, string>();
+
 export async function uploadEncryptedDocument(req: any, res: any) {
   try {
     const user = req.user;
@@ -43,6 +47,7 @@ export async function uploadEncryptedDocument(req: any, res: any) {
     };
 
     vaultDb.push(newRecord);
+    ciphertextStore.set(mockBlobId, ciphertextBase64);
     
     logger.info(`[E2EE_VAULT] User ${user.uid} uploaded encrypted document ${newRecord.id}. Zero-knowledge maintained.`);
 
@@ -59,6 +64,34 @@ export async function uploadEncryptedDocument(req: any, res: any) {
   } catch (error: any) {
     logger.error("E2EE_UPLOAD_ERROR", { message: error.message });
     res.status(500).json({ error: "Failed to store encrypted document" });
+  }
+}
+
+export async function downloadEncryptedDocument(req: any, res: any) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const { docId } = req.params;
+    const doc = vaultDb.find(d => d.id === docId && d.userId === user.uid);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    const ciphertext = ciphertextStore.get(doc.ciphertextBlobId);
+    if (!ciphertext) return res.status(404).json({ error: "Ciphertext not found in storage" });
+
+    res.json({
+      success: true,
+      data: {
+        id: doc.id,
+        filename: doc.filename,
+        iv: doc.iv,
+        salt: doc.salt,
+        ciphertextBase64: ciphertext,
+      }
+    });
+  } catch (error: any) {
+    logger.error("E2EE_DOWNLOAD_ERROR", { message: error.message });
+    res.status(500).json({ error: "Failed to download encrypted document" });
   }
 }
 
