@@ -1116,7 +1116,7 @@ export default function App() {
                 size={16}
               />
               <Input
-                placeholder="Search portfolios, assets, or records... (Win+O or Ctrl+Space)"
+                placeholder="Search... (Win+O or Ctrl+Space)"
                 className="bg-slate-900/50 border-slate-800 shadow-inner pl-10 focus-visible:border-indigo-500 focus-visible:ring-1 focus-visible:ring-indigo-500/50 transition-all"
               />
             </div>
