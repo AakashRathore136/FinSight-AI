@@ -1,4 +1,3 @@
-
 > **AI-powered BFSI intelligence platform for financial document analysis, risk assessment, and automated business insights.**
 
 FinSight AI is an AI-assisted financial intelligence platform built for the **Banking, Financial Services, and Insurance (BFSI)** domain. It enables organizations to upload financial documents, extract meaningful insights, evaluate portfolio risks, and generate structured reports using AI-driven analysis.
@@ -185,11 +184,11 @@ http://localhost:3001
 
 All pull requests run three automated checks via GitHub Actions:
 
-| Check | Command | Purpose |
-|-------|---------|---------|
+| Check      | Command            | Purpose                          |
+| ---------- | ------------------ | -------------------------------- |
 | TypeScript | `npx tsc --noEmit` | Catches type errors before merge |
-| Lint | `npm run lint` | Enforces code style rules |
-| Build | `npm run build` | Verifies Vite build succeeds |
+| Lint       | `npm run lint`     | Enforces code style rules        |
+| Build      | `npm run build`    | Verifies Vite build succeeds     |
 
 ### Adding secrets for the build step
 
@@ -199,7 +198,9 @@ Maintainers: add these secrets under **Settings → Secrets and variables → Ac
 
 # 🤝 Contributing
 
-Contributions are welcome!
+Contributions are welcome! Please read the [contribution guide](./CONTRIBUTING.md)
+before opening an issue or pull request. It covers local setup, environment
+variables, branch naming, commit conventions, testing, and review expectations.
 
 1. Fork the repository
 2. Create a feature branch
