@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 
         with:
           fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
 
       # ---- Phase 2: Artifact Management ----
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a 
         with:
           name: sbom-${{ github.sha }}
           path: |
@@ -88,7 +88,7 @@ jobs:
       # unmerged code isn't meaningful anyway.
       - name: Generate build provenance attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@1c608d11d69870c2092266b3f9a6f3abbf17002c 
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 
         with:
           subject-path: |
             sbom.cyclonedx.json
