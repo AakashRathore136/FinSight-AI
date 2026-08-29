@@ -123,8 +123,7 @@ export default function ZKPIncomeVerification() {
             <div className="bg-emerald-600 p-8 text-white text-center rounded-t-2xl">
               <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-emerald-100" />
               <h3 className="text-2xl font-black mb-1">Cryptographically Verified</h3>
-              <p className="text-emerald-100 font-medium">Income > {formatCurrency(result.threshold)}/mo</p>
-            </div>
+<p className="text-emerald-100 font-medium">Income &gt; {formatCurrency(result.threshold)}/mo</p>            </div>
             
             <div className="p-6 flex-1 flex flex-col justify-center">
               <p className="text-sm font-semibold text-slate-700 mb-3 text-center">Share this secure link with your landlord or creditor:</p>

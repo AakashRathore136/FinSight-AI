@@ -1,8 +1,7 @@
-import { buildSourceIndex, groundAnalysis } from "./grounding";
-import { adjudicateClaims } from "./adjudicator";
-import { extractPages, getPageOffsets } from "./extractPages";
-import type { GroundingResult, Citation, ClaimStatus } from "./types";
-import type { DocumentChunk } from "../rag/textChunker";
+import { buildSourceIndex, groundAnalysis } from "./grounding.ts";
+import { adjudicateClaims } from "./adjudicator.ts";
+import { extractPages, getPageOffsets } from "./extractPages.ts";
+import type { GroundingResult, Citation, ClaimStatus } from "./types.ts";
 
 export interface GroundingOptions {
   hfClient?: any;
