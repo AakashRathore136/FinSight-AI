@@ -337,7 +337,15 @@ export async function addTransaction(userId: string, input: TransactionInput): P
     // Queries are not allowed inside client transactions — resolve the holding
     // document ref first, then lock/update it atomically with the ledger write.
     let holdingRef = input.holdingId ? doc(db, 'portfolioHoldings', input.holdingId) : null;
-    if (!holdingRef && (input.type === 'buy' || input.type === 'sell')) {
+let legacyHoldingRef: ReturnType<typeof doc> | null = null;
+if (!holdingRef && (input.type === 'buy' || input.type === 'sell')) {
+  // ...unchanged...
+  if (!input.holdingId && (input.type === 'buy' || input.type === 'sell')) {
+    // ...unchanged...
+  }
+}   // <- add this
+
+const transaction = await runTransaction(db, async (tx) => {
     // Best-effort lookup for a *legacy* holding created under a non-stable id
     // (e.g. via addHolding). This is only a hint: the authoritative existence
     // check for a brand-new symbol happens inside runTransaction below, so two

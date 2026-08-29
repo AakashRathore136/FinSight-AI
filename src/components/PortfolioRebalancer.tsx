@@ -150,7 +150,7 @@ export default function PortfolioRebalancer() {
               </div>
               {result.driftWarning && (
                 <div className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full border border-amber-200">
-                  <AlertCircle className="w-3 h-3" /> High Drift Detected (>5%)
+                  <p className="text-emerald-100 font-medium">Income > {formatCurrency(result.threshold)}/mo</p>
                 </div>
               )}
             </div>
