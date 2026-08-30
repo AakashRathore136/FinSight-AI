@@ -1192,6 +1192,7 @@ export default function App() {
                   type="all"
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
+                  onUploadClick={() => setActiveTab("upload")}
                 />
               </motion.div>
             )}
@@ -1233,6 +1234,7 @@ export default function App() {
                   type="completed"
                   user={user}
                   onSelect={(id) => openAnalysisView(id, "list")}
+                  onUploadClick={() => setActiveTab("upload")}
                 />
               </motion.div>
             )}
