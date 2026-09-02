@@ -52,7 +52,9 @@ import {
   PieChart,
   Scale,
   Sparkles,
-  Target
+  Target,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -244,6 +246,7 @@ export default function App() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [emailAuthLoading, setEmailAuthLoading] = useState(false);
   const [showVerificationScreen, setShowVerificationScreen] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
@@ -847,14 +850,29 @@ export default function App() {
                   disabled={emailAuthLoading}
                   className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400 h-12 rounded-2xl px-4 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors duration-200"
                 />
-                <Input
-                  type="password"
-                  placeholder="Password (8+ chars, upper, lower, number, special)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={emailAuthLoading}
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400 h-12 rounded-2xl px-4 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors duration-200"
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password (8+ chars, upper, lower, number, special)"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={emailAuthLoading}
+                    className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400 h-12 rounded-2xl px-4 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors duration-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    disabled={emailAuthLoading}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <Button
@@ -947,17 +965,17 @@ export default function App() {
             active={activeTab === "history"}
             onClick={() => setActiveTab("history")}
           />
-          <NavItem 
-            icon={<TrendingUp size={20} />} 
-            label="Trends" 
-            active={activeTab === 'trends'} 
-            onClick={() => setActiveTab('trends')} 
+          <NavItem
+            icon={<TrendingUp size={20} />}
+            label="Trends"
+            active={activeTab === 'trends'}
+            onClick={() => setActiveTab('trends')}
           />
-          <NavItem 
-            icon={<Globe size={20} />} 
-            label="Currencies" 
-            active={activeTab === 'currencies'} 
-            onClick={() => setActiveTab('currencies')} 
+          <NavItem
+            icon={<Globe size={20} />}
+            label="Currencies"
+            active={activeTab === 'currencies'}
+            onClick={() => setActiveTab('currencies')}
           />
           <NavItem
             icon={<Bell size={20} />}
@@ -977,17 +995,17 @@ export default function App() {
             active={activeTab === 'challenges'}
             onClick={() => setActiveTab('challenges')}
           />
-          <NavItem 
-            icon={<Calculator size={20} />} 
-            label="Tax Estimator" 
-            active={activeTab === 'tax'} 
-            onClick={() => setActiveTab('tax')} 
+          <NavItem
+            icon={<Calculator size={20} />}
+            label="Tax Estimator"
+            active={activeTab === 'tax'}
+            onClick={() => setActiveTab('tax')}
           />
-          <NavItem 
-            icon={<Shield size={20} />} 
-            label="Emergency Fund" 
-            active={activeTab === 'emergency'} 
-            onClick={() => setActiveTab('emergency')} 
+          <NavItem
+            icon={<Shield size={20} />}
+            label="Emergency Fund"
+            active={activeTab === 'emergency'}
+            onClick={() => setActiveTab('emergency')}
           />
           <NavItem
             icon={<HeartPulse size={20} />}
@@ -1265,7 +1283,7 @@ export default function App() {
             )}
 
             {activeTab === 'bills' && (
-              <motion.div 
+              <motion.div
                 key="bills"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -1289,7 +1307,7 @@ export default function App() {
             )}
 
             {activeTab === 'emergency' && (
-              <motion.div 
+              <motion.div
                 key="emergency"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -1361,7 +1379,7 @@ export default function App() {
             )}
 
             {activeTab === 'upload' && (
-              <motion.div 
+              <motion.div
                 key="upload"
                 initial={false}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1411,7 +1429,7 @@ export default function App() {
             )}
 
             {activeTab === 'trends' && (
-              <motion.div 
+              <motion.div
                 key="trends"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -1422,7 +1440,7 @@ export default function App() {
             )}
 
             {activeTab === 'admin' && userProfile?.role === 'admin' && (
-              <motion.div 
+              <motion.div
                 key="admin"
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
@@ -1433,7 +1451,7 @@ export default function App() {
             )}
 
             {activeTab === 'privacy' && user && (
-              <motion.div 
+              <motion.div
                 key="privacy"
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
@@ -1444,7 +1462,7 @@ export default function App() {
             )}
 
             {activeTab === 'tax' && (
-              <motion.div 
+              <motion.div
                 key="tax"
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
@@ -1548,10 +1566,9 @@ function NavItem({
       onClick={onClick}
       className={`
         flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors
-        ${
-          active
-            ? "bg-slate-800/50 text-white"
-            : "text-slate-400 hover:bg-slate-800/30"
+        ${active
+          ? "bg-slate-800/50 text-white"
+          : "text-slate-400 hover:bg-slate-800/30"
         }
       `}
     >
