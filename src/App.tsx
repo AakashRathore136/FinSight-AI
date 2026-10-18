@@ -535,9 +535,9 @@ export default function App() {
     } catch (error: any) {
       const code = error?.code || "unknown";
       console.error("Login error full:", JSON.stringify({ code, message: error?.message }));
-      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
-        toast.error("No account found with this email. Please sign up first.");
-      } else if (code === "auth/wrong-password") {
+     if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+  toast.error("Email ya password galat hai. Details check karke dobara try karein.");
+    }else if (code === "auth/wrong-password") {
         toast.error("Incorrect password. Please try again.");
       } else if (code === "auth/invalid-email") {
         toast.error("Invalid email address");
@@ -961,9 +961,9 @@ export default function App() {
           />
           <NavItem
             icon={<Clock size={20} />}
-            label="AI Intelligence"
-            active={activeTab === "history"}
-            onClick={() => setActiveTab("history")}
+           label="History"
+           active={activeTab === "history"}
+           onClick={() => setActiveTab("history")}}
           />
           <NavItem
             icon={<TrendingUp size={20} />}
